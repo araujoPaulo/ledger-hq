@@ -6,9 +6,46 @@
 
 **Architecture:** A pnpm/Turborepo monorepo holds a NestJS + Prisma + PostgreSQL API and a React + Vite PWA, sharing a `domain` package (types, Zod schemas, validation rules) and a `crypto` package (key derivation). Authentication already uses the final zero-knowledge scheme — the browser derives an auth hash from the master password and the server never sees the password itself — so Phase 1 adds the vault envelope without reworking login.
 
-**Tech Stack:** TypeScript 5.6+, Node 22 LTS, pnpm 9, Turborepo, NestJS 10, Prisma 5, PostgreSQL 16, React 19, Vite 6, TanStack Router + Query, Tailwind CSS 4, i18next, hash-wasm, Vitest, Testcontainers, Playwright, Docker Compose, Caddy.
+**Tech Stack:** TypeScript 6.0, Node 24 LTS, pnpm 11, Turborepo 2, NestJS 12, Prisma 7, PostgreSQL 18, React 19.2, Vite 8, TanStack Router + Query, Tailwind CSS 4.3, i18next 26, hash-wasm 4, Vitest 5, Testcontainers 12, Playwright 1.62, Docker Compose, Caddy 2.11.
 
 **Spec:** `docs/superpowers/specs/2026-09-04-ledger-hq-design.md`
+
+## Version policy
+
+Every version below was read from the npm registry and Docker Hub on
+2026-09-04, and the risky combinations were compiled and run before being
+written down. Two of them need explaining, because the obvious choice is wrong.
+
+**TypeScript 6.0.3, not 7.0.2.** TypeScript 7 is the current stable release and
+it does work with NestJS — a decorator smoke test compiled cleanly and emitted
+`design:paramtypes`, so dependency injection is fine. The blocker is linting:
+`typescript-eslint@8.69.0`, the newest release, declares
+`"typescript": ">=4.8.4 <6.1.0"`, and no version supporting TypeScript 7 has
+shipped. Choosing 7 means giving up typed linting across the whole repository.
+Revisit when typescript-eslint publishes TypeScript 7 support; the migration is
+a version bump plus removing `ignoreDeprecations` if any is present.
+
+**Two TypeScript 6 requirements that break the obvious config.** `tsc` now
+errors on `"moduleResolution": "node"`, and it requires `rootDir` to be explicit
+whenever it emits. The shared base config therefore uses
+`"module": "preserve"` with `"moduleResolution": "bundler"`, the API overrides
+to `node16`/`node16`, and every package sets `"rootDir": "src"`. All three
+variants were compiled to confirm this before the plan was written.
+
+**Prisma 7 is a breaking rewrite of project setup.** `url` is no longer allowed
+in the `datasource` block, the `prisma-client-js` generator is replaced by
+`prisma-client` writing TypeScript into your source tree, a `prisma.config.ts`
+file is now required, and `PrismaClient` needs a driver adapter. Task 7 reflects
+the verified working shape. Note that the `latest` npm tag for `prisma` points
+at `8.0.0-rc.13`, a release candidate; the newest stable is `7.10.0`, so the
+plan pins `^7.10.0` rather than following `latest`.
+
+**ESLint flat config must be `.mjs`.** ESLint 10 loads `eslint.config.js` with
+the nearest `package.json` type, and the config packages are CommonJS. Using the
+`.mjs` extension avoids the failure entirely.
+
+**Node 24, not 26.** Node 26 is Current; Node 24 is Active LTS until October
+2026. A self-hosted machine that must survive unattended reboots runs LTS.
 
 ## Global Constraints
 
@@ -129,8 +166,8 @@ ledger-hq/
 {
   "name": "ledger-hq",
   "private": true,
-  "packageManager": "pnpm@9.12.0",
-  "engines": { "node": ">=22.0.0" },
+  "packageManager": "pnpm@11.25.0",
+  "engines": { "node": ">=24.0.0" },
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
@@ -139,9 +176,9 @@ ledger-hq/
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "prettier": "^3.3.3",
-    "turbo": "^2.1.3",
-    "typescript": "^5.6.3"
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.12",
+    "typescript": "^6.0.3"
   }
 }
 ```
@@ -171,7 +208,7 @@ packages:
 `.nvmrc`:
 
 ```
-22
+24
 ```
 
 `.gitignore`:
@@ -187,6 +224,8 @@ dist/
 coverage/
 playwright-report/
 test-results/
+# Prisma 7 writes the generated client into the source tree.
+apps/api/src/generated/
 ```
 
 - [ ] **Step 2: Create the shared config package**
@@ -198,8 +237,8 @@ test-results/
   "name": "@ledger-hq/config",
   "version": "0.0.0",
   "private": true,
-  "files": ["tsconfig.base.json", "eslint.config.js"],
-  "main": "eslint.config.js"
+  "files": ["tsconfig.base.json", "eslint.config.mjs"],
+  "main": "eslint.config.mjs"
 }
 ```
 
@@ -210,8 +249,8 @@ test-results/
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023"],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
+    "module": "preserve",
+    "moduleResolution": "bundler",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
@@ -220,13 +259,17 @@ test-results/
     "isolatedModules": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "declaration": true,
     "sourceMap": true
   }
 }
 ```
 
-`packages/config/eslint.config.js`:
+`"module": "preserve"` with `"moduleResolution": "bundler"` replaces the
+`ESNext`/`Bundler` pair: TypeScript 6 errors on the old `node` resolution and
+`preserve` is the mode Vite and Vitest expect. Each package adds its own
+`"rootDir": "src"`, which TypeScript 6 requires from any project that emits.
+
+`packages/config/eslint.config.mjs`:
 
 ```js
 import js from '@eslint/js'
@@ -249,7 +292,7 @@ export default tseslint.config(
 Install its dependencies at the root:
 
 ```bash
-pnpm add -Dw @eslint/js eslint typescript-eslint
+pnpm add -Dw @eslint/js@^10.0.1 eslint@^10.10.0 typescript-eslint@^8.69.0
 ```
 
 - [ ] **Step 3: Create the domain package with one failing test**
@@ -269,8 +312,8 @@ pnpm add -Dw @eslint/js eslint typescript-eslint
     "lint": "eslint src",
     "test": "vitest run"
   },
-  "dependencies": { "zod": "^3.23.8" },
-  "devDependencies": { "@ledger-hq/config": "workspace:*", "vitest": "^2.1.2" }
+  "dependencies": { "zod": "^4.5.4" },
+  "devDependencies": { "@ledger-hq/config": "workspace:*", "vitest": "^5.0.0" }
 }
 ```
 
@@ -279,6 +322,7 @@ pnpm add -Dw @eslint/js eslint typescript-eslint
 ```json
 {
   "extends": "@ledger-hq/config/tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "noEmit": true },
   "include": ["src"]
 }
 ```
@@ -329,10 +373,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 11
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
@@ -729,6 +773,15 @@ git commit -m "feat(domain): validate Portuguese tax and social security numbers
   - `createEmploymentSchema`, `endEmploymentSchema`, `type CreateEmploymentInput`, `type EndEmploymentInput`
   - `bootstrapSchema`, `loginSchema`, `type BootstrapInput`, `type LoginInput`
 
+**Zod 4 notes, verified by running them.** `z.discriminatedUnion`, `.strict()`,
+`.superRefine`, `.partial()` and `.required()` all still exist and behave as
+below. Custom issues added in a `superRefine` keep the `message` field, which is
+how a domain error code travels out of a schema. Zod 4 also offers top-level
+`z.email()` and `z.uuid()`; `z.uuid()` is used for identifiers, but email keeps
+the `z.string().trim().email()` form on purpose, because `z.email().trim()`
+validates before trimming and would reject a pasted address with a trailing
+space.
+
 **Design note:** shape rules (which fields exist for which client kind) live in the Zod schemas, expressed as a discriminated union. Cross-field rules that need the client's kind — which the payload does not carry — live in `checkFiscalProfileConsistency`, a pure function called by both the API and the browser form, so one rule produces one message on both sides.
 
 - [ ] **Step 1: Write the failing client schema test**
@@ -831,7 +884,7 @@ export const isoDateSchema = z
 
 export const base64Schema = z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/)
 
-export const uuidSchema = z.string().uuid()
+export const uuidSchema = z.uuid()
 ```
 
 `packages/domain/src/schemas/client.ts`:
@@ -1289,8 +1342,8 @@ git commit -m "feat(domain): add shared validation schemas for clients, profiles
     "lint": "eslint src",
     "test": "vitest run"
   },
-  "dependencies": { "hash-wasm": "^4.11.0" },
-  "devDependencies": { "@ledger-hq/config": "workspace:*", "vitest": "^2.1.2" }
+  "dependencies": { "hash-wasm": "^4.12.0" },
+  "devDependencies": { "@ledger-hq/config": "workspace:*", "vitest": "^5.0.0" }
 }
 ```
 
@@ -1299,7 +1352,7 @@ git commit -m "feat(domain): add shared validation schemas for clients, profiles
 ```json
 {
   "extends": "@ledger-hq/config/tsconfig.base.json",
-  "compilerOptions": { "lib": ["ES2023", "DOM"] },
+  "compilerOptions": { "lib": ["ES2023", "DOM"], "rootDir": "src", "noEmit": true },
   "include": ["src"]
 }
 ```
@@ -1601,7 +1654,7 @@ git commit -m "feat(crypto): derive master, stretched and auth keys from the mas
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint src test",
     "test": "vitest run --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts"
@@ -1609,33 +1662,35 @@ git commit -m "feat(crypto): derive master, stretched and auth keys from the mas
   "dependencies": {
     "@ledger-hq/crypto": "workspace:*",
     "@ledger-hq/domain": "workspace:*",
-    "@nestjs/common": "^10.4.4",
-    "@nestjs/config": "^3.2.3",
-    "@nestjs/core": "^10.4.4",
-    "@nestjs/platform-express": "^10.4.4",
-    "@prisma/client": "^5.20.0",
+    "@nestjs/common": "^12.0.1",
+    "@nestjs/config": "^12.0.0",
+    "@nestjs/core": "^12.0.1",
+    "@nestjs/platform-express": "^12.0.1",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "cookie-parser": "^1.4.7",
-    "helmet": "^8.0.0",
-    "nestjs-pino": "^4.1.0",
-    "pino": "^9.4.0",
-    "pino-http": "^10.3.0",
+    "hash-wasm": "^4.12.0",
+    "helmet": "^8.3.0",
+    "nestjs-pino": "^5.1.0",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1",
-    "uuidv7": "^1.0.2",
-    "zod": "^3.23.8"
+    "rxjs": "^7.8.2",
+    "uuidv7": "^1.2.1",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@ledger-hq/config": "workspace:*",
-    "@nestjs/cli": "^10.4.5",
-    "@nestjs/testing": "^10.4.4",
-    "@testcontainers/postgresql": "^10.13.2",
+    "@nestjs/cli": "^12.0.0",
+    "@nestjs/testing": "^12.0.1",
+    "@testcontainers/postgresql": "^12.1.0",
     "@types/cookie-parser": "^1.4.7",
     "@types/express": "^5.0.0",
-    "@types/node": "^22.7.5",
+    "@types/node": "^24.13.3",
     "@types/supertest": "^6.0.2",
-    "prisma": "^5.20.0",
-    "supertest": "^7.0.0",
-    "vitest": "^2.1.2"
+    "prisma": "^7.10.0",
+    "supertest": "^7.2.2",
+    "vitest": "^5.0.0"
   }
 }
 ```
@@ -1646,16 +1701,39 @@ git commit -m "feat(crypto): derive master, stretched and auth keys from the mas
 {
   "extends": "@ledger-hq/config/tsconfig.base.json",
   "compilerOptions": {
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "rootDir": "src",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "outDir": "dist",
     "types": ["node"]
   },
+  "include": ["src"]
+}
+```
+
+`apps/api/tsconfig.test.json`:
+
+```json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
   "include": ["src", "test"]
 }
 ```
+
+`node16` replaces the `CommonJS`/`Node` pair: TypeScript 6 rejects the old
+`node` resolution outright, and `node16` emits CommonJS for a package without
+`"type": "module"`, which is what NestJS needs. Decorator metadata was verified
+under TypeScript 6.0.3 — the emitted JavaScript contains `design:paramtypes`,
+so dependency injection resolves constructor types as usual.
+
+The build project includes only `src`, with `rootDir` set to match, so the
+output is `dist/main.js` rather than `dist/src/main.js` — which is what the
+container's start command expects. Tests are type-checked through the second
+project instead, because TypeScript 6 requires `rootDir` to cover every input
+file of an emitting project.
 
 `apps/api/vitest.config.ts`:
 
@@ -1991,7 +2069,7 @@ git commit -m "feat(api): scaffold NestJS with error-code responses and redacted
 ### Task 7: Database schema, constraints and the integration harness
 
 **Files:**
-- Create: `apps/api/prisma/schema.prisma`
+- Create: `apps/api/prisma/schema.prisma`, `apps/api/prisma.config.ts`
 - Create: `apps/api/prisma/migrations/<timestamp>_init/migration.sql` (generated, then extended by hand)
 - Create: `apps/api/src/common/prisma.service.ts`
 - Create: `apps/api/test/database.ts`, `apps/api/test/global-setup.ts`, `apps/api/vitest.integration.config.ts`
@@ -2004,6 +2082,20 @@ git commit -m "feat(api): scaffold NestJS with error-code responses and redacted
   - `getTestPrisma(): PrismaClient` and `resetDatabase(): Promise<void>` from `apps/api/test/database.ts`, used by every later integration test.
   - `pnpm --filter @ledger-hq/api test:integration`.
 
+**Prisma 7 changed project setup, and the old shape no longer validates.** Four
+differences from every Prisma tutorial written before it, each confirmed by
+running the CLI:
+
+1. `url` is rejected inside `datasource`. The connection string moves to
+   `prisma.config.ts`.
+2. `prisma-client-js` is replaced by the `prisma-client` generator, which needs
+   an explicit `output` and writes **TypeScript** into the source tree. Import
+   from that path, not from `@prisma/client`.
+3. `prisma.config.ts` is required for the CLI to find the schema, the migrations
+   directory and the database URL.
+4. `PrismaClient` takes a driver adapter. For PostgreSQL that is `PrismaPg` from
+   `@prisma/adapter-pg`.
+
 **Why the constraints get their own test:** the spec puts these invariants in the database on purpose. A test that only exercises the service layer would still pass if the constraints were silently dropped from a future migration.
 
 - [ ] **Step 1: Write the schema**
@@ -2012,12 +2104,12 @@ git commit -m "feat(api): scaffold NestJS with error-code responses and redacted
 
 ```prisma
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum ClientKind {
@@ -2143,18 +2235,36 @@ model AuditEvent {
 }
 ```
 
-- [ ] **Step 2: Generate the migration without applying it**
+- [ ] **Step 2: Add the Prisma configuration file**
+
+`apps/api/prisma.config.ts`:
+
+```ts
+import { defineConfig, env } from 'prisma/config'
+
+export default defineConfig({
+  schema: 'prisma/schema.prisma',
+  migrations: { path: 'prisma/migrations' },
+  datasource: { url: env('DATABASE_URL') },
+})
+```
+
+Without this file the CLI cannot resolve the database URL, because the schema is
+no longer allowed to carry one.
+
+- [ ] **Step 3: Generate the migration without applying it**
 
 ```bash
 cd apps/api
-docker run --rm -d --name lhq-dev-db -e POSTGRES_PASSWORD=ledger -e POSTGRES_USER=ledger -e POSTGRES_DB=ledger_hq -p 5432:5432 postgres:16-alpine
+docker run --rm -d --name lhq-dev-db -e POSTGRES_PASSWORD=ledger -e POSTGRES_USER=ledger -e POSTGRES_DB=ledger_hq -p 5432:5432 postgres:18.6-alpine
 cp .env.example .env
 pnpm exec prisma migrate dev --name init --create-only
 ```
 
-Expected: a new directory `prisma/migrations/<timestamp>_init/` containing `migration.sql`.
+Expected: `Loaded Prisma config from prisma.config.ts.` followed by a new
+directory `prisma/migrations/<timestamp>_init/` containing `migration.sql`.
 
-- [ ] **Step 3: Append the constraints Prisma cannot express**
+- [ ] **Step 4: Append the constraints Prisma cannot express**
 
 Append to the generated `migration.sql`:
 
@@ -2206,19 +2316,33 @@ Apply it:
 pnpm exec prisma migrate dev
 ```
 
-Expected: the migration applies cleanly and the Prisma client is generated.
+Expected: the migration applies cleanly and the client is generated into
+`src/generated/prisma`. That directory is git-ignored and regenerated on every
+install and build.
 
-- [ ] **Step 4: Create the Prisma service**
+- [ ] **Step 5: Create the Prisma service**
 
 `apps/api/src/common/prisma.service.ts`:
 
 ```ts
 import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import { Injectable } from '@nestjs/common'
-import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { PrismaClient } from '../generated/prisma/client'
 
+/**
+ * Prisma 7 connects through a driver adapter rather than a URL baked into the
+ * schema, so the connection string is read here and nowhere else.
+ */
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    const connectionString = process.env.DATABASE_URL
+    if (connectionString === undefined) throw new Error('DATABASE_URL is not set')
+
+    super({ adapter: new PrismaPg({ connectionString }) })
+  }
+
   async onModuleInit(): Promise<void> {
     await this.$connect()
   }
@@ -2229,7 +2353,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 }
 ```
 
-- [ ] **Step 5: Build the integration harness**
+- [ ] **Step 6: Build the integration harness**
 
 `apps/api/test/global-setup.ts`:
 
@@ -2241,7 +2365,7 @@ import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 let container: StartedPostgreSqlContainer
 
 export async function setup(): Promise<void> {
-  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  container = await new PostgreSqlContainer('postgres:18.6-alpine').start()
 
   process.env.DATABASE_URL = container.getConnectionUri()
   execSync('pnpm exec prisma migrate deploy', {
@@ -2259,12 +2383,15 @@ export async function teardown(): Promise<void> {
 `apps/api/test/database.ts`:
 
 ```ts
-import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { PrismaClient } from '../src/generated/prisma/client'
 
 let client: PrismaClient | undefined
 
 export function getTestPrisma(): PrismaClient {
-  client ??= new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } })
+  client ??= new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' }),
+  })
   return client
 }
 
@@ -2298,7 +2425,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 6: Write the constraint test**
+- [ ] **Step 7: Write the constraint test**
 
 `apps/api/test/schema-constraints.integration.test.ts`:
 
@@ -2445,14 +2572,14 @@ describe('employment constraints', () => {
 })
 ```
 
-- [ ] **Step 7: Run the integration suite**
+- [ ] **Step 8: Run the integration suite**
 
 Run: `pnpm --filter @ledger-hq/api test:integration`
-Expected: PASS, nine cases. The first run pulls the `postgres:16-alpine` image, so allow a minute.
+Expected: PASS, nine cases. The first run pulls the `postgres:18.6-alpine` image, so allow a minute.
 
 If `employment_no_overlap` fails to create during migration with `data type uuid has no default operator class for access method "gist"`, the `CREATE EXTENSION btree_gist` line is missing or placed after the constraint.
 
-- [ ] **Step 8: Add integration tests to CI**
+- [ ] **Step 9: Add integration tests to CI**
 
 Add to `.github/workflows/ci.yml`, after the `pnpm test` step:
 
@@ -2462,7 +2589,7 @@ Add to `.github/workflows/ci.yml`, after the `pnpm test` step:
 
 Testcontainers uses the Docker daemon that `ubuntu-latest` already provides; no service container is needed.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add apps/api .github
@@ -3272,7 +3399,7 @@ Expected: FAIL — 404 on `POST /api/v1/clients`, because no controller is regis
 `apps/api/src/clients/client.mapper.ts`:
 
 ```ts
-import type { Client } from '@prisma/client'
+import type { Client } from '../generated/prisma/client'
 
 export type ClientResponse = {
   id: string
@@ -3314,7 +3441,7 @@ export function toClientResponse(client: Client): ClientResponse {
 
 ```ts
 import { Injectable } from '@nestjs/common'
-import type { Client, Prisma } from '@prisma/client'
+import type { Client, Prisma } from '../generated/prisma/client'
 import { uuidv7 } from 'uuidv7'
 import { AppError } from '@ledger-hq/domain'
 import type { CreateClientInput, UpdateClientInput } from '@ledger-hq/domain'
@@ -3715,7 +3842,7 @@ Expected: FAIL — 404 on the `PUT` route.
 
 ```ts
 import { Injectable } from '@nestjs/common'
-import type { Prisma } from '@prisma/client'
+import type { Prisma } from '../generated/prisma/client'
 import { uuidv7 } from 'uuidv7'
 import { PrismaService } from '../common/prisma.service'
 
@@ -3754,7 +3881,7 @@ export class AuditModule {}
 
 ```ts
 import { Injectable } from '@nestjs/common'
-import type { FiscalProfile } from '@prisma/client'
+import type { FiscalProfile } from '../generated/prisma/client'
 import { AppError, checkFiscalProfileConsistency } from '@ledger-hq/domain'
 import type { ErrorCode, FiscalProfileInput } from '@ledger-hq/domain'
 import { PrismaService } from '../common/prisma.service'
@@ -3851,7 +3978,7 @@ import type { FiscalProfileInput } from '@ledger-hq/domain'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { SessionGuard } from '../auth/session.guard'
 import { FiscalProfilesService } from './fiscal-profiles.service'
-import type { FiscalProfile } from '@prisma/client'
+import type { FiscalProfile } from '../generated/prisma/client'
 
 type FiscalProfileResponse = Omit<FiscalProfile, 'startedAt' | 'updatedAt'> & {
   startedAt: string
@@ -4154,7 +4281,7 @@ Expected: FAIL — 404 on `POST /api/v1/employments`.
 
 ```ts
 import { Injectable } from '@nestjs/common'
-import type { Client, Employment } from '@prisma/client'
+import type { Client, Employment } from '../generated/prisma/client'
 import { uuidv7 } from 'uuidv7'
 import { AppError } from '@ledger-hq/domain'
 import type { CreateEmploymentInput } from '@ledger-hq/domain'
@@ -4404,29 +4531,29 @@ git commit -m "feat(api): link individuals to companies through employment spell
   "dependencies": {
     "@ledger-hq/crypto": "workspace:*",
     "@ledger-hq/domain": "workspace:*",
-    "@tanstack/react-query": "^5.59.0",
-    "@tanstack/react-router": "^1.58.15",
-    "i18next": "^23.15.2",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-i18next": "^15.0.2",
-    "zod": "^3.23.8"
+    "@tanstack/react-query": "^5.102.8",
+    "@tanstack/react-router": "^1.170.32",
+    "i18next": "^26.4.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-i18next": "^17.0.13",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@ledger-hq/config": "workspace:*",
-    "@tailwindcss/vite": "^4.0.0",
-    "@testing-library/jest-dom": "^6.5.0",
-    "@testing-library/react": "^16.0.1",
-    "@testing-library/user-event": "^14.5.2",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.3.2",
-    "eslint-plugin-i18next": "^6.1.0",
-    "jsdom": "^25.0.1",
-    "tailwindcss": "^4.0.0",
-    "vite": "^6.0.0",
-    "vite-plugin-pwa": "^0.20.5",
-    "vitest": "^2.1.2"
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "eslint-plugin-i18next": "^6.1.5",
+    "jsdom": "^30.0.1",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.2.2",
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^5.0.0"
   }
 }
 ```
@@ -6780,7 +6907,7 @@ Add `SystemModule` to `apps/api/src/app.module.ts`, then run the test again: PAS
 `docker/Dockerfile.api`:
 
 ```dockerfile
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 RUN corepack enable
 WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
@@ -6789,22 +6916,27 @@ COPY apps/api ./apps/api
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @ledger-hq/api exec prisma generate
 RUN pnpm --filter @ledger-hq/api build
-RUN pnpm deploy --filter @ledger-hq/api --prod /app
 
-FROM node:22-alpine
-WORKDIR /app
-COPY --from=build /app ./
-COPY --from=build /repo/apps/api/dist ./dist
-COPY --from=build /repo/apps/api/prisma ./prisma
+FROM node:24-alpine
+RUN corepack enable
+WORKDIR /repo
+# The whole installed workspace is copied rather than pruned with
+# `pnpm deploy`, which changed behaviour in pnpm 10 and now needs extra flags.
+# The image is larger; on a single-user self-hosted box that costs nothing.
+COPY --from=build /repo ./
+WORKDIR /repo/apps/api
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/main.js"]
 ```
+
+`prisma migrate deploy` runs from `apps/api` so it finds `prisma.config.ts`,
+which is where Prisma 7 reads the schema path and the database URL.
 
 `docker/Dockerfile.web`:
 
 ```dockerfile
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 RUN corepack enable
 WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
@@ -6813,7 +6945,7 @@ COPY apps/web ./apps/web
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @ledger-hq/web build
 
-FROM caddy:2-alpine
+FROM caddy:2.11.4-alpine
 COPY --from=build /repo/apps/web/dist /srv
 COPY docker/Caddyfile /etc/caddy/Caddyfile
 EXPOSE 8080
@@ -6852,7 +6984,7 @@ EXPOSE 8080
 ```yaml
 services:
   postgres:
-    image: postgres:16.4-alpine
+    image: postgres:18.6-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -6947,7 +7079,7 @@ docker compose exec -T postgres psql --username "${POSTGRES_USER}" --dbname "${P
 [ "${STATUS}" = "OK" ]
 ```
 
-The `id` column is a UUID string, and `gen_random_uuid()` is available in PostgreSQL 16 without an extension. Backup rows are the one place where a v4 identifier is acceptable, because nothing sorts or joins on them.
+The `id` column is a UUID string, and `gen_random_uuid()` is available in PostgreSQL 18 without an extension. Backup rows are the one place where a v4 identifier is acceptable, because nothing sorts or joins on them.
 
 Make it executable and schedule it:
 
@@ -7009,7 +7141,7 @@ git commit -m "feat(ops): containerise the stack with Tailscale access and encry
 - [ ] **Step 1: Configure Playwright**
 
 ```bash
-pnpm --filter @ledger-hq/web add -D @playwright/test
+pnpm --filter @ledger-hq/web add -D @playwright/test@^1.62.1
 pnpm --filter @ledger-hq/web exec playwright install --with-deps chromium
 ```
 
