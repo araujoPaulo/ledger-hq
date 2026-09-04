@@ -34,6 +34,8 @@ working when the backend is unreachable.
   them.
 - Credentials readable with no network connection at all.
 - Statutory deadlines derived automatically from each client's fiscal profile.
+- Individuals held as first-class clients, linked by employment to the companies
+  they work for, whether or not they have business activity of their own.
 - A direct answer to "who owes me money, and for how long".
 - Installable on desktop and phone without app stores.
 - Bilingual interface: Portuguese and English.
@@ -53,12 +55,16 @@ Explicitly out of scope. Each was considered and rejected.
 | Offline writes outside read caching | Only credential reads must work offline. See section 9. |
 | Native mobile applications | A PWA meets the requirement without a second codebase or store fees. |
 | CRDT-based synchronisation | A single user generates almost no genuine conflicts. |
+| Payroll processing | Salaries, contracts and categories are a separate domain. Employment records hold dates and job title only. |
+| A complete company headcount | Only people the practice actually works for are recorded. See section 6.3. |
+| Shareholder and director relationships | Only employment is modelled. Generalisation path documented in section 6.3. |
 
 ## 4. Decision summary
 
 | Area | Decision |
 |---|---|
 | Users | Single user |
+| Client kinds | Companies and individuals, linked by employment |
 | Hosting | Self-hosted on an office machine |
 | Remote access | Tailscale private network |
 | Credential security | Zero-knowledge, end-to-end encrypted |
@@ -110,6 +116,13 @@ obligations and debt belongs in `reporting`, never in a lateral dependency.
 Each module exposes a typed service. No module reaches into another module's
 Prisma models. This keeps every module small enough to read in full and to test
 in isolation.
+
+The `clients` module owns both client kinds and the employment relationship
+between them. Its screens are: a client list filtered and visually distinguished
+by kind; a company record with an *Employees* section listing linked people with
+their spells and job titles; and a person record with an *Employments* section
+listing employers. Creating an employee from a company record pre-fills the
+link.
 
 ### 5.3 API contract
 
@@ -184,37 +197,125 @@ Five aggregates: `Client` at the centre, with `Vault`, `Obligations` and
 
 ### 6.2 Core
 
-```prisma
-model Client {
-  id            String   @id
-  name          String
-  taxId         String   @unique          // NIF
-  legalForm     LegalForm                 // SOLE_TRADER | LDA | SA | ASSOCIATION | OTHER
-  accounting    Accounting                // ORGANIZED | SIMPLIFIED
-  email         String?
-  phone         String?
-  notes         String?
-  archivedAt    DateTime?
-  fiscalProfile FiscalProfile?
-}
+A client is either a company or a natural person. Both kinds need exactly the
+same capabilities — vault credentials and their own fiscal obligations — so a
+separate `Person` entity was rejected: it would duplicate identity and leave the
+same tax number in two places, free to diverge.
 
-model FiscalProfile {
-  clientId       String  @id
-  vatRegime      VatRegime    // MONTHLY | QUARTERLY | EXEMPT
-  incomeTax      IncomeTax    // CIT | PIT_CATEGORY_B
-  hasEmployees   Boolean
-  hasWithholding Boolean
-  isVatCashBasis Boolean
-  startedAt      DateTime @db.Date
+```prisma
+enum ClientKind { COMPANY, INDIVIDUAL }
+
+model Client {
+  id               String     @id
+  kind             ClientKind
+  name             String
+  taxId            String     @unique     // NIF; person and company ranges never collide in PT
+  accounting       Accounting             // ORGANIZED | SIMPLIFIED
+  email            String?
+  phone            String?
+  notes            String?
+  archivedAt       DateTime?
+  // COMPANY only
+  legalForm        LegalForm?             // LDA | UNIPESSOAL_LDA | SA | ASSOCIATION | OTHER
+  // INDIVIDUAL only
+  socialSecurityNo String?                // NISS
+  dateOfBirth      DateTime? @db.Date
+  fiscalProfile    FiscalProfile?
+  @@unique([id, kind])                    // target for composite foreign keys
 }
 ```
+
+`LegalForm` deliberately has no `SOLE_TRADER` member. A Portuguese *empresário em
+nome individual* is a natural person carrying on business activity, not a
+corporate legal form. Such a client is `kind = INDIVIDUAL` with
+`hasOpenActivity = true`. This removes an ambiguity in which a sole trader and a
+limited company shared one enum while behaving differently in every rule that
+consults it.
+
+A `CHECK` constraint enforces the discriminated fields: `legalForm` is required
+when `kind = COMPANY` and null otherwise; `socialSecurityNo` and `dateOfBirth`
+are permitted only when `kind = INDIVIDUAL`.
+
+```prisma
+model FiscalProfile {
+  clientId        String  @id
+  hasOpenActivity Boolean      // always true for COMPANY
+  vatRegime       VatRegime    // MONTHLY | QUARTERLY | EXEMPT | NOT_APPLICABLE
+  incomeTax       IncomeTax    // CIT | PIT_CATEGORY_B | PIT_EMPLOYMENT_ONLY
+  hasEmployees    Boolean      // COMPANY only
+  hasWithholding  Boolean
+  isVatCashBasis  Boolean
+  startedAt       DateTime @db.Date
+}
+```
+
+Three representative profiles:
+
+| Situation | `kind` | `hasOpenActivity` | `vatRegime` | `incomeTax` |
+|---|---|---|---|---|
+| Company | COMPANY | true | MONTHLY / QUARTERLY | CIT |
+| Employee whose personal income tax return the practice files | INDIVIDUAL | false | NOT_APPLICABLE | PIT_EMPLOYMENT_ONLY |
+| Employee who also invoices independently | INDIVIDUAL | true | QUARTERLY / EXEMPT | PIT_CATEGORY_B |
+
+The third row is the case that motivated this model: one person is an employee
+of a company client *and* has open activity, carrying VAT obligations of their
+own on top of the personal income tax return.
 
 `FiscalProfile` is the input to the obligation engine. It is mutable: when a
 client moves from quarterly to monthly VAT, the profile is edited. Previously
 generated instances remain untouched because they are historical records. The
 change is written to the audit log.
 
-### 6.3 Vault
+### 6.3 Employment
+
+Only people the practice actually works for are recorded — not every employee on
+a company's payroll. A company with fifteen employees whose personal filings the
+practice does not handle has no employee records at all. As a consequence,
+`FiscalProfile.hasEmployees` remains a manually maintained flag on the company
+profile; it cannot be derived from employment records, because those are
+deliberately incomplete.
+
+```prisma
+model Employment {
+  id           String     @id
+  employerId   String
+  employerKind ClientKind             // pinned to COMPANY by CHECK
+  employeeId   String
+  employeeKind ClientKind             // pinned to INDIVIDUAL by CHECK
+  startedOn    DateTime  @db.Date
+  endedOn      DateTime? @db.Date
+  jobTitle     String?
+  notes        String?
+
+  employer Client @relation("employer", fields: [employerId, employerKind], references: [id, kind])
+  employee Client @relation("employee", fields: [employeeId, employeeKind], references: [id, kind])
+}
+```
+
+The `employerKind` and `employeeKind` columns are not decorative redundancy.
+They are what lets PostgreSQL guarantee that a company can never be recorded as
+somebody's employee: a composite foreign key against `Client(id, kind)` plus a
+`CHECK` pinning each column to its one legal value. The invariant lives in the
+database rather than in hope.
+
+Three further constraints:
+
+- `CHECK (employer_id <> employee_id)` — nobody employs themselves.
+- `EXCLUDE USING gist` over `(employer_id, employee_id, daterange(started_on, ended_on))`
+  — no overlapping spells for the same pair. Re-hiring after termination is a new
+  row, preserving both spells.
+- No constraint across different pairs: one person may hold concurrent
+  employments with two companies, which happens in practice.
+
+Archiving a company does not archive its employees; they are independent
+clients. Ending an employment means setting `endedOn`, never deleting the row.
+
+**Deliberate limitation.** The table models employment only, as scoped. Adding
+shareholders and directors later means generalising it to `ClientRelationship`
+with a `kind` discriminator — a table rename plus one column. Recorded here so
+that the future migration is a considered decision rather than a surprise.
+
+### 6.4 Vault
 
 ```prisma
 model Platform {
@@ -251,7 +352,7 @@ password, PIN, TOTP secret, extra fields and notes are all inside `ciphertext`.
 version is the most recent; earlier ones remain available when a portal rejects
 a newly changed password.
 
-### 6.4 Obligations
+### 6.5 Obligations
 
 ```prisma
 model ObligationDefinition {
@@ -297,7 +398,7 @@ same quarter, however often the generator runs.
 
 "Overdue" is not stored state. It is `status != DONE && dueDate < today`.
 
-### 6.5 Billing
+### 6.6 Billing
 
 ```prisma
 model RetainerPlan {
@@ -361,7 +462,7 @@ old plan is closed with `validTo` and a new one created; 2025 charges keep 2025
 prices. A Postgres `EXCLUDE USING gist` constraint prevents overlapping plans
 for the same client.
 
-### 6.6 Audit
+### 6.7 Audit
 
 ```prisma
 model AuditEvent {
@@ -394,7 +495,12 @@ export const VAT_QUARTERLY_RETURN: ObligationDefinition = {
   authority: 'TAX',
   periodicity: 'QUARTERLY',
   legalRef: 'CIVA art. 41.º',
-  appliesWhen: { all: [{ field: 'vatRegime', op: 'eq', value: 'QUARTERLY' }] },
+  appliesWhen: {
+    all: [
+      { field: 'hasOpenActivity', op: 'eq', value: true },
+      { field: 'vatRegime', op: 'eq', value: 'QUARTERLY' },
+    ],
+  },
   deadline: { kind: 'dayOfMonthAfterPeriodEnd', day: 20, monthsAfter: 2 },
   businessDayShift: 'NEXT',
   validFrom: '2023-01-01',
@@ -417,10 +523,14 @@ expressiveness and buys two things: the UI can explain itself ("applies because:
 quarterly VAT and has employees"), and rules are inspectable without reading
 code. User-created `CUSTOM` definitions use the same structure.
 
+Conditions address a flattened subject combining the client's `kind` with its
+fiscal profile, so a rule can require `kind = COMPANY` or
+`hasOpenActivity = false` as naturally as it requires a VAT regime.
+
 ### 7.2 Resolver
 
 ```ts
-appliesTo(definition, profile, period): boolean
+appliesTo(definition, { clientKind, profile }, period): boolean
 generatePeriods(periodicity, from, to): Period[]
 resolveDueDate(definition, period): LocalDate
 ```
@@ -465,22 +575,27 @@ created ad hoc outside the catalog. The engine proposes; the accountant decides.
 
 ### 7.5 Initial catalog
 
-| Code | Deadline |
-|---|---|
-| `VAT_MONTHLY_RETURN` / `VAT_QUARTERLY_RETURN` | 20th of the 2nd following month |
-| `VAT_PAYMENT` | 25th of the 2nd following month |
-| `EFATURA_INVOICE_REPORTING` | 5th of the following month |
-| `DMR_AT` | 10th of the following month |
-| `SS_REMUNERATION_DECLARATION` | 10th of the following month |
-| `SS_CONTRIBUTION_PAYMENT` | 20th of the following month |
-| `WITHHOLDING_TAX_PAYMENT` | 20th of the following month |
-| `MODEL_22_CIT_RETURN` | 31 May |
-| `IES_ANNUAL_FILING` | 15 July |
-| `CIT_PAYMENT_ON_ACCOUNT` | July, September, 15 December |
-| `MODEL_10_INCOME_WITHHOLDING` | 31 January |
-| `MODEL_3_PIT_RETURN` | 1 April to 30 June |
-| `MODEL_30_NON_RESIDENT_PAYMENTS` | end of the 2nd following month |
-| `INVENTORY_REPORTING` | 31 January |
+| Code | Applies to | Deadline |
+|---|---|---|
+| `VAT_MONTHLY_RETURN` / `VAT_QUARTERLY_RETURN` | with open activity | 20th of the 2nd following month |
+| `VAT_PAYMENT` | with open activity | 25th of the 2nd following month |
+| `EFATURA_INVOICE_REPORTING` | with open activity | 5th of the following month |
+| `DMR_AT` | company | 10th of the following month |
+| `SS_REMUNERATION_DECLARATION` | company | 10th of the following month |
+| `SS_CONTRIBUTION_PAYMENT` | company | 20th of the following month |
+| `WITHHOLDING_TAX_PAYMENT` | company | 20th of the following month |
+| `MODEL_22_CIT_RETURN` | company | 31 May |
+| `IES_ANNUAL_FILING` | company | 15 July |
+| `CIT_PAYMENT_ON_ACCOUNT` | company | July, September, 15 December |
+| `MODEL_10_INCOME_WITHHOLDING` | company | 31 January |
+| `MODEL_3_PIT_RETURN` | individual | 1 April to 30 June |
+| `MODEL_30_NON_RESIDENT_PAYMENTS` | company | end of the 2nd following month |
+| `INVENTORY_REPORTING` | company | 31 January |
+
+The *applies to* column summarises `appliesWhen`; the authoritative condition is
+the catalog entry itself. Note that an individual with open activity picks up the
+VAT rules alongside the personal income tax return, which is exactly the
+employee-with-side-activity case from section 6.2.
 
 **The product owner is the authority on this table, not the implementer.** The
 catalog is seeded from general knowledge, which has an expiry date, while tax
@@ -518,6 +633,10 @@ begins.
 - Runs on the same daily cron as the obligation generator.
 - Archiving a client closes the plan with `validTo`, and no further charges are
   created.
+- A retainer plan is optional. An individual whose personal filings are covered
+  by their employer's retainer has no plan of their own and never appears in
+  receivables. Charging them separately means creating an `EXTRA` charge on their
+  own record.
 
 **Assumption:** `amountCents` is the gross amount owed, VAT included. Taxable
 base and VAT are not separated, because the system issues no documents. Adding
@@ -822,8 +941,8 @@ at presentation time with no change.
 
 ### 10.4 Domain enumerations
 
-`LegalForm`, `VatRegime`, `PaymentMethod`, obligation statuses and charge
-statuses live in the `domain` namespace:
+`ClientKind`, `LegalForm`, `VatRegime`, `IncomeTax`, `PaymentMethod`, obligation
+statuses and charge statuses live in the `domain` namespace:
 
 ```json
 { "vatRegime": { "MONTHLY": "Mensal", "QUARTERLY": "Trimestral", "EXEMPT": "Isento" } }
@@ -1001,7 +1120,7 @@ implementation plan.
 
 | Phase | Delivers | Standalone value |
 |---|---|---|
-| **0 — Foundation** | Monorepo, CI, Docker, Tailscale, authentication, clients with fiscal profiles, installable PWA, i18n infrastructure | Client register accessible on the phone |
+| **0 — Foundation** | Monorepo, CI, Docker, Tailscale, authentication, company and individual clients with fiscal profiles, employment links, installable PWA, i18n infrastructure | Client and staff register accessible on the phone |
 | **1 — Vault** | Crypto, platforms, credentials, offline access, TOTP, recovery | Replaces the current method of storing access details |
 | **2 — Obligations** | Catalog, resolver, generator, deadline dashboard | Deadlines no longer depend on memory |
 | **3 — Billing** | Plans, charges, payments, allocation, client ledger | Answers who owes what, and for how long |
@@ -1010,6 +1129,12 @@ implementation plan.
 Phase 1 precedes obligations deliberately. It delivers daily value from the
 first day and is the most delicate part technically; built early, it accumulates
 real-world use before the system grows large.
+
+Employment lives in Phase 0 because it touches the core `Client` model. Its two
+downstream capabilities then arrive with no further work on the relationship
+itself: personal credentials in Phase 1, because the vault is already keyed by
+client; personal obligations in Phase 2, because the engine already reads the
+client kind and fiscal profile.
 
 ## 15. Risks
 
