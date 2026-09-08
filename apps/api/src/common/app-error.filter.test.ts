@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ArgumentsHost } from '@nestjs/common'
+import { ForbiddenException } from '@nestjs/common'
 import { AppError } from '@ledger-hq/domain'
 import { AppErrorFilter } from './app-error.filter.js'
 
@@ -32,5 +33,28 @@ describe('AppErrorFilter', () => {
 
     const payload = JSON.stringify(json.mock.calls[0]?.[0])
     expect(payload).not.toMatch(/[A-Z][a-z]+ [a-z]+ [a-z]+/)
+  })
+
+  it('reduces a framework HttpException to a code-only envelope at its own status', () => {
+    const { host, status, json } = hostWithResponse()
+
+    new AppErrorFilter().catch(new ForbiddenException('Forbidden'), host)
+
+    expect(status).toHaveBeenCalledWith(403)
+    expect(json).toHaveBeenCalledWith({
+      error: { code: 'common.validation_failed', params: {} },
+    })
+  })
+
+  it('reduces an arbitrary thrown error to a 500 code-only envelope without leaking its message', () => {
+    const { host, status, json } = hostWithResponse()
+
+    new AppErrorFilter().catch(new Error('database connection string is postgres://secret'), host)
+
+    expect(status).toHaveBeenCalledWith(500)
+    expect(json).toHaveBeenCalledWith({
+      error: { code: 'common.validation_failed', params: {} },
+    })
+    expect(JSON.stringify(json.mock.calls[0]?.[0])).not.toMatch(/secret/)
   })
 })
