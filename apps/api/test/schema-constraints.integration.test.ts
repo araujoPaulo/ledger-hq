@@ -73,6 +73,22 @@ describe('client kind constraints', () => {
       }),
     ).rejects.toThrow(/client_kind_fields/)
   })
+
+  it('rejects a date of birth on a company', async () => {
+    await expect(
+      prisma.client.create({
+        data: {
+          id: uuidv7(),
+          kind: 'COMPANY',
+          name: 'W',
+          taxId: '501442600',
+          accounting: 'ORGANIZED',
+          legalForm: 'LDA',
+          dateOfBirth: new Date('1990-01-01T00:00:00Z'),
+        },
+      }),
+    ).rejects.toThrow(/client_kind_fields/)
+  })
 })
 
 describe('employment constraints', () => {
@@ -94,6 +110,29 @@ describe('employment constraints', () => {
         data: { ...employment(personA, personB, '2024-01-15'), employerKind: 'INDIVIDUAL' },
       }),
     ).rejects.toThrow(/employment_employer_is_company/)
+  })
+
+  it('rejects a company as the employee', async () => {
+    const employerId = await createCompany('501442600')
+    const employeeCompanyId = await createCompany('999999990')
+
+    await expect(
+      prisma.employment.create({
+        data: { ...employment(employerId, employeeCompanyId, '2024-01-15'), employeeKind: 'COMPANY' },
+      }),
+    ).rejects.toThrow(/employment_employee_is_individual/)
+  })
+
+  it('rejects an employment where the employer and employee are the same client', async () => {
+    const companyId = await createCompany('501442600')
+
+    // Confirmed against the raw constraint (see the report): Postgres checks
+    // non-deferred CHECK constraints inline during the insert, before the
+    // AFTER-ROW triggers that enforce the composite foreign keys run, so
+    // "employment_not_self" is what actually rejects this row.
+    await expect(
+      prisma.employment.create({ data: employment(companyId, companyId, '2024-01-15') }),
+    ).rejects.toThrow(/employment_not_self/)
   })
 
   it('rejects overlapping spells for the same pair', async () => {

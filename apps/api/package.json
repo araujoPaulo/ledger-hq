@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint .",
     "test": "vitest run --config vitest.config.ts",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "generate": "DATABASE_URL=\"${DATABASE_URL:-postgresql://ledger:ledger@localhost:5432/ledger_hq}\" prisma generate",
+    "postinstall": "pnpm run generate"
   },
   "dependencies": {
     "@ledger-hq/crypto": "workspace:*",
