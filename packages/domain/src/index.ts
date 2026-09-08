@@ -1,1 +1,2 @@
-export const DOMAIN_PACKAGE_NAME = '@ledger-hq/domain'
+export * from './enums'
+export * from './errors'
