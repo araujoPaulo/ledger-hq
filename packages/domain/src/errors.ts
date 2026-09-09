@@ -13,6 +13,7 @@ export const ERROR_CODES = [
   'auth.session_expired',
   'clients.tax_id_taken',
   'clients.archived',
+  'clients.kind_mismatch',
   'fiscal_profile.open_activity_required_for_company',
   'fiscal_profile.vat_regime_requires_open_activity',
   'fiscal_profile.income_tax_incompatible_with_kind',

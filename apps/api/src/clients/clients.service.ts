@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
-import type { Client, Prisma } from '../generated/prisma/client.js'
+import type { Client } from '../generated/prisma/client.js'
+import { Prisma } from '../generated/prisma/client.js'
 import { uuidv7 } from 'uuidv7'
 import { AppError } from '@ledger-hq/domain'
 import type { CreateClientInput, UpdateClientInput } from '@ledger-hq/domain'
@@ -19,9 +20,13 @@ export class ClientsService {
   async create(input: CreateClientInput): Promise<Client> {
     await this.assertTaxIdFree(input.taxId)
 
-    return this.prisma.client.create({
-      data: { id: uuidv7(), ...toPersistedFields(input) } as Prisma.ClientUncheckedCreateInput,
-    })
+    try {
+      return await this.prisma.client.create({
+        data: { id: uuidv7(), ...toPersistedFields(input) } as Prisma.ClientUncheckedCreateInput,
+      })
+    } catch (error) {
+      throw toTaxIdConflictOr(error, input.taxId)
+    }
   }
 
   async list(filters: ListFilters): Promise<Client[]> {
@@ -54,13 +59,22 @@ export class ClientsService {
   async update(id: string, input: UpdateClientInput): Promise<Client> {
     const existing = await this.findOne(id)
     if (existing.archivedAt) throw new AppError('clients.archived', {}, 409)
+    // The kind CHECK constraint (`client_kind_fields`) would catch a mismatch
+    // at the database, but only as an opaque constraint-violation error; this
+    // gives the caller a clean, specific one instead.
+    if (input.kind !== existing.kind) throw new AppError('clients.kind_mismatch', {}, 409)
 
     const { kind: _kind, ...changes } = input
     if (typeof changes.taxId === 'string' && changes.taxId !== existing.taxId) {
       await this.assertTaxIdFree(changes.taxId)
     }
 
-    return this.prisma.client.update({ where: { id }, data: toPersistedFields(changes) })
+    try {
+      return await this.prisma.client.update({ where: { id }, data: toPersistedFields(changes) })
+    } catch (error) {
+      const taxId = typeof changes.taxId === 'string' ? changes.taxId : existing.taxId
+      throw toTaxIdConflictOr(error, taxId)
+    }
   }
 
   async archive(id: string): Promise<Client> {
@@ -89,4 +103,29 @@ function toPersistedFields(input: Record<string, unknown>): Record<string, unkno
   }
 
   return 'kind' in input ? { ...fields, kind: input.kind } : fields
+}
+
+/**
+ * `assertTaxIdFree`'s check-then-act read is only the friendly path: two
+ * concurrent writes can both pass it before either commits. This closes the
+ * gap by turning the database's own unique-constraint violation — the
+ * guarantee that actually holds — into the same domain error, instead of
+ * letting it fall through to the catch-all filter as an opaque 500.
+ */
+function toTaxIdConflictOr(error: unknown, taxId: string): unknown {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002' &&
+    targetsTaxId(error.meta)
+  ) {
+    return new AppError('clients.tax_id_taken', { taxId }, 409)
+  }
+
+  return error
+}
+
+function targetsTaxId(meta: Record<string, unknown> | undefined): boolean {
+  const target = meta?.target
+  if (Array.isArray(target)) return target.includes('taxId')
+  return typeof target === 'string' && target.includes('taxId')
 }

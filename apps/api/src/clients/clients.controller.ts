@@ -1,6 +1,6 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
-import { createClientSchema, updateClientSchema } from '@ledger-hq/domain'
-import type { CreateClientInput, UpdateClientInput } from '@ledger-hq/domain'
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, UseGuards, UsePipes } from '@nestjs/common'
+import { createClientSchema, listClientsQuerySchema, updateClientSchema } from '@ledger-hq/domain'
+import type { CreateClientInput, ListClientsQuery, UpdateClientInput } from '@ledger-hq/domain'
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js'
 import { SessionGuard } from '../auth/session.guard.js'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
@@ -14,15 +14,12 @@ export class ClientsController {
   constructor(private readonly clients: ClientsService) {}
 
   @Get()
-  async list(
-    @Query('kind') kind?: 'COMPANY' | 'INDIVIDUAL',
-    @Query('search') search?: string,
-    @Query('includeArchived') includeArchived?: string,
-  ): Promise<ClientResponse[]> {
+  @UsePipes(new ZodValidationPipe(listClientsQuerySchema))
+  async list(@Query() query: ListClientsQuery): Promise<ClientResponse[]> {
     const found = await this.clients.list({
-      ...(kind ? { kind } : {}),
-      ...(search ? { search } : {}),
-      includeArchived: includeArchived === 'true',
+      ...(query.kind ? { kind: query.kind } : {}),
+      ...(query.search ? { search: query.search } : {}),
+      includeArchived: query.includeArchived === 'true',
     })
 
     return found.map(toClientResponse)

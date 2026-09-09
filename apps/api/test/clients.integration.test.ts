@@ -106,6 +106,12 @@ describe('GET /clients', () => {
     expect((await get('/api/v1/clients').expect(200)).body).toHaveLength(0)
     expect((await get('/api/v1/clients?includeArchived=true').expect(200)).body).toHaveLength(1)
   })
+
+  it('rejects an invalid kind query value instead of reaching Prisma', async () => {
+    const response = await get('/api/v1/clients?kind=BOGUS').expect(422)
+
+    expect(response.body.error.code).toBe('common.validation_failed')
+  })
 })
 
 describe('PATCH /clients/:id', () => {
@@ -146,6 +152,19 @@ describe('PATCH /clients/:id', () => {
       .expect(404)
 
     expect(response.body.error.code).toBe('common.not_found')
+  })
+
+  it('rejects a kind mismatch against the existing record', async () => {
+    const created = await post('/api/v1/clients', company).expect(201)
+
+    const response = await request(app.getHttpServer())
+      .patch(`/api/v1/clients/${created.body.id}`)
+      .set('Cookie', cookie)
+      .set('X-Requested-With', 'ledger-hq')
+      .send({ kind: 'INDIVIDUAL', socialSecurityNo: '11234567890' })
+      .expect(409)
+
+    expect(response.body.error.code).toBe('clients.kind_mismatch')
   })
 })
 
