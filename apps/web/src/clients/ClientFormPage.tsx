@@ -68,6 +68,59 @@ export function ClientFormPage() {
   const [form, setForm] = useState<FormState>(initialState)
   const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set())
   const [showValidationError, setShowValidationError] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Map<string, string>>(new Map())
+
+  /**
+   * Per-field messages for the schema's own validation failures.
+   *
+   * `createClientSchema`'s refinements deliberately carry no `ErrorCode`
+   * message (see the comment on `taxId` in
+   * packages/domain/src/schemas/client.ts): that convention exists to avoid
+   * colliding with the server-side pipe's code-promotion mechanism, so a
+   * local `safeParse` failure here produces plain Zod issue codes
+   * (`too_small`, `custom`, `invalid_format`, `invalid_value`, `too_big` —
+   * confirmed empirically against this Zod version, not assumed), never a
+   * domain `ErrorCode`. There is nothing in the `errors` namespace to look
+   * those up against, so this switch calls `t()` on a literal key per
+   * field — never on the field name itself — and stays entirely inside
+   * `clients.json`'s `form.*.invalid` keys. It never touches
+   * `packages/domain`, `ERROR_CODES`, or the `errors` namespace.
+   */
+  function translateFieldError(field: string): string | undefined {
+    switch (field) {
+      case 'name':
+        return t('clients:form.name.invalid')
+      case 'taxId':
+        return t('clients:form.taxId.invalid')
+      case 'accounting':
+        return t('clients:form.accounting.invalid')
+      case 'legalForm':
+        return t('clients:form.legalForm.invalid')
+      case 'socialSecurityNo':
+        return t('clients:form.socialSecurityNo.invalid')
+      case 'dateOfBirth':
+        return t('clients:form.dateOfBirth.invalid')
+      case 'email':
+        return t('clients:form.email.invalid')
+      case 'phone':
+        return t('clients:form.phone.invalid')
+      case 'notes':
+        return t('clients:form.notes.invalid')
+      default:
+        return undefined
+    }
+  }
+
+  function fieldError(field: string) {
+    const message = fieldErrors.get(field)
+    if (!message) return null
+
+    return (
+      <p role="alert" className="text-sm text-red-700">
+        {message}
+      </p>
+    )
+  }
 
   const mutation = useMutation({
     mutationFn: (input: CreateClientInput) => createClient(input),
@@ -101,13 +154,22 @@ export function ClientFormPage() {
 
         const result = createClientSchema.safeParse(toCandidate(form))
         if (!result.success) {
-          setInvalidFields(new Set(result.error.issues.map((issue) => String(issue.path[0]))))
+          const fields = new Set(result.error.issues.map((issue) => String(issue.path[0])))
+          setInvalidFields(fields)
           setShowValidationError(true)
+
+          const messages = new Map<string, string>()
+          for (const field of fields) {
+            const message = translateFieldError(field)
+            if (message !== undefined) messages.set(field, message)
+          }
+          setFieldErrors(messages)
           return
         }
 
         setInvalidFields(new Set())
         setShowValidationError(false)
+        setFieldErrors(new Map())
         mutation.mutate(result.data)
       }}
     >
@@ -137,6 +199,7 @@ export function ClientFormPage() {
           className="rounded border border-slate-300 px-2 py-1"
         />
       </label>
+      {fieldError('name')}
 
       <label className="flex flex-col gap-1 text-sm">
         {t('clients:form.taxId.label')}
@@ -147,6 +210,7 @@ export function ClientFormPage() {
           className="rounded border border-slate-300 px-2 py-1"
         />
       </label>
+      {fieldError('taxId')}
 
       <label className="flex flex-col gap-1 text-sm">
         {t('clients:form.accounting.label')}
@@ -162,22 +226,26 @@ export function ClientFormPage() {
           ))}
         </select>
       </label>
+      {fieldError('accounting')}
 
       {form.kind === 'COMPANY' && (
-        <label className="flex flex-col gap-1 text-sm">
-          {t('clients:form.legalForm.label')}
-          <select
-            value={form.legalForm}
-            onChange={(event) => update('legalForm', event.target.value as LegalForm)}
-            className="rounded border border-slate-300 px-2 py-1"
-          >
-            {LEGAL_FORM_VALUES.map((value) => (
-              <option key={value} value={value}>
-                {t(`domain:legalForm.${value}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <>
+          <label className="flex flex-col gap-1 text-sm">
+            {t('clients:form.legalForm.label')}
+            <select
+              value={form.legalForm}
+              onChange={(event) => update('legalForm', event.target.value as LegalForm)}
+              className="rounded border border-slate-300 px-2 py-1"
+            >
+              {LEGAL_FORM_VALUES.map((value) => (
+                <option key={value} value={value}>
+                  {t(`domain:legalForm.${value}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {fieldError('legalForm')}
+        </>
       )}
 
       {form.kind === 'INDIVIDUAL' && (
@@ -191,6 +259,7 @@ export function ClientFormPage() {
               className="rounded border border-slate-300 px-2 py-1"
             />
           </label>
+          {fieldError('socialSecurityNo')}
 
           <label className="flex flex-col gap-1 text-sm">
             {t('clients:form.dateOfBirth.label')}
@@ -202,6 +271,7 @@ export function ClientFormPage() {
               className="rounded border border-slate-300 px-2 py-1"
             />
           </label>
+          {fieldError('dateOfBirth')}
         </>
       )}
 
@@ -215,6 +285,7 @@ export function ClientFormPage() {
           className="rounded border border-slate-300 px-2 py-1"
         />
       </label>
+      {fieldError('email')}
 
       <label className="flex flex-col gap-1 text-sm">
         {t('clients:form.phone.label')}
@@ -225,6 +296,7 @@ export function ClientFormPage() {
           className="rounded border border-slate-300 px-2 py-1"
         />
       </label>
+      {fieldError('phone')}
 
       <label className="flex flex-col gap-1 text-sm">
         {t('clients:form.notes.label')}
@@ -235,6 +307,7 @@ export function ClientFormPage() {
           className="rounded border border-slate-300 px-2 py-1"
         />
       </label>
+      {fieldError('notes')}
 
       {showValidationError && (
         <p role="alert" className="text-sm text-red-700">

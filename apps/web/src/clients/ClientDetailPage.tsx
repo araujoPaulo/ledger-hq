@@ -49,6 +49,11 @@ export function ClientDetailPage() {
   const record = client.data
   const profileMissing =
     fiscalProfile.error instanceof ApiError && fiscalProfile.error.code === 'common.not_found'
+  // A genuine fetch failure (a real 500, or the browser going offline) must
+  // not be indistinguishable from "no profile exists yet": rendering the
+  // form with defaults in that case would let a submit silently overwrite a
+  // profile that merely failed to load, with no ErrorMessage in sight.
+  const profileFailed = fiscalProfile.isError && !profileMissing
 
   return (
     <section className="flex flex-col gap-6">
@@ -133,7 +138,9 @@ export function ClientDetailPage() {
         )}
       </dl>
 
-      {fiscalProfile.isPending && !profileMissing ? null : (
+      {fiscalProfile.isPending ? null : profileFailed ? (
+        <ErrorMessage error={fiscalProfile.error} />
+      ) : (
         <FiscalProfileForm clientId={clientId} kind={record.kind} initial={fiscalProfile.data ?? null} />
       )}
     </section>

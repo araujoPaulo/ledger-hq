@@ -4,16 +4,16 @@
   "empty": "Ainda não há clientes.",
   "filter": { "all": "Todos", "search": "Pesquisar por nome ou NIF", "showArchived": "Mostrar arquivados" },
   "form": {
-    "name": { "label": "Nome" },
-    "taxId": { "label": "NIF" },
+    "name": { "label": "Nome", "invalid": "Indica um nome válido." },
+    "taxId": { "label": "NIF", "invalid": "O NIF não é válido." },
     "kind": { "label": "Tipo" },
-    "legalForm": { "label": "Forma jurídica" },
-    "accounting": { "label": "Contabilidade" },
-    "socialSecurityNo": { "label": "NISS" },
-    "dateOfBirth": { "label": "Data de nascimento" },
-    "email": { "label": "Email" },
-    "phone": { "label": "Telefone" },
-    "notes": { "label": "Notas" }
+    "legalForm": { "label": "Forma jurídica", "invalid": "Escolhe uma forma jurídica válida." },
+    "accounting": { "label": "Contabilidade", "invalid": "Escolhe um tipo de contabilidade válido." },
+    "socialSecurityNo": { "label": "NISS", "invalid": "O NISS não é válido." },
+    "dateOfBirth": { "label": "Data de nascimento", "invalid": "Indica uma data de nascimento válida." },
+    "email": { "label": "Email", "invalid": "Indica um email válido." },
+    "phone": { "label": "Telefone", "invalid": "O telefone é demasiado longo." },
+    "notes": { "label": "Notas", "invalid": "As notas são demasiado longas." }
   },
   "profile": {
     "title": "Perfil fiscal",

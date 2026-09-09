@@ -81,7 +81,13 @@ describe('ClientFormPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /guardar|save/i }))
 
     expect(createClient).not.toHaveBeenCalled()
-    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    // Two alerts now: the generic summary (kept as a fallback for anything
+    // the per-field mapping doesn't cover) and the specific, translated
+    // per-field message below the tax number input — not a raw Zod issue
+    // code such as "custom".
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts.length).toBeGreaterThanOrEqual(1)
+    expect(await screen.findByText(/o nif não é válido/i)).toBeInTheDocument()
   })
 
   it('submits a valid company', async () => {
