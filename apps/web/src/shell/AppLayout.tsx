@@ -1,5 +1,6 @@
 import { Link, Outlet } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { ConnectionStatus } from './ConnectionStatus'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { RequireSession } from '../router'
 
@@ -21,6 +22,7 @@ export function AppLayout() {
           </div>
         </nav>
       </header>
+      <ConnectionStatus />
       <main className="mx-auto max-w-5xl px-4 py-6">
         <RequireSession>
           <Outlet />
