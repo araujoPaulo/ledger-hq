@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { ClientKind } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
@@ -51,18 +52,15 @@ export function EmploymentSection({ client }: Props) {
       ) : (
         <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">
           {employments.data.map((spell) => {
+            const counterpartyId = isCompany ? spell.employeeId : spell.employerId
             const counterpartyName = isCompany ? spell.employeeName : spell.employerName
             const isOpen = spell.endedOn === null
 
             return (
               <li key={spell.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                {/*
-                 * A plain span, not a router `Link`: this section is also
-                 * exercised by EmploymentSection.test.tsx without a
-                 * RouterProvider ancestor, and no requirement calls for
-                 * navigating to the counterparty's own page from here.
-                 */}
-                <span className="font-medium">{counterpartyName}</span>
+                <Link to="/clients/$clientId" params={{ clientId: counterpartyId }} className="font-medium">
+                  {counterpartyName}
+                </Link>
                 <span className="text-slate-600">{spell.jobTitle}</span>
                 <span className="text-slate-600">
                   {formatDate(spell.startedOn, locale)}
