@@ -10,6 +10,7 @@ import { CsrfGuard } from './auth/csrf.guard.js'
 import { ClientsModule } from './clients/clients.module.js'
 import { AuditModule } from './audit/audit.module.js'
 import { FiscalProfilesModule } from './fiscal-profiles/fiscal-profiles.module.js'
+import { EmploymentsModule } from './employments/employments.module.js'
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { FiscalProfilesModule } from './fiscal-profiles/fiscal-profiles.module.j
     ClientsModule,
     AuditModule,
     FiscalProfilesModule,
+    EmploymentsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: CsrfGuard }],
 })
