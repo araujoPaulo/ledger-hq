@@ -1,5 +1,6 @@
 {
   "title": "Clients",
+  "newTitle": "New client",
   "empty": "No clients yet.",
   "filter": { "all": "All", "search": "Search by name or tax number", "showArchived": "Show archived" },
   "form": {

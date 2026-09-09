@@ -1,5 +1,6 @@
 {
   "title": "Clientes",
+  "newTitle": "Novo cliente",
   "empty": "Ainda não há clientes.",
   "filter": { "all": "Todos", "search": "Pesquisar por nome ou NIF", "showArchived": "Mostrar arquivados" },
   "form": {

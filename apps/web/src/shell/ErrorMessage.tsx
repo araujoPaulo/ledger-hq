@@ -13,8 +13,13 @@ import { ApiError, type ClientErrorCode } from '../api/client'
  * whether it bothers to annotate its own local variable. `defaultValue` is
  * unreachable in practice — every code in the registry has a translation in
  * both locale bundles (enforced by locales.test.ts and i18n:check).
+ *
+ * Exported so any component that needs to render a bare error/violation
+ * code outside of an `ApiError` (for example, the fiscal profile form's
+ * live `checkFiscalProfileConsistency` violations) can reuse the same
+ * guarantee instead of calling `t()` on the code directly.
  */
-function translateErrorCode(
+export function translateErrorCode(
   t: TFunction<'errors'>,
   code: ClientErrorCode,
   params: Record<string, string> = {},

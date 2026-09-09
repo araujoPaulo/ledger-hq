@@ -4,6 +4,9 @@ import { AppLayout } from './shell/AppLayout'
 import { useBootstrapRequired, useSession } from './auth/session'
 import { LoginPage } from './auth/LoginPage'
 import { SetupPage } from './auth/SetupPage'
+import { ClientListPage } from './clients/ClientListPage'
+import { ClientFormPage } from './clients/ClientFormPage'
+import { ClientDetailPage } from './clients/ClientDetailPage'
 
 export function RequireSession({ children }: { children: ReactNode }) {
   const bootstrap = useBootstrapRequired()
@@ -24,16 +27,27 @@ const indexRoute = createRoute({
   component: () => null,
 })
 
-// Registered so the shell's nav link in AppLayout type-checks against
-// TanStack Router's typed `Link`. The client register itself is out of
-// scope for this task; a later task replaces this stub with a real page.
 const clientsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clients',
-  component: () => null,
+  component: ClientListPage,
 })
 
-export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, clientsRoute]) })
+const clientNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/clients/new',
+  component: ClientFormPage,
+})
+
+const clientDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/clients/$clientId',
+  component: ClientDetailPage,
+})
+
+export const router = createRouter({
+  routeTree: rootRoute.addChildren([indexRoute, clientsRoute, clientNewRoute, clientDetailRoute]),
+})
 
 declare module '@tanstack/react-router' {
   interface Register {
