@@ -30,7 +30,12 @@ fi
 # DETAIL are always one of a few fixed literals set above, never
 # attacker-controlled input. `--command`/`-c` does not perform variable
 # substitution, so the statement is fed on stdin instead.
-docker compose exec -T postgres psql --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" \
+# `-v ON_ERROR_STOP=1` matters here specifically: without it, psql exits 0
+# even when the INSERT itself fails (schema drift, permissions, disk full),
+# which would make this script silently report success while never having
+# recorded anything — exactly the "failing silently" this script exists to
+# prevent.
+docker compose exec -T postgres psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" \
   --set=status="${STATUS}" --set=detail="${DETAIL}" <<'SQL'
 INSERT INTO "SystemHealth" (id, "check", status, detail)
 VALUES (gen_random_uuid(), 'backup', :'status', NULLIF(:'detail', ''));

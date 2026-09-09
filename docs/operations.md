@@ -69,11 +69,19 @@ crontab -e
   `docker compose logs -f` for all three services. The API logs structured
   JSON (one line per request); the web container logs Caddy's access log.
   `docker compose logs --since 1h <service>` narrows to recent output.
-- **Connection banner**: the web app shows an offline/online banner driven by
-  `navigator.onLine` and a periodic health check. If it reads "offline" while
-  the phone has a normal internet connection, check the Tailscale connection
-  on the phone first (Settings → Tailscale), then `tailscale serve status` on
-  the host, then `docker compose ps` for a crashed container.
+- **Connection banner**: the web app shows an offline banner driven purely by
+  the browser's own `navigator.onLine` state and the `online`/`offline`
+  window events (`apps/web/src/shell/useOnlineStatus.ts`) — there is no
+  periodic health check behind it. That means it reflects whether the
+  device's network interface is up at all, not whether Tailscale or the API
+  is actually reachable: a phone with working Wi-Fi but a disconnected
+  Tailscale session will *not* show this banner, because the OS still
+  considers itself online. If the app looks stuck (spinners, stale data)
+  without the banner appearing, check the Tailscale connection on the phone
+  first (Settings → Tailscale), then `tailscale serve status` on the host,
+  then `docker compose ps` for a crashed container. The banner appearing at
+  all means the device itself has no network connection — a phone/Wi-Fi
+  problem, not something to debug on the server.
 - **Health report**: `GET /api/v1/system/health-report` (behind login) returns
   `{ lastBackup: { status, occurredAt } | null, consecutiveFailures: number }`.
   A `consecutiveFailures` count above 0, or a `lastBackup.occurredAt` older
@@ -97,8 +105,40 @@ If an update causes a regression:
 
 ```bash
 docker compose down
-# restore the most recent dump if the update also changed data in a way that
-# needs undoing (see "Restore drill" below for the restore commands)
+```
+
+If the update also changed data in a way that needs undoing, restore the most
+recent dump into the **real** `ledger_hq` database before bringing the stack
+back up. This is destructive — it overwrites everything currently in
+production with the dump's contents — so only run it when you mean to
+discard everything written since that dump:
+
+```bash
+cd /path/to/ledger-hq
+set -a && . ./.env && set +a
+
+# 1. Decrypt the dump to restore.
+age --decrypt -i /path/to/age-private-key.txt \
+  -o /tmp/rollback-restore.dump \
+  "${BACKUP_LOCAL_DIR}/ledger-hq-<timestamp>.dump.age"
+
+# 2. Start only postgres so the api/web containers aren't serving against a
+#    database mid-restore.
+docker compose up -d postgres
+
+# 3. THIS OVERWRITES PRODUCTION. Drop and recreate the database, then
+#    restore into it.
+docker compose exec -T postgres dropdb -U "${POSTGRES_USER}" "${POSTGRES_DB}"
+docker compose exec -T postgres createdb -U "${POSTGRES_USER}" "${POSTGRES_DB}"
+docker cp /tmp/rollback-restore.dump "$(docker compose ps -q postgres)":/tmp/rollback-restore.dump
+docker compose exec -T postgres pg_restore -U "${POSTGRES_USER}" \
+  -d "${POSTGRES_DB}" --no-owner /tmp/rollback-restore.dump
+rm -f /tmp/rollback-restore.dump
+```
+
+Then roll back the code and bring the whole stack up:
+
+```bash
 git checkout <previous tag>
 docker compose up -d --build
 ```
@@ -109,6 +149,9 @@ Run this against a throwaway database, never production, to prove the
 backups are actually restorable:
 
 ```bash
+cd /path/to/ledger-hq
+set -a && . ./.env && set +a
+
 # 1. Decrypt the most recent dump.
 age --decrypt -i /path/to/age-private-key.txt \
   -o /tmp/restore-test.dump \
