@@ -5,6 +5,8 @@
 export const ERROR_CODES = [
   'common.validation_failed',
   'common.not_found',
+  'common.forbidden',
+  'common.internal_error',
   'auth.invalid_credentials',
   'auth.already_bootstrapped',
   'auth.not_bootstrapped',

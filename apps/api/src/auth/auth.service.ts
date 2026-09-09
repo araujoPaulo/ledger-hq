@@ -30,14 +30,25 @@ export type SessionUser = { id: string; email: string; locale: string }
  * missing user would short-circuit before hashing and an attacker could
  * recover valid emails purely from response latency, defeating the same
  * "wrong address indistinguishable from wrong password" guarantee the decoy
- * KDF salt gives `kdfSaltFor`. Computed once per process, not per request.
+ * KDF salt gives `kdfSaltFor`. Lazily computed on first use and memoised for
+ * the life of the process, not per request — and lazily rather than eagerly
+ * at module load, so a rejection only ever happens inside an awaited call
+ * inside `login()` (where it becomes an ordinary thrown error the exception
+ * filter handles) instead of as an unhandled promise rejection that would
+ * otherwise terminate the process before anything ever awaited it.
  */
-const dummyDigest: Promise<string> = argon2id({
-  password: randomBytes(32),
-  salt: randomBytes(16),
-  ...SERVER_HASH_PARAMS,
-  outputType: 'encoded',
-})
+let dummyDigestPromise: Promise<string> | undefined
+
+function getDummyDigest(): Promise<string> {
+  dummyDigestPromise ??= argon2id({
+    password: randomBytes(32),
+    salt: randomBytes(16),
+    ...SERVER_HASH_PARAMS,
+    outputType: 'encoded',
+  })
+
+  return dummyDigestPromise
+}
 
 @Injectable()
 export class AuthService {
@@ -96,10 +107,10 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email: input.email } })
 
     // Always verify, even for a nonexistent user, against a fixed dummy
-    // digest computed at the same cost — see `dummyDigest` above.
+    // digest computed at the same cost — see `getDummyDigest` above.
     const valid = await argon2Verify({
       password: Buffer.from(input.authHash, 'base64'),
-      hash: user?.authHashDigest ?? (await dummyDigest),
+      hash: user?.authHashDigest ?? (await getDummyDigest()),
     })
 
     if (!user || !valid) {

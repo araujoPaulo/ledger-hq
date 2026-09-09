@@ -1,9 +1,10 @@
+import { createHash } from 'node:crypto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
 import type { INestApplication } from '@nestjs/common'
 import { deriveAuthHash, deriveMasterKey, fromBase64, generateSalt, toBase64 } from '@ledger-hq/crypto'
 import { createTestApp } from './app.js'
-import { resetDatabase } from './database.js'
+import { getTestPrisma, resetDatabase } from './database.js'
 
 const EMAIL = 'paulo@example.com'
 const PASSWORD = 'a long master password'
@@ -96,6 +97,20 @@ describe('kdf salt lookup', () => {
     expect(first.body.kdfSalt).toBe(second.body.kdfSalt)
     expect(first.body.kdfSalt).not.toBe(kdfSalt)
   })
+
+  it('rejects a query shape it cannot handle instead of crashing', async () => {
+    // Express's query parser turns `?email[]=x` into { email: ['x'] } — a
+    // plain `.trim()` on that would throw a TypeError and surface as a 500
+    // on an authentication endpoint.
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/auth/kdf')
+      .query('email[]=x')
+      .expect(422)
+
+    expect(response.body).toEqual({
+      error: { code: 'common.validation_failed', params: expect.anything() },
+    })
+  })
 })
 
 describe('login', () => {
@@ -130,6 +145,18 @@ describe('login', () => {
     expect(wrongEmail.body).toEqual(wrongHash.body)
   })
 
+  it('accepts a different-case email than the one used to bootstrap', async () => {
+    const { authHash } = await bootstrap()
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .set('X-Requested-With', 'ledger-hq')
+      .send({ email: EMAIL.toUpperCase(), authHash })
+      .expect(200)
+
+    expect(response.headers['set-cookie']?.[0]).toContain('lhq_session=')
+  })
+
   it('rejects a request without the CSRF header', async () => {
     const { authHash } = await bootstrap()
 
@@ -138,7 +165,7 @@ describe('login', () => {
       .send({ email: EMAIL, authHash })
       .expect(403)
 
-    expect(response.body).toEqual({ error: { code: 'common.validation_failed', params: {} } })
+    expect(response.body).toEqual({ error: { code: 'common.forbidden', params: {} } })
   })
 })
 
@@ -180,5 +207,28 @@ describe('session', () => {
 
     await request(app.getHttpServer()).post('/api/v1/auth/logout').set('Cookie', cookie).set('X-Requested-With', 'ledger-hq').expect(204)
     await request(app.getHttpServer()).get('/api/v1/auth/session').set('Cookie', cookie).expect(401)
+  })
+
+  it('stores the session token hashed, never in the clear', async () => {
+    const { authHash } = await bootstrap()
+
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .set('X-Requested-With', 'ledger-hq')
+      .send({ email: EMAIL, authHash })
+      .expect(200)
+
+    const setCookie = login.headers['set-cookie']?.[0] ?? ''
+    const rawToken = /lhq_session=([^;]+)/.exec(setCookie)?.[1] ?? ''
+    expect(rawToken.length).toBeGreaterThan(0)
+
+    // bootstrap() also creates a session, so look the row up by the expected
+    // hash rather than grabbing "any" row: if the raw token were stored
+    // instead, this lookup finds nothing and throws.
+    const expectedHash = createHash('sha256').update(rawToken).digest('hex')
+    const session = await getTestPrisma().session.findUniqueOrThrow({ where: { tokenHash: expectedHash } })
+
+    expect(session.tokenHash).toBe(expectedHash)
+    expect(session.tokenHash).not.toBe(rawToken)
   })
 })

@@ -2,8 +2,8 @@ import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, UseGuards, UseP
 import type { Request, Response } from 'express'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { ConfigService } from '@nestjs/config'
-import { bootstrapSchema, loginSchema } from '@ledger-hq/domain'
-import type { BootstrapInput, LoginInput } from '@ledger-hq/domain'
+import { bootstrapSchema, kdfQuerySchema, loginSchema } from '@ledger-hq/domain'
+import type { BootstrapInput, KdfQuery, LoginInput } from '@ledger-hq/domain'
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- AuthService is constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { AuthService, type SessionUser } from './auth.service.js'
@@ -23,8 +23,9 @@ export class AuthController {
   }
 
   @Get('kdf')
-  async kdf(@Query('email') email: string) {
-    return this.auth.kdfSaltFor((email ?? '').trim())
+  @UsePipes(new ZodValidationPipe(kdfQuerySchema))
+  async kdf(@Query() query: KdfQuery) {
+    return this.auth.kdfSaltFor(query.email)
   }
 
   @Post('bootstrap')
