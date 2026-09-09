@@ -8,6 +8,8 @@ import { HealthModule } from './health/health.module.js'
 import { AuthModule } from './auth/auth.module.js'
 import { CsrfGuard } from './auth/csrf.guard.js'
 import { ClientsModule } from './clients/clients.module.js'
+import { AuditModule } from './audit/audit.module.js'
+import { FiscalProfilesModule } from './fiscal-profiles/fiscal-profiles.module.js'
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { ClientsModule } from './clients/clients.module.js'
     HealthModule,
     AuthModule,
     ClientsModule,
+    AuditModule,
+    FiscalProfilesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: CsrfGuard }],
 })
