@@ -8,6 +8,7 @@ import { formatDate } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
 import { archiveClient, getClient, getFiscalProfile, restoreClient } from './api'
 import { FiscalProfileForm } from './FiscalProfileForm'
+import { EmploymentSection } from '../employments/EmploymentSection'
 
 export function ClientDetailPage() {
   const { clientId } = useParams({ from: '/clients/$clientId' })
@@ -143,6 +144,8 @@ export function ClientDetailPage() {
       ) : (
         <FiscalProfileForm clientId={clientId} kind={record.kind} initial={fiscalProfile.data ?? null} />
       )}
+
+      <EmploymentSection client={{ id: record.id, kind: record.kind, name: record.name }} />
     </section>
   )
 }
