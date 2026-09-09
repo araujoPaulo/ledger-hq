@@ -1,6 +1,7 @@
 import { Link, Outlet } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { LanguageSwitcher } from './LanguageSwitcher'
+import { RequireSession } from '../router'
 
 export function AppLayout() {
   const { t } = useTranslation('common')
@@ -21,7 +22,9 @@ export function AppLayout() {
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <Outlet />
+        <RequireSession>
+          <Outlet />
+        </RequireSession>
       </main>
     </div>
   )

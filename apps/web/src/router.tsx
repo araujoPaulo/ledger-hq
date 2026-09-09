@@ -1,5 +1,20 @@
+import type { ReactNode } from 'react'
 import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router'
 import { AppLayout } from './shell/AppLayout'
+import { useBootstrapRequired, useSession } from './auth/session'
+import { LoginPage } from './auth/LoginPage'
+import { SetupPage } from './auth/SetupPage'
+
+export function RequireSession({ children }: { children: ReactNode }) {
+  const bootstrap = useBootstrapRequired()
+  const session = useSession()
+
+  if (bootstrap.isPending || session.isPending) return null
+  if (bootstrap.data?.required === true) return <SetupPage />
+  if (session.isError) return <LoginPage />
+
+  return <>{children}</>
+}
 
 const rootRoute = createRootRoute({ component: AppLayout })
 

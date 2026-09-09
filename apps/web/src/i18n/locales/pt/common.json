@@ -16,5 +16,14 @@
     "offline": "Sem ligação ao servidor",
     "lastSync": "Última sincronização: {{time}}"
   },
-  "language": { "label": "Idioma", "pt-PT": "Português", "en-GB": "English" }
+  "language": { "label": "Idioma", "pt-PT": "Português", "en-GB": "English" },
+  "auth": {
+    "emailLabel": "Email",
+    "masterPasswordLabel": "Palavra-passe mestra",
+    "confirmPasswordLabel": "Confirma a palavra-passe mestra",
+    "setupTitle": "Configura a tua conta",
+    "loginTitle": "Entrar",
+    "recoveryWarning": "Anota o teu código de recuperação e guarda-o em local seguro. Se perderes a palavra-passe mestra e o código de recuperação, ninguém — nem nós — consegue recuperar os teus dados.",
+    "passwordMismatch": "As palavras-passe não coincidem."
+  }
 }
