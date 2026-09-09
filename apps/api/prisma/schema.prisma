@@ -128,3 +128,13 @@ model AuditEvent {
   @@index([entityType, entityId])
   @@index([occurredAt])
 }
+
+model SystemHealth {
+  id         String   @id @db.Uuid
+  check      String
+  status     String // "OK" | "FAILED"
+  detail     String?
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([check, occurredAt])
+}

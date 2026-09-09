@@ -1,0 +1,15 @@
+FROM node:24-alpine AS build
+RUN corepack enable
+WORKDIR /repo
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
+COPY packages ./packages
+COPY apps/web ./apps/web
+RUN pnpm install --frozen-lockfile
+# Built through turbo so packages/domain and packages/crypto (both consumed
+# by apps/web) are compiled to `dist` first, per `dependsOn: ["^build"]`.
+RUN pnpm exec turbo run build --filter=@ledger-hq/web
+
+FROM caddy:2.11.4-alpine
+COPY --from=build /repo/apps/web/dist /srv
+COPY docker/Caddyfile /etc/caddy/Caddyfile
+EXPOSE 8080

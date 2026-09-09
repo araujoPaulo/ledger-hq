@@ -11,6 +11,7 @@ import { ClientsModule } from './clients/clients.module.js'
 import { AuditModule } from './audit/audit.module.js'
 import { FiscalProfilesModule } from './fiscal-profiles/fiscal-profiles.module.js'
 import { EmploymentsModule } from './employments/employments.module.js'
+import { SystemModule } from './system/system.module.js'
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { EmploymentsModule } from './employments/employments.module.js'
     AuditModule,
     FiscalProfilesModule,
     EmploymentsModule,
+    SystemModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: CsrfGuard }],
 })

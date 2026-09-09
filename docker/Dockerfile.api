@@ -1,0 +1,26 @@
+FROM node:24-alpine AS build
+RUN corepack enable
+WORKDIR /repo
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
+COPY packages ./packages
+COPY apps/api ./apps/api
+# `pnpm install` triggers @ledger-hq/api's own `postinstall` script, which
+# runs `prisma generate` — no separate manual generate step is needed.
+RUN pnpm install --frozen-lockfile
+# Built through turbo (not `pnpm --filter @ledger-hq/api build` directly) so
+# that `dependsOn: ["^build"]` in turbo.json builds packages/domain and
+# packages/crypto to `dist` first — apps/api's `nest build` cannot resolve
+# them otherwise.
+RUN pnpm exec turbo run build --filter=@ledger-hq/api
+
+FROM node:24-alpine
+RUN corepack enable
+WORKDIR /repo
+# The whole installed workspace is copied rather than pruned with
+# `pnpm deploy`, which changed behaviour in pnpm 10 and now needs extra flags.
+# The image is larger; on a single-user self-hosted box that costs nothing.
+COPY --from=build /repo ./
+WORKDIR /repo/apps/api
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/main.js"]
