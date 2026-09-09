@@ -40,11 +40,17 @@ export default defineConfig({
               expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
             },
           },
-          {
-            // Writes fail loudly rather than pretending to succeed.
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/v1'),
-            handler: 'NetworkOnly',
-          },
+          // Writes fail loudly rather than pretending to succeed. Workbox's
+          // Route binds to exactly one HTTP method (workbox-routing's
+          // `HTTPMethod` is a single-value union, not an array), so each
+          // write verb needs its own entry to actually be intercepted —
+          // a single rule with no `method` defaults to 'GET' and would
+          // silently never match a write.
+          ...(['POST', 'PUT', 'PATCH', 'DELETE'] as const).map((method) => ({
+            urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith('/api/v1'),
+            handler: 'NetworkOnly' as const,
+            method,
+          })),
         ],
       },
     }),
