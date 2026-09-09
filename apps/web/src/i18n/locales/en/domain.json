@@ -1,0 +1,22 @@
+{
+  "clientKind": { "COMPANY": "Company", "INDIVIDUAL": "Individual" },
+  "legalForm": {
+    "LDA": "Private limited company",
+    "UNIPESSOAL_LDA": "Single-member private limited company",
+    "SA": "Public limited company",
+    "ASSOCIATION": "Association",
+    "OTHER": "Other"
+  },
+  "accounting": { "ORGANIZED": "Organized", "SIMPLIFIED": "Simplified" },
+  "vatRegime": {
+    "MONTHLY": "Monthly",
+    "QUARTERLY": "Quarterly",
+    "EXEMPT": "Exempt",
+    "NOT_APPLICABLE": "Not applicable"
+  },
+  "incomeTax": {
+    "CIT": "Corporate income tax",
+    "PIT_CATEGORY_B": "Personal income tax, category B",
+    "PIT_EMPLOYMENT_ONLY": "Personal income tax, employment only"
+  }
+}

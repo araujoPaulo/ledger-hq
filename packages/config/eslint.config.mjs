@@ -14,5 +14,11 @@ export default tseslint.config(
       'no-console': 'error',
     },
   },
+  { files: ['**/scripts/**'], rules: { 'no-console': 'off' } },
+  {
+    files: ['apps/web/src/**/*.tsx'],
+    plugins: { i18next: (await import('eslint-plugin-i18next')).default },
+    rules: { 'i18next/no-literal-string': ['error', { markupOnly: true }] },
+  },
   { ignores: ['dist/**', 'node_modules/**', '**/*.config.js'] },
 )

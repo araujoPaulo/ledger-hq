@@ -1,0 +1,16 @@
+{
+  "employeesTitle": "Employees",
+  "employmentsTitle": "Employments",
+  "empty": "No employment records.",
+  "add": "Add employment",
+  "end": "End employment",
+  "current": "Current",
+  "columns": { "person": "Person", "company": "Company", "jobTitle": "Job title", "period": "Period" },
+  "form": {
+    "employee": { "label": "Person" },
+    "employer": { "label": "Company" },
+    "startedOn": { "label": "Start date" },
+    "endedOn": { "label": "End date" },
+    "jobTitle": { "label": "Job title" }
+  }
+}

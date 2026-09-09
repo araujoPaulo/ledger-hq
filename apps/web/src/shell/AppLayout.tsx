@@ -1,5 +1,6 @@
 import { Link, Outlet } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { LanguageSwitcher } from './LanguageSwitcher'
 
 export function AppLayout() {
   const { t } = useTranslation('common')
@@ -14,6 +15,9 @@ export function AppLayout() {
           <Link to="/clients" className="text-sm">
             {t('nav.clients')}
           </Link>
+          <div className="ml-auto">
+            <LanguageSwitcher />
+          </div>
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">

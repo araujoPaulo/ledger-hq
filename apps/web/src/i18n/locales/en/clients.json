@@ -1,0 +1,27 @@
+{
+  "title": "Clients",
+  "empty": "No clients yet.",
+  "filter": { "all": "All", "search": "Search by name or tax number", "showArchived": "Show archived" },
+  "form": {
+    "name": { "label": "Name" },
+    "taxId": { "label": "Tax number" },
+    "kind": { "label": "Kind" },
+    "legalForm": { "label": "Legal form" },
+    "accounting": { "label": "Accounting" },
+    "socialSecurityNo": { "label": "Social security number" },
+    "dateOfBirth": { "label": "Date of birth" },
+    "email": { "label": "Email" },
+    "phone": { "label": "Phone" },
+    "notes": { "label": "Notes" }
+  },
+  "profile": {
+    "title": "Fiscal profile",
+    "hasOpenActivity": "Open activity",
+    "vatRegime": "VAT regime",
+    "incomeTax": "Income tax",
+    "hasEmployees": "Has employees",
+    "hasWithholding": "Withholds tax at source",
+    "isVatCashBasis": "VAT cash basis",
+    "startedAt": "Start date"
+  }
+}

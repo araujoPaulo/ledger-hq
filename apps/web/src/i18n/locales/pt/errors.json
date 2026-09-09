@@ -1,0 +1,34 @@
+{
+  "common": {
+    "validation_failed": "Há campos por corrigir.",
+    "not_found": "Registo não encontrado.",
+    "forbidden": "A página está desatualizada. Recarrega e tenta outra vez.",
+    "internal_error": "Ocorreu um erro no servidor. Tenta outra vez mais tarde.",
+    "offline": "Sem ligação ao servidor.",
+    "unexpected": "Ocorreu um erro inesperado."
+  },
+  "auth": {
+    "invalid_credentials": "Credenciais inválidas.",
+    "already_bootstrapped": "A conta já existe.",
+    "not_bootstrapped": "Ainda não existe conta configurada.",
+    "session_expired": "A sessão expirou. Entra outra vez."
+  },
+  "clients": {
+    "tax_id_taken": "Já existe um cliente com o NIF {{taxId}}.",
+    "archived": "O cliente está arquivado.",
+    "kind_mismatch": "O tipo de cliente não corresponde ao registo guardado."
+  },
+  "fiscal_profile": {
+    "open_activity_required_for_company": "Uma empresa tem sempre atividade aberta.",
+    "vat_regime_requires_open_activity": "Sem atividade aberta, o regime de IVA tem de ser «Não aplicável».",
+    "income_tax_incompatible_with_kind": "O imposto sobre o rendimento não corresponde ao tipo de cliente.",
+    "employees_flag_not_allowed_for_individual": "Uma pessoa singular não pode ter empregados neste registo."
+  },
+  "employment": {
+    "employer_must_be_company": "O empregador tem de ser uma empresa.",
+    "employee_must_be_individual": "O empregado tem de ser uma pessoa singular.",
+    "self_employment": "Um cliente não pode empregar-se a si próprio.",
+    "overlapping_spell": "Já existe um vínculo sobreposto para este par.",
+    "ended_before_started": "A data de cessação é anterior à de admissão."
+  }
+}

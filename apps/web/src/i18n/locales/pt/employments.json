@@ -1,0 +1,16 @@
+{
+  "employeesTitle": "Empregados",
+  "employmentsTitle": "Vínculos",
+  "empty": "Sem vínculos registados.",
+  "add": "Adicionar vínculo",
+  "end": "Cessar vínculo",
+  "current": "Em vigor",
+  "columns": { "person": "Pessoa", "company": "Empresa", "jobTitle": "Cargo", "period": "Período" },
+  "form": {
+    "employee": { "label": "Pessoa" },
+    "employer": { "label": "Empresa" },
+    "startedOn": { "label": "Data de admissão" },
+    "endedOn": { "label": "Data de cessação" },
+    "jobTitle": { "label": "Cargo" }
+  }
+}

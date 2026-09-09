@@ -1,0 +1,27 @@
+{
+  "title": "Clientes",
+  "empty": "Ainda não há clientes.",
+  "filter": { "all": "Todos", "search": "Pesquisar por nome ou NIF", "showArchived": "Mostrar arquivados" },
+  "form": {
+    "name": { "label": "Nome" },
+    "taxId": { "label": "NIF" },
+    "kind": { "label": "Tipo" },
+    "legalForm": { "label": "Forma jurídica" },
+    "accounting": { "label": "Contabilidade" },
+    "socialSecurityNo": { "label": "NISS" },
+    "dateOfBirth": { "label": "Data de nascimento" },
+    "email": { "label": "Email" },
+    "phone": { "label": "Telefone" },
+    "notes": { "label": "Notas" }
+  },
+  "profile": {
+    "title": "Perfil fiscal",
+    "hasOpenActivity": "Atividade aberta",
+    "vatRegime": "Regime de IVA",
+    "incomeTax": "Imposto sobre o rendimento",
+    "hasEmployees": "Tem empregados",
+    "hasWithholding": "Faz retenções na fonte",
+    "isVatCashBasis": "IVA de caixa",
+    "startedAt": "Início"
+  }
+}
