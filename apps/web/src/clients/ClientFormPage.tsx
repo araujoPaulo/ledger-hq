@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { ACCOUNTING_VALUES, CLIENT_KIND_VALUES, LEGAL_FORM_VALUES, createClientSchema } from '@ledger-hq/domain'
@@ -64,6 +64,7 @@ export function ClientFormPage() {
   const { t } = useTranslation(['clients', 'common', 'domain'])
   const { t: tError } = useTranslation('errors')
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const [form, setForm] = useState<FormState>(initialState)
   const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set())
@@ -125,6 +126,12 @@ export function ClientFormPage() {
   const mutation = useMutation({
     mutationFn: (input: CreateClientInput) => createClient(input),
     onSuccess: async (client) => {
+      // Without this, the list page's cached (now-stale) result — fetched
+      // before this client existed — is still within its 30s staleTime on
+      // the next visit, so it renders "no clients yet" for up to half a
+      // minute after creating one. Every other mutation that changes what
+      // the list would show (archive, restore) already invalidates it.
+      await queryClient.invalidateQueries({ queryKey: ['clients'] })
       await navigate({ to: '/clients/$clientId', params: { clientId: client.id } })
     },
   })

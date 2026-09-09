@@ -59,4 +59,13 @@ export default defineConfig({
     port: 5173,
     proxy: { '/api': { target: 'http://localhost:3000', changeOrigin: true } },
   },
+  // The brief's `webServer` entry runs `vite preview`, not `vite dev` — and
+  // `server.proxy` above has no effect there, since `preview` is a distinct
+  // server with its own config block. Without this, the e2e suite's API
+  // calls would 404 against the static preview server instead of reaching
+  // the API.
+  preview: {
+    port: 4173,
+    proxy: { '/api': { target: 'http://localhost:3000', changeOrigin: true } },
+  },
 })

@@ -23,3 +23,23 @@ jobs:
       - run: pnpm --filter @ledger-hq/web i18n:check
       - run: pnpm --filter @ledger-hq/api test:integration
       - run: pnpm build
+      - run: pnpm --filter @ledger-hq/web exec playwright install --with-deps chromium
+      - run: docker compose up -d --wait postgres
+        env:
+          # docker-compose.yml's postgres service reads these from the
+          # environment; there is no committed .env in CI, so they must be
+          # set explicitly here, matching the DATABASE_URL given to the
+          # later steps. `--wait` blocks until the service's own
+          # `pg_isready` healthcheck passes, instead of racing `migrate
+          # deploy` against a container that is still starting up.
+          POSTGRES_USER: ledger
+          POSTGRES_PASSWORD: ledger
+          POSTGRES_DB: ledger_hq
+      - run: pnpm --filter @ledger-hq/api exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://ledger:ledger@localhost:5432/ledger_hq
+      - run: pnpm --filter @ledger-hq/web test:e2e
+        env:
+          DATABASE_URL: postgresql://ledger:ledger@localhost:5432/ledger_hq
+          AUTH_SALT_SECRET: ci-secret
+          COOKIE_SECURE: "false"
