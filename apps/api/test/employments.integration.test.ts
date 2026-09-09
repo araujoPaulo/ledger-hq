@@ -196,4 +196,23 @@ describe('POST /employments/:id/end', () => {
 
     expect(response.body.error.code).toBe('employment.ended_before_started')
   })
+
+  it('rejects an end date that reaches into a later spell for the same pair', async () => {
+    const employerId = await createClient(companyPayload('501442600'))
+    const employeeId = await createClient(personPayload('123456789'))
+
+    const earlier = await post('/api/v1/employments', {
+      employerId,
+      employeeId,
+      startedOn: '2024-01-01',
+      endedOn: '2024-06-30',
+    }).expect(201)
+
+    // Consecutive, not overlapping: starts the day after the earlier one ends.
+    await post('/api/v1/employments', { employerId, employeeId, startedOn: '2024-07-01' }).expect(201)
+
+    const response = await post(`/api/v1/employments/${earlier.body.id}/end`, { endedOn: '2024-08-01' }).expect(409)
+
+    expect(response.body.error.code).toBe('employment.overlapping_spell')
+  })
 })

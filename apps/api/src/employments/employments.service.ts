@@ -78,24 +78,41 @@ export class EmploymentsService {
       throw new AppError('employment.ended_before_started', {}, 422)
     }
 
-    return this.prisma.employment.update({
-      where: { id },
-      data: { endedOn: toDate(endedOn) },
-      include: WITH_NAMES,
-    })
+    // Pushing the end date out can make this spell reach into a later one
+    // for the same pair, so it needs the same overlap guard `create` has —
+    // excluding itself, or it would always "clash" with its own row.
+    await this.assertNoOverlap(
+      existing.employerId,
+      existing.employeeId,
+      existing.startedOn.toISOString().slice(0, 10),
+      endedOn,
+      existing.id,
+    )
+
+    try {
+      return await this.prisma.employment.update({
+        where: { id },
+        data: { endedOn: toDate(endedOn) },
+        include: WITH_NAMES,
+      })
+    } catch (error) {
+      throw toOverlapConflictOr(error)
+    }
   }
 
   /**
    * Checked here so the API can name the problem. The GiST exclusion
    * constraint in the database (`employment_no_overlap`, added in Task 7)
    * remains the authoritative guard: this check-then-act read can lose a
-   * race, which is why `create` also catches the constraint violation below.
+   * race, which is why both `create` and `end` also catch the constraint
+   * violation on their write (see `toOverlapConflictOr`).
    */
   private async assertNoOverlap(
     employerId: string,
     employeeId: string,
     startedOn: string,
     endedOn: string | null,
+    excludeId?: string,
   ): Promise<void> {
     const start = toDate(startedOn)
     const end = endedOn === null ? null : toDate(endedOn)
@@ -104,6 +121,7 @@ export class EmploymentsService {
       where: {
         employerId,
         employeeId,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
         ...(end === null ? {} : { startedOn: { lte: end } }),
         OR: [{ endedOn: null }, { endedOn: { gte: start } }],
       },
@@ -119,10 +137,14 @@ function toDate(isoDate: string): Date {
 
 /**
  * `assertNoOverlap`'s check-then-act read is only the friendly path: two
- * concurrent writes can both pass it before either commits. This closes the
- * gap by turning the database's own exclusion-constraint violation — the
- * guarantee that actually holds — into the same domain error, instead of
- * letting it fall through to the catch-all filter as an opaque 500.
+ * concurrent writes can both pass it before either commits — and `end`'s
+ * write can lose to the constraint even without a race, since extending an
+ * open spell's end date is itself capable of reaching into a later spell for
+ * the same pair. This closes the gap by turning the database's own
+ * exclusion-constraint violation — the guarantee that actually holds — into
+ * the same domain error, instead of letting it fall through to the catch-all
+ * filter as an opaque 500. Both `create` and `end` route their write through
+ * this.
  *
  * Empirically (via the `@prisma/adapter-pg` driver adapter this project
  * uses), a Postgres EXCLUDE constraint violation does not surface as one of
