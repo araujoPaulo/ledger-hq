@@ -6,10 +6,14 @@ import { isoDateSchema } from './common'
 
 const sharedFields = {
   name: z.string().trim().min(1).max(200),
-  taxId: z
-    .string()
-    .trim()
-    .refine(isValidNif, { message: 'common.validation_failed' }),
+  // No `message` override here: the `ZodValidationPipe` promotes an issue's
+  // `message` to its per-issue `code` whenever the message matches a known
+  // `ErrorCode` (that's how cross-field checks below surface a specific
+  // domain code). `common.validation_failed` is itself a valid `ErrorCode`,
+  // so giving it as the message here would collide with that mechanism and
+  // report every failure as `common.validation_failed` instead of Zod's own
+  // `custom` issue code.
+  taxId: z.string().trim().refine(isValidNif),
   accounting: z.enum(ACCOUNTING_VALUES),
   email: z.string().trim().email().max(200).optional(),
   phone: z.string().trim().max(40).optional(),
@@ -27,11 +31,8 @@ const companySchema = z
 const individualSchema = z
   .object({
     kind: z.literal('INDIVIDUAL'),
-    socialSecurityNo: z
-      .string()
-      .trim()
-      .refine(isValidNissFormat, { message: 'common.validation_failed' })
-      .optional(),
+    // See the comment on `taxId` above for why no `message` override here.
+    socialSecurityNo: z.string().trim().refine(isValidNissFormat).optional(),
     dateOfBirth: isoDateSchema.optional(),
     ...sharedFields,
   })

@@ -7,6 +7,7 @@ import { validateEnv } from './common/env-validation.js'
 import { HealthModule } from './health/health.module.js'
 import { AuthModule } from './auth/auth.module.js'
 import { CsrfGuard } from './auth/csrf.guard.js'
+import { ClientsModule } from './clients/clients.module.js'
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { CsrfGuard } from './auth/csrf.guard.js'
     LoggerModule.forRoot(LOGGER_OPTIONS),
     HealthModule,
     AuthModule,
+    ClientsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: CsrfGuard }],
 })
