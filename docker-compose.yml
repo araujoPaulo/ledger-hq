@@ -13,7 +13,7 @@ services:
       # the mount point itself as evidence of a pre-18 layout that needs a
       # manual pg_upgrade. Mounting one level up lets the image manage its
       # own versioned subdirectory (PGDATA=/var/lib/postgresql/18/docker).
-      - postgres-data:/var/lib/postgresql
+      - ledgerhq-postgres-data:/var/lib/postgresql
     ports:
       # Bound to loopback only, so the host (e.g. the e2e suite's API
       # process, or CI) can reach it without exposing it beyond the machine.
@@ -52,4 +52,4 @@ services:
       - "127.0.0.1:8080:8080"
 
 volumes:
-  postgres-data:
+  ledgerhq-postgres-data:
