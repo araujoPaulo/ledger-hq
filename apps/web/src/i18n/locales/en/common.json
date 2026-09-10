@@ -1,0 +1,30 @@
+{
+  "appName": "Ledger HQ",
+  "nav": { "clients": "Clients" },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "create": "Create",
+    "edit": "Edit",
+    "archive": "Archive",
+    "restore": "Restore",
+    "signIn": "Sign in",
+    "signOut": "Sign out"
+  },
+  "connection": {
+    "online": "Online",
+    "offline": "No connection to the server",
+    "lastSync": "Last synchronised: {{time}}"
+  },
+  "language": { "label": "Language", "pt-PT": "Português", "en-GB": "English" },
+  "auth": {
+    "emailLabel": "Email",
+    "masterPasswordLabel": "Master password",
+    "confirmPasswordLabel": "Confirm master password",
+    "setupTitle": "Set up your account",
+    "loginTitle": "Sign in",
+    "recoveryWarning": "Write down your recovery code and keep it somewhere safe. If you lose both your master password and your recovery code, no one — not even us — can recover your data.",
+    "passwordMismatch": "The passwords do not match.",
+    "passwordTooShort": "The master password must be at least {{min}} characters long."
+  }
+}

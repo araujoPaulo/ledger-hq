@@ -1,0 +1,22 @@
+{
+  "clientKind": { "COMPANY": "Empresa", "INDIVIDUAL": "Pessoa singular" },
+  "legalForm": {
+    "LDA": "Sociedade por quotas",
+    "UNIPESSOAL_LDA": "Unipessoal por quotas",
+    "SA": "Sociedade anónima",
+    "ASSOCIATION": "Associação",
+    "OTHER": "Outra"
+  },
+  "accounting": { "ORGANIZED": "Organizada", "SIMPLIFIED": "Não organizada" },
+  "vatRegime": {
+    "MONTHLY": "Mensal",
+    "QUARTERLY": "Trimestral",
+    "EXEMPT": "Isento",
+    "NOT_APPLICABLE": "Não aplicável"
+  },
+  "incomeTax": {
+    "CIT": "IRC",
+    "PIT_CATEGORY_B": "IRS categoria B",
+    "PIT_EMPLOYMENT_ONLY": "IRS trabalho dependente"
+  }
+}

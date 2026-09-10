@@ -1,0 +1,13 @@
+{
+  "name": "@ledger-hq/config",
+  "version": "0.0.0",
+  "private": true,
+  "files": ["tsconfig.base.json", "eslint.config.mjs"],
+  "exports": {
+    "./eslint.config.mjs": "./eslint.config.mjs",
+    "./tsconfig.base.json": "./tsconfig.base.json"
+  },
+  "dependencies": {
+    "eslint-plugin-i18next": "^6.1.5"
+  }
+}

@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ClientKind {
+  COMPANY
+  INDIVIDUAL
+}
+
+enum LegalForm {
+  LDA
+  UNIPESSOAL_LDA
+  SA
+  ASSOCIATION
+  OTHER
+}
+
+enum Accounting {
+  ORGANIZED
+  SIMPLIFIED
+}
+
+enum VatRegime {
+  MONTHLY
+  QUARTERLY
+  EXEMPT
+  NOT_APPLICABLE
+}
+
+enum IncomeTax {
+  CIT
+  PIT_CATEGORY_B
+  PIT_EMPLOYMENT_ONLY
+}
+
+model User {
+  id             String    @id @db.Uuid
+  email          String    @unique
+  kdfSalt        Bytes
+  authHashDigest String
+  locale         String    @default("pt-PT")
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  sessions       Session[]
+}
+
+model Session {
+  id        String   @id @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Client {
+  id               String     @id @db.Uuid
+  kind             ClientKind
+  name             String
+  taxId            String     @unique
+  accounting       Accounting
+  email            String?
+  phone            String?
+  notes            String?
+  archivedAt       DateTime?  @db.Timestamptz(3)
+  // COMPANY only
+  legalForm        LegalForm?
+  // INDIVIDUAL only
+  socialSecurityNo String?
+  dateOfBirth      DateTime?  @db.Date
+  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
+
+  fiscalProfile         FiscalProfile?
+  employmentsAsEmployer Employment[]   @relation("employer")
+  employmentsAsEmployee Employment[]   @relation("employee")
+
+  @@unique([id, kind])
+  @@index([kind, name])
+}
+
+model FiscalProfile {
+  clientId        String    @id @db.Uuid
+  hasOpenActivity Boolean
+  vatRegime       VatRegime
+  incomeTax       IncomeTax
+  hasEmployees    Boolean
+  hasWithholding  Boolean
+  isVatCashBasis  Boolean
+  startedAt       DateTime  @db.Date
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model Employment {
+  id           String     @id @db.Uuid
+  employerId   String     @db.Uuid
+  employerKind ClientKind
+  employeeId   String     @db.Uuid
+  employeeKind ClientKind
+  startedOn    DateTime   @db.Date
+  endedOn      DateTime?  @db.Date
+  jobTitle     String?
+  notes        String?
+  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
+
+  employer Client @relation("employer", fields: [employerId, employerKind], references: [id, kind])
+  employee Client @relation("employee", fields: [employeeId, employeeKind], references: [id, kind])
+
+  @@index([employerId])
+  @@index([employeeId])
+}
+
+model AuditEvent {
+  id         String   @id @db.Uuid
+  entityType String
+  entityId   String
+  action     String
+  metadata   Json
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([entityType, entityId])
+  @@index([occurredAt])
+}
+
+model SystemHealth {
+  id         String   @id @db.Uuid
+  check      String
+  status     String // "OK" | "FAILED"
+  detail     String?
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([check, occurredAt])
+}

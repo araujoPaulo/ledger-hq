@@ -1,0 +1,50 @@
+{
+  "name": "@ledger-hq/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "lint": "eslint .",
+    "test": "vitest run --config vitest.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "generate": "DATABASE_URL=\"${DATABASE_URL:-postgresql://ledger:ledger@localhost:5432/ledger_hq}\" prisma generate",
+    "postinstall": "pnpm run generate"
+  },
+  "dependencies": {
+    "@ledger-hq/crypto": "workspace:*",
+    "@ledger-hq/domain": "workspace:*",
+    "@nestjs/common": "^12.0.1",
+    "@nestjs/config": "^12.0.0",
+    "@nestjs/core": "^12.0.1",
+    "@nestjs/platform-express": "^12.0.1",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "cookie-parser": "^1.4.7",
+    "hash-wasm": "^4.12.0",
+    "helmet": "^8.3.0",
+    "nestjs-pino": "^5.1.0",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "uuidv7": "^1.2.1",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@ledger-hq/config": "workspace:*",
+    "@nestjs/cli": "^12.0.0",
+    "@nestjs/testing": "^12.0.1",
+    "@testcontainers/postgresql": "^12.1.0",
+    "@types/cookie-parser": "^1.4.7",
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.13.3",
+    "@types/supertest": "^6.0.2",
+    "prisma": "^7.10.0",
+    "supertest": "^7.2.2",
+    "vitest": "^5.0.0"
+  }
+}

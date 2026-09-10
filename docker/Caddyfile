@@ -1,0 +1,21 @@
+:8080 {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+
+		header {
+			# No external origins at all: the vault's defence against a
+			# malicious script being injected into the page.
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+			X-Content-Type-Options "nosniff"
+			Referrer-Policy "no-referrer"
+		}
+	}
+}

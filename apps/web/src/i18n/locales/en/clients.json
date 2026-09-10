@@ -1,0 +1,28 @@
+{
+  "title": "Clients",
+  "newTitle": "New client",
+  "empty": "No clients yet.",
+  "filter": { "all": "All", "search": "Search by name or tax number", "showArchived": "Show archived" },
+  "form": {
+    "name": { "label": "Name", "invalid": "Enter a valid name." },
+    "taxId": { "label": "Tax number", "invalid": "This tax number is not valid." },
+    "kind": { "label": "Kind" },
+    "legalForm": { "label": "Legal form", "invalid": "Choose a valid legal form." },
+    "accounting": { "label": "Accounting", "invalid": "Choose a valid accounting type." },
+    "socialSecurityNo": { "label": "Social security number", "invalid": "This social security number is not valid." },
+    "dateOfBirth": { "label": "Date of birth", "invalid": "Enter a valid date of birth." },
+    "email": { "label": "Email", "invalid": "Enter a valid email address." },
+    "phone": { "label": "Phone", "invalid": "The phone number is too long." },
+    "notes": { "label": "Notes", "invalid": "The notes are too long." }
+  },
+  "profile": {
+    "title": "Fiscal profile",
+    "hasOpenActivity": "Open activity",
+    "vatRegime": "VAT regime",
+    "incomeTax": "Income tax",
+    "hasEmployees": "Has employees",
+    "hasWithholding": "Withholds tax at source",
+    "isVatCashBasis": "VAT cash basis",
+    "startedAt": "Start date"
+  }
+}

@@ -1,0 +1,3 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`deriveMasterKey > matches the committed snapshot, so a parameter change cannot pass silently 1`] = `"DRo8ZSPI8G5OCvnFFapbVEjP69aDjy1Sw9i2743cPC4="`;

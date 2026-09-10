@@ -1,0 +1,13 @@
+# Never let a real secret reach a build context, let alone an image layer.
+**/.env
+**/.env.*
+!**/.env.example
+
+# Host-native artefacts that must be rebuilt inside the image, not copied
+# from whatever platform happens to be running `docker build`.
+**/node_modules
+**/dist
+**/.turbo
+apps/api/src/generated
+
+.git

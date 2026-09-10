@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      # Mounted at the parent directory, not .../data: the postgres 18+
+      # image refuses to start (even against a brand-new, empty volume) if
+      # anything is mounted directly at /var/lib/postgresql/data, treating
+      # the mount point itself as evidence of a pre-18 layout that needs a
+      # manual pg_upgrade. Mounting one level up lets the image manage its
+      # own versioned subdirectory (PGDATA=/var/lib/postgresql/18/docker).
+      - postgres-data:/var/lib/postgresql
+    ports:
+      # Bound to loopback only, so the host (e.g. the e2e suite's API
+      # process, or CI) can reach it without exposing it beyond the machine.
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      NODE_ENV: production
+      TZ: Europe/Lisbon
+      COOKIE_SECURE: "true"
+      SESSION_TTL_DAYS: "30"
+      AUTH_SALT_SECRET: ${AUTH_SALT_SECRET}
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      # Bound to loopback only. Tailscale terminates TLS in front of it.
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  postgres-data:
