@@ -23,3 +23,16 @@ export const AUTH_HASH_PARAMS = {
 } as const
 
 export const VAULT_HKDF_INFO = 'ledger-hq:vault'
+
+/**
+ * `deriveAuthHash` passes the raw master password's UTF-8 bytes as the
+ * Argon2id salt for the second derivation pass, and Argon2 implementations
+ * (including the `hash-wasm` build used here) throw if a salt is under 8
+ * bytes — so an unconstrained short password crashes derivation outright.
+ * 12 is comfortably above that technical floor and a reasonable minimum for
+ * the one credential this whole zero-knowledge design depends on, with no
+ * password-reset path. Consumers (`SetupPage`, `LoginPage`, ...) must
+ * enforce this themselves, client-side, before calling any derivation
+ * function — this package only owns the number, not the enforcement.
+ */
+export const MIN_MASTER_PASSWORD_LENGTH = 12

@@ -11,6 +11,7 @@ import { I18nextProvider } from 'react-i18next'
 import i18next from 'i18next'
 import { describe, expect, it, vi } from 'vitest'
 import { initI18n } from '../i18n'
+import { ApiError } from '../api/client'
 
 const listClients = vi.hoisted(() => vi.fn())
 vi.mock('./api', () => ({ listClients }))
@@ -86,6 +87,19 @@ describe('ClientListPage', () => {
     renderPage()
 
     expect(await screen.findByText(/ainda não há clientes/i)).toBeInTheDocument()
+  })
+
+  // A fetch failure must not be indistinguishable from "no clients yet":
+  // `data` stays `undefined`, so a plain `data?.length === 0` check falls
+  // through to the empty state (or an empty `.map()`) with no indication
+  // anything went wrong. Same class of bug already fixed in
+  // FiscalProfileForm/ClientDetailPage and AddEmploymentForm.
+  it('shows an error message rather than the empty state when the fetch fails', async () => {
+    listClients.mockRejectedValue(new ApiError('common.internal_error', {}, 500))
+    renderPage()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/erro no servidor|server error/i)
+    expect(screen.queryByText(/ainda não há clientes/i)).not.toBeInTheDocument()
   })
 
   it('passes the search term to the query', async () => {

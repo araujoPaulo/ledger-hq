@@ -52,9 +52,22 @@ describe('LoginPage', () => {
     renderPage()
 
     await userEvent.type(screen.getByLabelText(/email/i), 'paulo@example.com')
-    await userEvent.type(screen.getByLabelText(/palavra-passe|master password/i), 'wrong')
+    // Long enough to clear the client-side minimum-length gate (Finding 6) —
+    // this test is about the server rejecting it, not the length check.
+    await userEvent.type(screen.getByLabelText(/palavra-passe|master password/i), 'wrong password')
     await userEvent.click(screen.getByRole('button', { name: /entrar|sign in/i }))
 
     expect(await screen.findByText(/credenciais inválidas/i)).toBeInTheDocument()
+  })
+
+  it('refuses a too-short master password before deriving anything or calling the API', async () => {
+    renderPage()
+
+    await userEvent.type(screen.getByLabelText(/email/i), 'paulo@example.com')
+    await userEvent.type(screen.getByLabelText(/palavra-passe|master password/i), 'short1')
+    await userEvent.click(screen.getByRole('button', { name: /entrar|sign in/i }))
+
+    expect(screen.getByText(/pelo menos 12 caracteres|at least 12 characters/i)).toBeInTheDocument()
+    expect(signIn).not.toHaveBeenCalled()
   })
 })

@@ -4,6 +4,7 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { CLIENT_KIND_VALUES } from '@ledger-hq/domain'
 import type { ClientKind } from '@ledger-hq/domain'
+import { ErrorMessage } from '../shell/ErrorMessage'
 import { listClients } from './api'
 import type { ClientFilters } from './api'
 
@@ -68,7 +69,17 @@ export function ClientListPage() {
         </label>
       </div>
 
-      {clients.data?.length === 0 ? (
+      {/*
+       * Without this three-way split, a genuine fetch failure (`data` stays
+       * `undefined`) would fall through to the `data?.length === 0` empty
+       * state or an empty `.map()` — indistinguishable from "this client
+       * truly has none yet". Same class of bug already fixed, with the
+       * same reasoning, in FiscalProfileForm/ClientDetailPage and
+       * AddEmploymentForm.
+       */}
+      {clients.isError ? (
+        <ErrorMessage error={clients.error} />
+      ) : clients.data?.length === 0 ? (
         <p className="text-sm text-slate-600">{t('clients:empty')}</p>
       ) : (
         <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">

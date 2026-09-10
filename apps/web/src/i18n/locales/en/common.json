@@ -24,6 +24,7 @@
     "setupTitle": "Set up your account",
     "loginTitle": "Sign in",
     "recoveryWarning": "Write down your recovery code and keep it somewhere safe. If you lose both your master password and your recovery code, no one — not even us — can recover your data.",
-    "passwordMismatch": "The passwords do not match."
+    "passwordMismatch": "The passwords do not match.",
+    "passwordTooShort": "The master password must be at least {{min}} characters long."
   }
 }

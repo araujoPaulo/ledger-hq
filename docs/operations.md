@@ -133,7 +133,11 @@ docker compose exec -T postgres createdb -U "${POSTGRES_USER}" "${POSTGRES_DB}"
 docker cp /tmp/rollback-restore.dump "$(docker compose ps -q postgres)":/tmp/rollback-restore.dump
 docker compose exec -T postgres pg_restore -U "${POSTGRES_USER}" \
   -d "${POSTGRES_DB}" --no-owner /tmp/rollback-restore.dump
+
+# 4. Clean up the decrypted dump on both the host and inside the container —
+#    it is plaintext and must not linger in either place.
 rm -f /tmp/rollback-restore.dump
+docker compose exec -T postgres rm -f /tmp/rollback-restore.dump
 ```
 
 Then roll back the code and bring the whole stack up:
@@ -167,12 +171,16 @@ docker compose exec -T postgres pg_restore -U "${POSTGRES_USER}" \
 #    change often, e.g.:
 docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d restore_drill \
   -c 'SELECT count(*) FROM "Client";'
-docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d ledger_hq \
+docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
   -c 'SELECT count(*) FROM "Client";'
 
 # 4. Drop the throwaway database.
 docker compose exec -T postgres dropdb -U "${POSTGRES_USER}" restore_drill
+
+# 5. Clean up the decrypted dump on both the host and inside the container —
+#    it is plaintext and must not linger in either place.
 rm -f /tmp/restore-test.dump
+docker compose exec -T postgres rm -f /tmp/restore-test.dump
 ```
 
 If the counts don't match (accounting for the time between the dump and the

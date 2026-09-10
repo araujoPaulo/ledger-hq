@@ -37,7 +37,13 @@ export default defineConfig({
             options: {
               cacheName: 'api-reads',
               networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              // This cache holds the complete client register in plaintext
+              // (names, tax IDs, dates of birth, notes, ...) in the
+              // browser's Cache Storage — there is no vault/encryption
+              // layer over it (see docs/security-model.md). 24 hours still
+              // covers the "see yesterday's state while offline" goal
+              // without leaving a week of PII sitting on a lost device.
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 },
             },
           },
           // Writes fail loudly rather than pretending to succeed. Workbox's

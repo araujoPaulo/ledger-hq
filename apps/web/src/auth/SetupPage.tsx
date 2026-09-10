@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { MIN_MASTER_PASSWORD_LENGTH } from '@ledger-hq/crypto'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { createAccount } from './credentials'
 import { SESSION_QUERY_KEY } from './session'
@@ -13,6 +14,10 @@ export function SetupPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
 
   const passwordsMismatch = confirmPassword.length > 0 && masterPassword !== confirmPassword
+  // Argon2id's salt (the raw master password, in `deriveAuthHash`) throws
+  // below 8 bytes — refuse before any derivation runs, the same way the
+  // mismatch check above refuses before a submit.
+  const passwordTooShort = masterPassword.length > 0 && masterPassword.length < MIN_MASTER_PASSWORD_LENGTH
 
   const mutation = useMutation({
     mutationFn: () => createAccount(email, masterPassword, i18n.language as 'pt-PT' | 'en-GB'),
@@ -29,7 +34,7 @@ export function SetupPage() {
       className="mx-auto flex max-w-sm flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
-        if (passwordsMismatch) return
+        if (passwordsMismatch || passwordTooShort) return
         mutation.mutate()
       }}
     >
@@ -75,6 +80,12 @@ export function SetupPage() {
         />
       </label>
 
+      {passwordTooShort && (
+        <p role="alert" className="text-sm text-red-700">
+          {t('auth.passwordTooShort', { min: MIN_MASTER_PASSWORD_LENGTH })}
+        </p>
+      )}
+
       {passwordsMismatch && (
         <p role="alert" className="text-sm text-red-700">
           {t('auth.passwordMismatch')}
@@ -85,7 +96,7 @@ export function SetupPage() {
 
       <button
         type="submit"
-        disabled={mutation.isPending || passwordsMismatch}
+        disabled={mutation.isPending || passwordsMismatch || passwordTooShort}
         className="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
       >
         {t('actions.create')}

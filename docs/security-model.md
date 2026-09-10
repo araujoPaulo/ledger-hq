@@ -15,13 +15,24 @@ which is which throughout:
 ## What is mitigated
 
 Theft of the office machine, theft of backup files, a database copy, disk
-level access to the server, a lost phone holding cached data. In every one
-of these the attacker holds AES-256-GCM ciphertext (once the vault exists)
-and, even today, only an Argon2id hash of a hash — never a password, never
-a key.
+level access to the server. In every one of these the attacker holds
+AES-256-GCM ciphertext (once the vault exists) and, even today, only an
+Argon2id hash of a hash — never a password, never a key.
 
 ## What is not mitigated
 
+- **A lost or stolen phone with cached client data.** The PWA's read cache
+  (`apps/web/vite.config.ts`'s Workbox `runtimeCaching` for `GET
+  /api/v1/*`) stores every cached API response — the complete client
+  register: names, Portuguese tax numbers, social security numbers, dates
+  of birth, emails, phone numbers, free-text notes — **unencrypted**, in
+  the browser's Cache Storage, for up to 24 hours (`maxAgeSeconds`). This
+  is plain personal data, not credential material: the Argon2id-hash-of-a-
+  hash reasoning above does not apply to it. A device that is lost or
+  stolen while its browser profile is unlocked and unwiped exposes this
+  cached data, in full, for up to that 24-hour window. There is no
+  encryption at rest over this cache today; closing that gap depends on
+  the vault (Phase 1) and is out of scope for the current phase.
 - **A compromised server serving malicious JavaScript to an unlocked
   session.** The server delivers the application's own code; if that code
   is malicious, it runs with whatever key material the session holds
