@@ -23,6 +23,11 @@ export const ERROR_CODES = [
   'employment.self_employment',
   'employment.overlapping_spell',
   'employment.ended_before_started',
+  'vault.not_set_up',
+  'vault.already_set_up',
+  'vault.invalid_recovery_code',
+  'platforms.name_taken',
+  'credentials.label_taken',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]
