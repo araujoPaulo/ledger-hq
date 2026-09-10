@@ -10,8 +10,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -21,7 +19,6 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @ledger-hq/web i18n:check
-      - run: pnpm --filter @ledger-hq/api test:integration
       - run: pnpm build
       - run: pnpm --filter @ledger-hq/web exec playwright install --with-deps chromium
       - run: docker compose up -d --wait postgres
@@ -38,6 +35,10 @@ jobs:
       - run: pnpm --filter @ledger-hq/api exec prisma migrate deploy
         env:
           DATABASE_URL: postgresql://ledger:ledger@localhost:5432/ledger_hq
+      - run: pnpm --filter @ledger-hq/api test:integration
+        env:
+          DATABASE_URL: postgresql://ledger:ledger@localhost:5432/ledger_hq
+          AUTH_SALT_SECRET: ci-secret
       - run: pnpm --filter @ledger-hq/web test:e2e
         env:
           DATABASE_URL: postgresql://ledger:ledger@localhost:5432/ledger_hq
