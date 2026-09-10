@@ -8,6 +8,7 @@ describe('isValidNif', () => {
     ['123456789', 'individual, remainder 2, check digit 9'],
     ['501442600', 'company, remainder 1, check digit 0'],
     ['999999990', 'remainder 0, check digit 0'],
+    ['451234561', 'non-resident individual (45x), remainder 10, check digit 1'],
   ])('accepts %s (%s)', (value) => {
     expect(isValidNif(value)).toBe(true)
   })
@@ -21,7 +22,7 @@ describe('isValidNif', () => {
     ['1234567890', 'too long'],
     ['12345678a', 'not all digits'],
     ['', 'empty'],
-    ['423456789', 'first digit outside the assigned ranges'],
+    ['023456789', 'first digit outside the assigned ranges'],
   ])('rejects %s (%s)', (value) => {
     expect(isValidNif(value)).toBe(false)
   })

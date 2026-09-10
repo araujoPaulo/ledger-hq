@@ -1,5 +1,10 @@
-/** First digits assigned by the Portuguese tax authority. */
-const ASSIGNED_FIRST_DIGITS = new Set(['1', '2', '3', '5', '6', '7', '8', '9'])
+/**
+ * First digits assigned by the Portuguese tax authority. `4` covers
+ * non-resident natural persons (the `45x` range); the validator only checks
+ * the first digit, not the second, so it does not assert which `4x` second
+ * digits the tax authority actually assigns.
+ */
+const ASSIGNED_FIRST_DIGITS = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9'])
 
 /**
  * Validates a Portuguese tax identification number (NIF).
