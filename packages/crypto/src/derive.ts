@@ -59,3 +59,13 @@ export async function deriveStretchedKey(masterKey: Bytes): Promise<Bytes> {
 export function deriveAuthHash(masterKey: Bytes, masterPassword: string): Promise<Bytes> {
   return argon2(masterKey, utf8(masterPassword), AUTH_HASH_PARAMS)
 }
+
+/**
+ * The server-verifiable proof of recovery-code possession: the same
+ * hash-of-a-hash shape as `deriveAuthHash`, but keyed by the recovered vault
+ * key and salted with the recovery code instead of the master password.
+ * Never touches the master-password derivation path.
+ */
+export function deriveRecoveryAuthHash(vaultKey: Bytes, recoveryCode: string): Promise<Bytes> {
+  return argon2(vaultKey, utf8(recoveryCode), AUTH_HASH_PARAMS)
+}

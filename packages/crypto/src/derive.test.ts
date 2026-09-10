@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fromBase64, toBase64 } from './encoding'
-import { deriveAuthHash, deriveMasterKey, deriveStretchedKey, generateSalt } from './derive'
+import { deriveAuthHash, deriveRecoveryAuthHash, deriveMasterKey, deriveStretchedKey, generateSalt } from './derive'
 import { KDF_PARAMS } from './params'
 
 const PASSWORD = 'correct horse battery staple'
@@ -87,6 +87,15 @@ describe('deriveAuthHash', () => {
     expect(toBase64(await deriveAuthHash(masterKey, PASSWORD))).toBe(
       toBase64(await deriveAuthHash(masterKey, PASSWORD)),
     )
+  })
+})
+
+describe('deriveRecoveryAuthHash', () => {
+  it('produces a different hash for a different recovery code', async () => {
+    const vaultKey = crypto.getRandomValues(new Uint8Array(32))
+    const a = await deriveRecoveryAuthHash(vaultKey, 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE-F')
+    const b = await deriveRecoveryAuthHash(vaultKey, 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE-G')
+    expect(a).not.toEqual(b)
   })
 })
 
