@@ -8,6 +8,7 @@ import { ClientListPage } from './clients/ClientListPage'
 import { ClientFormPage } from './clients/ClientFormPage'
 import { ClientDetailPage } from './clients/ClientDetailPage'
 import { VaultSetupPage } from './vault/VaultSetupPage'
+import { PlatformsPage } from './vault/PlatformsPage'
 
 export function RequireSession({ children }: { children: ReactNode }) {
   const bootstrap = useBootstrapRequired()
@@ -52,8 +53,14 @@ const vaultSetupRoute = createRoute({
   component: VaultSetupPage,
 })
 
+const platformsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/vault/platforms',
+  component: PlatformsPage,
+})
+
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, clientsRoute, clientNewRoute, clientDetailRoute, vaultSetupRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, clientsRoute, clientNewRoute, clientDetailRoute, vaultSetupRoute, platformsRoute]),
 })
 
 declare module '@tanstack/react-router' {

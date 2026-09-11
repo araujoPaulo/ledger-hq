@@ -18,5 +18,10 @@
     "CIT": "Corporate income tax",
     "PIT_CATEGORY_B": "Personal income tax, category B",
     "PIT_EMPLOYMENT_ONLY": "Personal income tax, employment only"
+  },
+  "authKind": {
+    "PASSWORD": "Password",
+    "PASSWORD_OTP": "Password + verification code",
+    "CERTIFICATE": "Certificate"
   }
 }

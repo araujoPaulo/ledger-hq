@@ -12,5 +12,15 @@
     "passwordLabel": "Master password",
     "wrongPassword": "Incorrect password.",
     "unlockButton": "Unlock"
+  },
+  "platforms": {
+    "title": "Platforms",
+    "newTitle": "New platform",
+    "empty": "There are no platforms yet.",
+    "form": {
+      "name": { "label": "Name", "invalid": "Enter a valid name." },
+      "url": { "label": "URL", "invalid": "Enter a valid URL." },
+      "authKind": { "label": "Authentication kind" }
+    }
   }
 }

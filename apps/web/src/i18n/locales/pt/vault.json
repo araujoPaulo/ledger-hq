@@ -12,5 +12,15 @@
     "passwordLabel": "Palavra-passe mestra",
     "wrongPassword": "Palavra-passe incorreta.",
     "unlockButton": "Desbloquear"
+  },
+  "platforms": {
+    "title": "Plataformas",
+    "newTitle": "Nova plataforma",
+    "empty": "Ainda não há plataformas.",
+    "form": {
+      "name": { "label": "Nome", "invalid": "Indica um nome válido." },
+      "url": { "label": "URL", "invalid": "Indica um URL válido." },
+      "authKind": { "label": "Tipo de autenticação" }
+    }
   }
 }

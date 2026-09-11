@@ -18,5 +18,10 @@
     "CIT": "IRC",
     "PIT_CATEGORY_B": "IRS categoria B",
     "PIT_EMPLOYMENT_ONLY": "IRS trabalho dependente"
+  },
+  "authKind": {
+    "PASSWORD": "Palavra-passe",
+    "PASSWORD_OTP": "Palavra-passe + código de verificação",
+    "CERTIFICATE": "Certificado"
   }
 }

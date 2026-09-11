@@ -30,6 +30,9 @@ export function AppLayout() {
           <Link to="/clients" className="text-sm">
             {t('nav.clients')}
           </Link>
+          <Link to="/vault/platforms" className="text-sm">
+            {t('nav.platforms')}
+          </Link>
           <div className="ml-auto flex items-center gap-3">
             <LanguageSwitcher />
             {vaultState.status === 'unlocked' && (
