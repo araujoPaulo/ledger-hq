@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config'
 import { argon2Verify, argon2id } from 'hash-wasm'
 import { uuidv7 } from 'uuidv7'
 import { AppError } from '@ledger-hq/domain'
-import type { BootstrapInput, LoginInput } from '@ledger-hq/domain'
+import type { BootstrapInput, LoginInput, SetUpVaultInput } from '@ledger-hq/domain'
 import { KDF_PARAMS } from '@ledger-hq/crypto'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { PrismaService } from '../common/prisma.service.js'
@@ -23,6 +23,8 @@ const SERVER_HASH_PARAMS = {
 } as const
 
 export type SessionUser = { id: string; email: string; locale: string }
+
+export type VaultEnvelope = { protectedVaultKey: string | null; setUpAt: string | null }
 
 /**
  * Verified against when the email does not exist, so `login` always pays the
@@ -101,6 +103,37 @@ export class AuthService {
     })
 
     return this.createSession(user.id)
+  }
+
+  async getVaultEnvelope(userId: string): Promise<VaultEnvelope> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } })
+
+    return {
+      protectedVaultKey: user.vaultProtectedKey ? Buffer.from(user.vaultProtectedKey).toString('base64') : null,
+      setUpAt: user.vaultSetUpAt?.toISOString() ?? null,
+    }
+  }
+
+  async setUpVault(userId: string, input: SetUpVaultInput): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } })
+    if (user.vaultSetUpAt !== null) throw new AppError('vault.already_set_up', {}, 409)
+
+    const recoveryAuthDigest = await argon2id({
+      password: Buffer.from(input.recoveryAuthHash, 'base64'),
+      salt: randomBytes(16),
+      ...SERVER_HASH_PARAMS,
+      outputType: 'encoded',
+    })
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        vaultProtectedKey: Buffer.from(input.protectedVaultKey, 'base64'),
+        vaultRecoveryKey: Buffer.from(input.recoveryVaultKey, 'base64'),
+        vaultRecoveryAuthDigest: recoveryAuthDigest,
+        vaultSetUpAt: new Date(),
+      },
+    })
   }
 
   async login(input: LoginInput): Promise<string> {
