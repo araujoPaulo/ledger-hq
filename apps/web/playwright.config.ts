@@ -3,6 +3,13 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
+  // setup-and-clients.spec.ts and vault-offline.spec.ts both perform this
+  // single-user app's one-time account bootstrap; at Playwright's default
+  // parallelism the two specs' files run concurrently and race that
+  // bootstrap, intermittently failing whichever one loses. Serializing the
+  // suite makes this reliable in CI and locally without every future
+  // invocation needing to remember `--workers=1`.
+  workers: 1,
   use: { baseURL: 'http://localhost:4173', locale: 'pt-PT' },
   webServer: [
     {

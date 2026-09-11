@@ -1,3 +1,6 @@
 export * from './derive'
 export * from './encoding'
 export * from './params'
+export * from './vault-key'
+export * from './item'
+export * from './totp'

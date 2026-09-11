@@ -3,5 +3,6 @@ import common from './common.json'
 import domain from './domain.json'
 import employments from './employments.json'
 import errors from './errors.json'
+import vault from './vault.json'
 
-export const resources = { clients, common, domain, employments, errors }
+export const resources = { clients, common, domain, employments, errors, vault }

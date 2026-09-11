@@ -96,4 +96,29 @@ describe('AppLayout', () => {
     // translated "Entrar"/"Sign in" text).
     expect(await screen.findByRole('heading', { name: /entrar|sign in/i })).toBeInTheDocument()
   })
+
+  it('shows the lock-vault button only once the vault is unlocked', async () => {
+    const { unlockVault, lockVault } = await import('../vault/vault-session')
+    lockVault()
+
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === '/auth/bootstrap-required') return { required: false }
+      if (path === '/auth/session') return { id: '1', email: 'paulo@example.com', locale: 'pt-PT' }
+      throw new Error(`unexpected path in test: ${path}`)
+    })
+
+    renderLayout()
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: /entrar|sign in/i })).not.toBeInTheDocument()
+    })
+
+    expect(screen.queryByRole('button', { name: /bloquear cofre/i })).not.toBeInTheDocument()
+
+    unlockVault({ type: 'secret' } as CryptoKey)
+
+    expect(await screen.findByRole('button', { name: /bloquear cofre/i })).toBeInTheDocument()
+
+    lockVault()
+  })
 })

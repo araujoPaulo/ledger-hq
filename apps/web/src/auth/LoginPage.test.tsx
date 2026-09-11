@@ -11,6 +11,9 @@ import { ApiError } from '../api/client'
 const signIn = vi.hoisted(() => vi.fn())
 vi.mock('./credentials', () => ({ signIn }))
 
+const recoverVaultMock = vi.hoisted(() => vi.fn())
+vi.mock('../vault/recover', () => ({ recoverVault: recoverVaultMock }))
+
 const { LoginPage } = await import('./LoginPage')
 
 await initI18n()
@@ -69,5 +72,35 @@ describe('LoginPage', () => {
 
     expect(screen.getByText(/pelo menos 12 caracteres|at least 12 characters/i)).toBeInTheDocument()
     expect(signIn).not.toHaveBeenCalled()
+  })
+})
+
+describe('recovery mode', () => {
+  beforeEach(() => {
+    recoverVaultMock.mockReset()
+  })
+
+  it('switches to the recovery form and back', async () => {
+    renderPage() // this file's existing render helper
+    await userEvent.click(screen.getByRole('button', { name: /esqueceste a palavra-passe/i }))
+    expect(screen.getByRole('heading', { name: /recuperar acesso/i })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /voltar a entrar/i }))
+    expect(screen.getByRole('heading', { name: /entrar/i })).toBeInTheDocument()
+  })
+
+  it('submits the recovery code and new password', async () => {
+    recoverVaultMock.mockResolvedValue(undefined)
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: /esqueceste a palavra-passe/i }))
+
+    await userEvent.type(screen.getByLabelText(/código de recuperação/i), 'ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z')
+    await userEvent.type(screen.getByLabelText('Nova palavra-passe mestra'), 'a new long master password')
+    await userEvent.type(screen.getByLabelText(/confirma a nova palavra-passe/i), 'a new long master password')
+    await userEvent.click(screen.getByRole('button', { name: /^recuperar acesso$/i }))
+
+    await vi.waitFor(() => {
+      expect(recoverVaultMock).toHaveBeenCalledWith('a new long master password', 'ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z')
+    })
   })
 })

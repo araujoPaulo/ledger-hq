@@ -6,10 +6,14 @@ import { LanguageSwitcher } from './LanguageSwitcher'
 import { RequireSession } from '../router'
 import { signOut } from '../auth/credentials'
 import { SESSION_QUERY_KEY } from '../auth/session'
+import { lockVault, useVaultState } from '../vault/vault-session'
+import { useVaultSync } from '../vault/useVaultSync'
 
 export function AppLayout() {
   const { t } = useTranslation('common')
   const queryClient = useQueryClient()
+  const vaultState = useVaultState()
+  useVaultSync()
 
   const signOutMutation = useMutation({
     mutationFn: signOut,
@@ -28,8 +32,20 @@ export function AppLayout() {
           <Link to="/clients" className="text-sm">
             {t('nav.clients')}
           </Link>
+          <Link to="/vault/platforms" className="text-sm">
+            {t('nav.platforms')}
+          </Link>
           <div className="ml-auto flex items-center gap-3">
             <LanguageSwitcher />
+            {vaultState.status === 'unlocked' && (
+              <button
+                type="button"
+                onClick={() => lockVault()}
+                className="rounded border border-slate-300 px-2 py-1 text-sm"
+              >
+                {t('actions.lockVault')}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => signOutMutation.mutate()}

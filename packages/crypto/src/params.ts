@@ -25,6 +25,12 @@ export const AUTH_HASH_PARAMS = {
 export const VAULT_HKDF_INFO = 'ledger-hq:vault'
 
 /**
+ * Distinct from `VAULT_HKDF_INFO`: this expands the recovery *code* (not the
+ * master password) into the key that wraps the second copy of the vault key.
+ */
+export const RECOVERY_HKDF_INFO = 'ledger-hq:vault-recovery'
+
+/**
  * `deriveAuthHash` passes the raw master password's UTF-8 bytes as the
  * Argon2id salt for the second derivation pass, and Argon2 implementations
  * (including the `hash-wasm` build used here) throw if a salt is under 8

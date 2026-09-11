@@ -30,5 +30,16 @@
     "self_employment": "A client cannot employ themselves.",
     "overlapping_spell": "An overlapping spell already exists for this pair.",
     "ended_before_started": "The end date is before the start date."
+  },
+  "vault": {
+    "not_set_up": "The vault has not been set up yet.",
+    "already_set_up": "The vault is already set up.",
+    "invalid_recovery_code": "Invalid recovery code."
+  },
+  "platforms": {
+    "name_taken": "A platform named {{name}} already exists."
+  },
+  "credentials": {
+    "label_taken": "A credential named {{label}} already exists for this platform."
   }
 }

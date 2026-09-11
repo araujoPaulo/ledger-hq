@@ -1,0 +1,44 @@
+{
+  "setup": {
+    "title": "Set up the vault",
+    "confirmPasswordLabel": "Confirm your master password",
+    "recoveryCodeIntro": "This is your recovery code. It is the only way to regain access if you lose your master password.",
+    "acknowledgeLabel": "I have written down the recovery code and stored it somewhere safe.",
+    "continueButton": "Continue"
+  },
+  "unlock": {
+    "notSetUp": "The vault has not been set up yet.",
+    "setUpLink": "Set it up now",
+    "passwordLabel": "Master password",
+    "wrongPassword": "Incorrect password.",
+    "unlockButton": "Unlock"
+  },
+  "platforms": {
+    "title": "Platforms",
+    "newTitle": "New platform",
+    "empty": "There are no platforms yet.",
+    "form": {
+      "name": { "label": "Name", "invalid": "Enter a valid name." },
+      "url": { "label": "URL", "invalid": "Enter a valid URL." },
+      "authKind": { "label": "Authentication kind" }
+    }
+  },
+  "credentials": {
+    "title": "Credentials",
+    "empty": "There are no credentials for this client yet.",
+    "newTitle": "New credential",
+    "reveal": "Reveal",
+    "hide": "Hide",
+    "copy": "Copy",
+    "totp": "Current code",
+    "rotate": "Change password",
+    "rotateConfirm": "Confirm",
+    "form": {
+      "platform": { "label": "Platform" },
+      "label": { "label": "Label" },
+      "username": { "label": "Username" },
+      "password": { "label": "Password" },
+      "totpSecret": { "label": "TOTP secret (optional)" }
+    }
+  }
+}

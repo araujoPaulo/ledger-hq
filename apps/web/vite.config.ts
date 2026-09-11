@@ -30,6 +30,20 @@ export default defineConfig({
         navigateFallback: '/index.html',
         runtimeCaching: [
           {
+            // This one read has its own IndexedDB-backed offline fallback
+            // (resolveEnvelope in vault/unlock.ts) that the generic
+            // NetworkFirst cache below would otherwise shadow: NetworkFirst
+            // resolves *successfully* from a stale cache entry when offline,
+            // so the fallback's catch-based offline detection never fires.
+            // NetworkOnly makes an offline fetch to this URL genuinely
+            // reject instead. Must stay ahead of the generic NetworkFirst
+            // rule below — Workbox's router matches routes in array order,
+            // first match wins.
+            urlPattern: ({ url, request }) =>
+              url.pathname === '/api/v1/auth/vault-envelope' && request.method === 'GET',
+            handler: 'NetworkOnly' as const,
+          },
+          {
             // Reads degrade to the last known state, clearly marked as stale.
             urlPattern: ({ url, request }) =>
               url.pathname.startsWith('/api/v1') && request.method === 'GET',

@@ -31,3 +31,6 @@ export const INCOME_TAX_VALUES = [
   'PIT_EMPLOYMENT_ONLY',
 ] as const
 export type IncomeTax = (typeof INCOME_TAX_VALUES)[number]
+
+export const AUTH_KIND_VALUES = ['PASSWORD', 'PASSWORD_OTP', 'CERTIFICATE'] as const
+export type AuthKind = (typeof AUTH_KIND_VALUES)[number]

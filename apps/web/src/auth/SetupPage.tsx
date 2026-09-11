@@ -40,10 +40,6 @@ export function SetupPage() {
     >
       <h1 className="text-lg font-semibold">{t('auth.setupTitle')}</h1>
 
-      <p role="alert" className="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
-        {t('auth.recoveryWarning')}
-      </p>
-
       <label className="flex flex-col gap-1 text-sm">
         {t('auth.emailLabel')}
         <input

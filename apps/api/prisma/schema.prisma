@@ -38,14 +38,24 @@ enum IncomeTax {
   PIT_EMPLOYMENT_ONLY
 }
 
+enum AuthKind {
+  PASSWORD
+  PASSWORD_OTP
+  CERTIFICATE
+}
+
 model User {
-  id             String    @id @db.Uuid
-  email          String    @unique
-  kdfSalt        Bytes
-  authHashDigest String
-  locale         String    @default("pt-PT")
-  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
-  sessions       Session[]
+  id                      String    @id @db.Uuid
+  email                   String    @unique
+  kdfSalt                 Bytes
+  authHashDigest          String
+  locale                  String    @default("pt-PT")
+  vaultProtectedKey       Bytes?
+  vaultRecoveryKey        Bytes?
+  vaultRecoveryAuthDigest String?
+  vaultSetUpAt            DateTime? @db.Timestamptz(3)
+  createdAt               DateTime  @default(now()) @db.Timestamptz(3)
+  sessions                Session[]
 }
 
 model Session {
@@ -80,6 +90,7 @@ model Client {
   fiscalProfile         FiscalProfile?
   employmentsAsEmployer Employment[]   @relation("employer")
   employmentsAsEmployee Employment[]   @relation("employee")
+  credentials           Credential[]
 
   @@unique([id, kind])
   @@index([kind, name])
@@ -115,6 +126,46 @@ model Employment {
 
   @@index([employerId])
   @@index([employeeId])
+}
+
+model Platform {
+  id        String   @id @db.Uuid
+  name      String   @unique
+  url       String?
+  authKind  AuthKind
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  credentials Credential[]
+}
+
+model Credential {
+  id         String   @id @db.Uuid
+  clientId   String   @db.Uuid
+  platformId String   @db.Uuid
+  label      String
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  client   Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  platform Platform            @relation(fields: [platformId], references: [id])
+  versions CredentialVersion[]
+
+  @@unique([clientId, platformId, label])
+  @@index([clientId])
+  @@index([updatedAt])
+}
+
+model CredentialVersion {
+  id           String   @id @db.Uuid
+  credentialId String   @db.Uuid
+  ciphertext   Bytes
+  iv           Bytes
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  credential Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@index([credentialId, createdAt])
 }
 
 model AuditEvent {

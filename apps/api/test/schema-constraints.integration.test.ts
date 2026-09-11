@@ -177,3 +177,19 @@ describe('employment constraints', () => {
     ).rejects.toThrow(/employment_ended_after_started/)
   })
 })
+
+describe('credential constraints', () => {
+  it('rejects two credentials with the same client, platform and label', async () => {
+    const client = await prisma.client.create({
+      data: { id: uuidv7(), kind: 'COMPANY', name: 'X', taxId: '500000001', accounting: 'ORGANIZED', legalForm: 'LDA' },
+    })
+    const platform = await prisma.platform.create({
+      data: { id: uuidv7(), name: 'Test Platform', authKind: 'PASSWORD' },
+    })
+    const shared = { clientId: client.id, platformId: platform.id, label: 'Acesso principal' }
+
+    await prisma.credential.create({ data: { id: uuidv7(), ...shared } })
+
+    await expect(prisma.credential.create({ data: { id: uuidv7(), ...shared } })).rejects.toThrow()
+  })
+})

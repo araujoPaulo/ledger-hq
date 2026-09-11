@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config'
 import { argon2Verify, argon2id } from 'hash-wasm'
 import { uuidv7 } from 'uuidv7'
 import { AppError } from '@ledger-hq/domain'
-import type { BootstrapInput, LoginInput } from '@ledger-hq/domain'
+import type { BootstrapInput, LoginInput, RecoverVaultInput, SetUpVaultInput } from '@ledger-hq/domain'
 import { KDF_PARAMS } from '@ledger-hq/crypto'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { PrismaService } from '../common/prisma.service.js'
@@ -23,6 +23,8 @@ const SERVER_HASH_PARAMS = {
 } as const
 
 export type SessionUser = { id: string; email: string; locale: string }
+
+export type VaultEnvelope = { protectedVaultKey: string | null; setUpAt: string | null }
 
 /**
  * Verified against when the email does not exist, so `login` always pays the
@@ -97,6 +99,89 @@ export class AuthService {
         kdfSalt: Buffer.from(input.kdfSalt, 'base64'),
         authHashDigest: digest,
         locale: input.locale,
+      },
+    })
+
+    return this.createSession(user.id)
+  }
+
+  async getVaultEnvelope(userId: string): Promise<VaultEnvelope> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } })
+
+    return {
+      protectedVaultKey: user.vaultProtectedKey ? Buffer.from(user.vaultProtectedKey).toString('base64') : null,
+      setUpAt: user.vaultSetUpAt?.toISOString() ?? null,
+    }
+  }
+
+  async assertVaultSetUp(): Promise<void> {
+    const user = await this.prisma.user.findFirst()
+    if (!user || user.vaultSetUpAt === null) throw new AppError('vault.not_set_up', {}, 409)
+  }
+
+  async getRecoveryEnvelope(): Promise<{ recoveryVaultKey: string | null }> {
+    const user = await this.prisma.user.findFirst()
+
+    return {
+      recoveryVaultKey: user?.vaultRecoveryKey ? Buffer.from(user.vaultRecoveryKey).toString('base64') : null,
+    }
+  }
+
+  async setUpVault(userId: string, input: SetUpVaultInput): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } })
+    if (user.vaultSetUpAt !== null) throw new AppError('vault.already_set_up', {}, 409)
+
+    const recoveryAuthDigest = await argon2id({
+      password: Buffer.from(input.recoveryAuthHash, 'base64'),
+      salt: randomBytes(16),
+      ...SERVER_HASH_PARAMS,
+      outputType: 'encoded',
+    })
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        vaultProtectedKey: Buffer.from(input.protectedVaultKey, 'base64'),
+        vaultRecoveryKey: Buffer.from(input.recoveryVaultKey, 'base64'),
+        vaultRecoveryAuthDigest: recoveryAuthDigest,
+        vaultSetUpAt: new Date(),
+      },
+    })
+  }
+
+  /**
+   * No session guard: this is how access is regained without one. The
+   * server never sees the vault key or the recovery code — only
+   * `recoveryAuthHash`, verified against the digest `setUpVault` stored,
+   * the same timing-safe way `login` verifies `authHash` (see
+   * `getDummyDigest` above: the expensive verify always runs, so response
+   * latency cannot reveal whether a vault was ever set up).
+   */
+  async recoverVault(input: RecoverVaultInput): Promise<string> {
+    const user = await this.prisma.user.findFirst()
+
+    const valid = await argon2Verify({
+      password: Buffer.from(input.recoveryAuthHash, 'base64'),
+      hash: user?.vaultRecoveryAuthDigest ?? (await getDummyDigest()),
+    })
+
+    if (!user || !user.vaultRecoveryAuthDigest || !valid) {
+      throw new AppError('vault.invalid_recovery_code', {}, 401)
+    }
+
+    const authHashDigest = await argon2id({
+      password: Buffer.from(input.authHash, 'base64'),
+      salt: randomBytes(16),
+      ...SERVER_HASH_PARAMS,
+      outputType: 'encoded',
+    })
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        kdfSalt: Buffer.from(input.kdfSalt, 'base64'),
+        authHashDigest,
+        vaultProtectedKey: Buffer.from(input.protectedVaultKey, 'base64'),
       },
     })
 

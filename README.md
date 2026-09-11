@@ -8,12 +8,14 @@ across notes and memory. It runs on an office machine, is reached remotely
 over a private Tailscale network, and installs as an app on desktop and
 phone.
 
-This repository currently implements **Phase 0 — Foundation**: the monorepo,
+This repository currently implements **Phase 0 — Foundation** (the monorepo,
 authentication, the client/fiscal-profile/employment register, the
-installable PWA shell, and the operational tooling to run it self-hosted.
-The credential vault, fiscal obligation engine and billing ledger described
-in the [design specification](docs/superpowers/specs/2026-09-04-ledger-hq-design.md)
-are later phases and are not implemented yet.
+installable PWA shell, and the operational tooling to run it self-hosted)
+and **Phase 1 — Vault** (the zero-knowledge encrypted credential vault,
+recovery-code account recovery, and offline vault reads). The fiscal
+obligation engine and billing ledger described in the [design
+specification](docs/superpowers/specs/2026-09-04-ledger-hq-design.md) are
+later phases and are not implemented yet.
 
 ## Requirements
 

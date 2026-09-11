@@ -1,0 +1,44 @@
+{
+  "setup": {
+    "title": "Configura o cofre",
+    "confirmPasswordLabel": "Confirma a tua palavra-passe mestra",
+    "recoveryCodeIntro": "Este é o teu código de recuperação. É a única forma de recuperares o acesso se perderes a palavra-passe mestra.",
+    "acknowledgeLabel": "Anotei o código de recuperação e guardei-o em local seguro.",
+    "continueButton": "Continuar"
+  },
+  "unlock": {
+    "notSetUp": "O cofre ainda não foi configurado.",
+    "setUpLink": "Configurar agora",
+    "passwordLabel": "Palavra-passe mestra",
+    "wrongPassword": "Palavra-passe incorreta.",
+    "unlockButton": "Desbloquear"
+  },
+  "platforms": {
+    "title": "Plataformas",
+    "newTitle": "Nova plataforma",
+    "empty": "Ainda não há plataformas.",
+    "form": {
+      "name": { "label": "Nome", "invalid": "Indica um nome válido." },
+      "url": { "label": "URL", "invalid": "Indica um URL válido." },
+      "authKind": { "label": "Tipo de autenticação" }
+    }
+  },
+  "credentials": {
+    "title": "Credenciais",
+    "empty": "Ainda não há credenciais para este cliente.",
+    "newTitle": "Nova credencial",
+    "reveal": "Ver",
+    "hide": "Ocultar",
+    "copy": "Copiar",
+    "totp": "Código atual",
+    "rotate": "Mudar palavra-passe",
+    "rotateConfirm": "Confirmar",
+    "form": {
+      "platform": { "label": "Plataforma" },
+      "label": { "label": "Designação" },
+      "username": { "label": "Utilizador" },
+      "password": { "label": "Palavra-passe" },
+      "totpSecret": { "label": "Segredo TOTP (opcional)" }
+    }
+  }
+}
