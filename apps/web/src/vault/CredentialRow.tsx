@@ -6,6 +6,7 @@ import type { CredentialItem } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { rotateCredential } from './api'
 import type { CredentialResponse } from './api'
+import { recordReveal } from './outbox'
 import { useVaultState } from './vault-session'
 
 type Props = { credential: CredentialResponse; platformName: string; onRotated: () => void }
@@ -33,6 +34,7 @@ export function CredentialRow({ credential, platformName, onRotated }: Props) {
     if (vaultState.status !== 'unlocked') return
     const decrypted = await decryptCredentialItem(vaultState.key, fromBase64(credential.ciphertext), fromBase64(credential.iv))
     setItem(decrypted as CredentialItem)
+    void recordReveal(credential.id)
   }
 
   // Spec 9.4: "Locking releases the reference and clears cached plaintext."

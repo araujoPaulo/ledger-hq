@@ -5,6 +5,7 @@ interface VaultSchema extends DBSchema {
   vaultMeta: { key: string; value: VaultMetaRecord }
   credentials: { key: string; value: CachedCredential; indexes: { byClient: string } }
   platforms: { key: string; value: CachedPlatform }
+  outbox: { key: string; value: OutboxEvent }
 }
 
 export type VaultMetaRecord = {
@@ -26,17 +27,31 @@ export type CachedCredential = {
 
 export type CachedPlatform = { id: string; name: string; url: string | null; authKind: string }
 
+export type OutboxEvent = {
+  id: string
+  entityType: string
+  entityId: string
+  action: string
+  metadata: Record<string, unknown>
+  occurredAt: string
+}
+
 const CACHED_CREDENTIAL_KEYS = ['id', 'clientId', 'platformId', 'label', 'updatedAt', 'ciphertext', 'iv']
 
 let dbPromise: Promise<IDBPDatabase<VaultSchema>> | undefined
 
 function getDb(): Promise<IDBPDatabase<VaultSchema>> {
-  dbPromise ??= openDB<VaultSchema>('ledger-hq-vault', 1, {
-    upgrade(db) {
-      db.createObjectStore('vaultMeta', { keyPath: 'id' })
-      const credentials = db.createObjectStore('credentials', { keyPath: 'id' })
-      credentials.createIndex('byClient', 'clientId')
-      db.createObjectStore('platforms', { keyPath: 'id' })
+  dbPromise ??= openDB<VaultSchema>('ledger-hq-vault', 2, {
+    upgrade(db, oldVersion) {
+      if (oldVersion < 1) {
+        db.createObjectStore('vaultMeta', { keyPath: 'id' })
+        const credentials = db.createObjectStore('credentials', { keyPath: 'id' })
+        credentials.createIndex('byClient', 'clientId')
+        db.createObjectStore('platforms', { keyPath: 'id' })
+      }
+      if (oldVersion < 2) {
+        db.createObjectStore('outbox', { keyPath: 'id' })
+      }
     },
   })
   return dbPromise
@@ -92,4 +107,19 @@ export async function putCachedPlatforms(items: CachedPlatform[]): Promise<void>
 export async function listCachedPlatforms(): Promise<CachedPlatform[]> {
   const db = await getDb()
   return db.getAll('platforms')
+}
+
+export async function queueOutboxEvent(event: OutboxEvent): Promise<void> {
+  const db = await getDb()
+  await db.put('outbox', event)
+}
+
+export async function listOutboxEvents(): Promise<OutboxEvent[]> {
+  const db = await getDb()
+  return db.getAll('outbox')
+}
+
+export async function deleteOutboxEvent(id: string): Promise<void> {
+  const db = await getDb()
+  await db.delete('outbox', id)
 }

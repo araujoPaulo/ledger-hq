@@ -1,12 +1,15 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  deleteOutboxEvent,
   getVaultMeta,
   listCachedCredentials,
   listCachedPlatforms,
+  listOutboxEvents,
   putCachedCredentials,
   putCachedPlatforms,
   putVaultMeta,
+  queueOutboxEvent,
 } from './vault-db'
 import type { CachedCredential } from './vault-db'
 
@@ -56,5 +59,14 @@ describe('vault-db', () => {
   it('refuses to cache a credential missing a required field', async () => {
     const { iv: _iv, ...incomplete } = credential
     await expect(putCachedCredentials([incomplete as CachedCredential])).rejects.toThrow(/unexpected fields/)
+  })
+
+  it('queues, lists and deletes outbox events', async () => {
+    const event = { id: 'e1', entityType: 'credential', entityId: 'c1', action: 'credential.revealed', metadata: {}, occurredAt: '2026-09-10T00:00:00.000Z' }
+    await queueOutboxEvent(event)
+    await expect(listOutboxEvents()).resolves.toEqual([event])
+
+    await deleteOutboxEvent('e1')
+    await expect(listOutboxEvents()).resolves.toEqual([])
   })
 })
