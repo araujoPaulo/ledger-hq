@@ -1,0 +1,9 @@
+{
+  "setup": {
+    "title": "Set up the vault",
+    "confirmPasswordLabel": "Confirm your master password",
+    "recoveryCodeIntro": "This is your recovery code. It is the only way to regain access if you lose your master password.",
+    "acknowledgeLabel": "I have written down the recovery code and stored it somewhere safe.",
+    "continueButton": "Continue"
+  }
+}
