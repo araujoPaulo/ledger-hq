@@ -2,8 +2,8 @@ import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, UseGuards, UseP
 import type { Request, Response } from 'express'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { ConfigService } from '@nestjs/config'
-import { bootstrapSchema, kdfQuerySchema, loginSchema, setUpVaultSchema } from '@ledger-hq/domain'
-import type { BootstrapInput, KdfQuery, LoginInput, SetUpVaultInput } from '@ledger-hq/domain'
+import { bootstrapSchema, kdfQuerySchema, loginSchema, recoverVaultSchema, setUpVaultSchema } from '@ledger-hq/domain'
+import type { BootstrapInput, KdfQuery, LoginInput, RecoverVaultInput, SetUpVaultInput } from '@ledger-hq/domain'
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- AuthService is constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { AuthService, type SessionUser, type VaultEnvelope } from './auth.service.js'
@@ -70,6 +70,20 @@ export class AuthController {
     @Body(new ZodValidationPipe(setUpVaultSchema)) body: SetUpVaultInput,
   ): Promise<void> {
     await this.auth.setUpVault(user.id, body)
+  }
+
+  @Get('vault-recovery-envelope')
+  recoveryEnvelope() {
+    return this.auth.getRecoveryEnvelope()
+  }
+
+  @Post('vault-recover')
+  @HttpCode(200)
+  async recoverVault(
+    @Body(new ZodValidationPipe(recoverVaultSchema)) body: RecoverVaultInput,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    this.setSessionCookie(response, await this.auth.recoverVault(body))
   }
 
   private setSessionCookie(response: Response, token: string): void {

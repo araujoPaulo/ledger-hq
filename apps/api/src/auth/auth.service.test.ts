@@ -21,7 +21,11 @@ function fakeConfig(): ConfigService {
 
 function fakePrisma(user: unknown): PrismaService {
   return {
-    user: { findUnique: vi.fn().mockResolvedValue(user) },
+    user: {
+      findUnique: vi.fn().mockResolvedValue(user),
+      findFirst: vi.fn().mockResolvedValue(user),
+      update: vi.fn().mockResolvedValue(user),
+    },
     session: { create: vi.fn().mockResolvedValue({}) },
   } as unknown as PrismaService
 }
@@ -84,5 +88,40 @@ describe('AuthService#login', () => {
     await expect(service.login({ email: 'nobody@example.com', authHash: SOME_AUTH_HASH })).rejects.toMatchObject({
       code: 'auth.invalid_credentials',
     })
+  })
+})
+
+describe('AuthService#recoverVault', () => {
+  beforeEach(() => {
+    argon2VerifyMock.mockReset()
+    argon2idMock.mockReset()
+    argon2idMock.mockResolvedValue('dummy-encoded-digest')
+  })
+
+  it('calls argon2Verify exactly once even when the vault was never set up', async () => {
+    argon2VerifyMock.mockResolvedValue(false)
+    const user = { id: 'u1', email: 'paulo@example.com', vaultRecoveryAuthDigest: null }
+    const service = new AuthService(fakePrisma(user), fakeConfig())
+
+    await expect(
+      service.recoverVault({ recoveryAuthHash: SOME_AUTH_HASH, kdfSalt: SOME_AUTH_HASH, authHash: SOME_AUTH_HASH, protectedVaultKey: SOME_AUTH_HASH }),
+    ).rejects.toMatchObject({ code: 'vault.invalid_recovery_code' })
+
+    expect(argon2VerifyMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('verifies against the stored recovery digest when one exists', async () => {
+    argon2VerifyMock.mockResolvedValue(true)
+    const user = { id: 'u1', email: 'paulo@example.com', vaultRecoveryAuthDigest: 'stored-recovery-digest' }
+    const service = new AuthService(fakePrisma(user), fakeConfig())
+
+    await service.recoverVault({
+      recoveryAuthHash: SOME_AUTH_HASH,
+      kdfSalt: SOME_AUTH_HASH,
+      authHash: SOME_AUTH_HASH,
+      protectedVaultKey: SOME_AUTH_HASH,
+    })
+
+    expect(argon2VerifyMock).toHaveBeenCalledWith(expect.objectContaining({ hash: 'stored-recovery-digest' }))
   })
 })
