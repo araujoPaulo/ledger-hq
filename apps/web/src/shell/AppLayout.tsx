@@ -7,11 +7,13 @@ import { RequireSession } from '../router'
 import { signOut } from '../auth/credentials'
 import { SESSION_QUERY_KEY } from '../auth/session'
 import { lockVault, useVaultState } from '../vault/vault-session'
+import { useVaultSync } from '../vault/useVaultSync'
 
 export function AppLayout() {
   const { t } = useTranslation('common')
   const queryClient = useQueryClient()
   const vaultState = useVaultState()
+  useVaultSync()
 
   const signOutMutation = useMutation({
     mutationFn: signOut,
