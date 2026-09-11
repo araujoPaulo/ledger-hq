@@ -15,24 +15,34 @@ which is which throughout:
 ## What is mitigated
 
 Theft of the office machine, theft of backup files, a database copy, disk
-level access to the server. In every one of these the attacker holds
-AES-256-GCM ciphertext (once the vault exists) and, even today, only an
-Argon2id hash of a hash — never a password, never a key.
+level access to the server. Every one of these hands the attacker
+AES-256-GCM ciphertext for every vault credential, and an Argon2id hash of
+a hash for login — never a password, never a key.
+
+This does **not** extend to the plaintext client register cached for
+offline reads — see the next section. An office machine and a lost phone
+are exposed identically there; that cache is not part of what this section
+covers.
 
 ## What is not mitigated
 
-- **A lost or stolen phone with cached client data.** The PWA's read cache
+- **A lost or stolen device — phone, laptop, or the office machine itself —
+  with cached client-register data.** The PWA's read cache
   (`apps/web/vite.config.ts`'s Workbox `runtimeCaching` for `GET
   /api/v1/*`) stores every cached API response — the complete client
   register: names, Portuguese tax numbers, social security numbers, dates
   of birth, emails, phone numbers, free-text notes — **unencrypted**, in
   the browser's Cache Storage, for up to 24 hours (`maxAgeSeconds`). This
   is plain personal data, not credential material: the Argon2id-hash-of-a-
-  hash reasoning above does not apply to it. A device that is lost or
-  stolen while its browser profile is unlocked and unwiped exposes this
-  cached data, in full, for up to that 24-hour window. There is no
-  encryption at rest over this cache today; closing that gap depends on
-  the vault (Phase 1) and is out of scope for the current phase.
+  hash reasoning above does not apply to it, and the vault's own
+  ciphertext-only IndexedDB cache (below) does not narrow this gap either
+  — the client register and the vault are two different caches, holding
+  two different kinds of data. Any device that is lost or stolen while its
+  browser profile is unlocked and unwiped exposes this cached data, in
+  full, for up to that 24-hour window — whether that device is a phone in
+  a coat pocket or the practice's own office computer. This remains an
+  open gap after Phase 1; closing it would mean encrypting the client
+  register cache too, which is out of scope for this phase.
 - **A compromised server serving malicious JavaScript to an unlocked
   session.** The server delivers the application's own code; if that code
   is malicious, it runs with whatever key material the session holds
@@ -83,11 +93,11 @@ attacker only `Argon2id(authHash)`, one more expensive step away from
 `authHash` itself, which in turn is one non-invertible step away from
 `masterKey`.
 
-**Stage 2 (`stretched`) is implemented but not yet consumed anywhere.** No
-code path in this repository currently calls `deriveStretchedKey`'s result
-for anything — it exists in `packages/crypto` ready for Phase 1, which will
-use it to unwrap the vault key described below. Today, the login flow only
-ever uses stages 1, 3 and 4.
+**Stage 2 (`stretched`) unwraps the vault key.** `apps/web/src/vault/setup.ts`,
+`unlock.ts` and `recover.ts` are the three places `deriveStretchedKey`'s
+result is used — to wrap `protectedVaultKey` at setup, and to unwrap it on
+every unlock. It never reaches the server and is held only for the
+duration of these three operations.
 
 ### Why 64 MiB is a ceiling, not a target
 
@@ -138,16 +148,16 @@ tokens either. `secure` is controlled by `COOKIE_SECURE` (`true` in
 production, over Tailscale's TLS; `false` only for local HTTP development)
 and lifetime by `SESSION_TTL_DAYS` (30 by default).
 
-## The vault (Phase 1 — design only, not built)
+## The vault
 
-This section describes what the spec commits to building, so that the
-threat model above reads completely even before the code exists. **None of
-this is implemented in `apps/api` or `apps/web` today** beyond the
-`stretched` key derivation already described.
+`packages/crypto/src/vault-key.ts` and `item.ts` implement the envelope
+this section describes; `apps/api/src/vault/` (`Platform`, `Credential`,
+`CredentialVersion`) and `apps/api/src/auth/` (the envelope fields on
+`User`) persist it; `apps/web/src/vault/` is the browser side.
 
-Credentials will not be encrypted directly with a password-derived key.
-Instead, a random 256-bit `vaultKey` is generated once and stored wrapped
-two ways:
+Credentials are not encrypted directly with a password-derived key.
+Instead, a random 256-bit `vaultKey` is generated once, at setup, and
+stored wrapped two ways:
 
 ```
 vaultKey          = random(32)
@@ -155,33 +165,78 @@ protectedVaultKey = AES-KW(vaultKey, stretched)              // unwrapped with t
 recoveryVaultKey  = AES-KW(vaultKey, HKDF(recoveryCode))     // unwrapped with the recovery code
 ```
 
-The indirection is what makes changing the master password cheap: only the
-32-byte `protectedVaultKey` envelope is re-wrapped, not every stored
-credential. Without it, a password change would have to decrypt and
-re-encrypt every credential of every client in one operation that can fail
-midway and leave the vault inconsistent.
+The indirection is what makes changing the master password cheap in
+principle (a future feature, not built yet): only the 32-byte
+`protectedVaultKey` envelope would need re-wrapping, not every stored
+credential.
 
-**Recovery code:** 128 random bits, shown exactly once at account setup in
-a human-transcribable form. It is the only other way to unwrap `vaultKey`.
+Each credential's current and prior values (`CredentialVersion`) are
+AES-256-GCM, a fresh random 96-bit IV per encryption, authenticated —
+`packages/crypto/src/item.test.ts` proves a single flipped ciphertext byte,
+or the wrong key, makes decryption fail rather than silently return
+garbage. TOTP codes (`totp.ts`) are generated client-side from a secret
+that itself lives only inside the encrypted item; nothing server-side ever
+sees it in the clear.
 
-> **Warning, once the vault ships:** losing both the master password and
-> the recovery code means permanently losing every stored credential. There
-> is no password reset and no backdoor — that is the property zero-knowledge
-> buys, and this is its cost. The recovery code must be written on paper and
-> stored off-site. The application will require explicit confirmation that
-> it has been stored before the first credential can be created.
+**The unwrapped `vaultKey` is a non-extractable WebCrypto `CryptoKey`**
+(`unwrapVaultKey`, `importVaultSessionKey`) — even this application's own
+code cannot read its raw bytes back out once unlocked, only use it to
+encrypt or decrypt. It lives in a module-level store
+(`apps/web/src/vault/vault-session.ts`), never in `localStorage` or
+IndexedDB, and is dropped after 5 minutes of inactivity or when the tab is
+hidden and reappears past that window. Copying a revealed password to the
+clipboard clears it again 30 seconds later, to the extent the browser
+permits (`CredentialRow.tsx`).
 
-The web app's setup screen already ships this warning's copy today
-(`auth.recoveryWarning` in both locale bundles, shown on `SetupPage`), ahead
-of the feature that will make it literally true — there is no vault yet to
-lose access to.
+**Recovery code:** 128 random bits, shown exactly once on `VaultSetupPage`
+in a human-transcribable, dash-grouped form, with an explicit checkbox
+gating continuation. It is the only other way to unwrap `vaultKey` — and,
+since Task 6, the only way to regain access to the *account* at all once
+the master password is lost (see "Recovery, not just reset" below).
 
-Independently of the vault, one thing is already true today and will
-remain true after Phase 1 ships: **there is no password-reset flow of any
-kind, for anyone.** This is a deliberate consequence of being a
-single-user system with no email or SMS integration (see the design
-spec's non-goals). Forgetting the master password today means the account
-cannot be logged into again — there is nothing encrypted with it yet, so
-nothing beyond access itself is lost, but that access is not recoverable
-either. The spec is explicit that this is by design ("there is no reset
-and no backdoor") rather than a gap Phase 1 is expected to close.
+> **Warning.** Losing both the master password and the recovery code means
+> permanently losing every stored credential. There is no backdoor — that
+> is the property zero-knowledge buys, and this is its cost. The recovery
+> code must be written on paper and stored off-site.
+
+**Offline reads, no offline writes.** `apps/web/src/vault/vault-db.ts`
+caches ciphertext, IVs and non-sensitive metadata (never plaintext —
+enforced at runtime by `putCachedCredentials`'s field-shape guard, not
+just by a test) in IndexedDB, refreshed opportunistically by
+`useVaultSync` whenever the app is online (`sync.ts`, cursor-based on
+`updatedAt`). With the network down entirely, `VaultUnlockGate` falls back
+to that cache to unlock and decrypt — the server takes no part. Writing
+(creating or rotating a credential) always requires a live connection;
+there is no offline write queue for credentials, deliberately, to avoid
+two divergent plaintexts for the same password with no way to know which
+one a portal actually accepts.
+
+### Recovery, not just reset
+
+The spec's own risk table calls out "master password and recovery code
+both lost" as a named risk, which only makes sense if the recovery code
+alone is enough to regain access when *just* the master password is lost.
+Doing that safely — without the server ever seeing `vaultKey` or the
+recovery code — needed one more piece the spec's crypto section did not
+specify: a way for the server to verify *possession* of the recovery code.
+`docs/adr/0005-recovery-code-verification.md` records that decision.
+
+In short: `recoveryAuthHash = Argon2id(vaultKey, salt = recoveryCode)` is
+computed the same way `authHash` already is, stored server-side as
+`Argon2id(recoveryAuthHash)`, and verified the same timing-safe way login
+verifies `authHash` (`AuthService#recoverVault`, `auth.service.test.ts` —
+`argon2Verify` runs exactly once whether or not a vault was ever set up).
+A successful verification is what authorises resetting `kdfSalt`,
+`authHashDigest` and `protectedVaultKey` in the same request — the one
+case in this system where an unauthenticated endpoint can change login
+credentials, because proving the recovery code stands in for a session.
+
+There is still no password-reset flow that does not require the recovery
+code — that remains deliberate, a consequence of being a single-user
+system with no email or SMS integration (see the design spec's
+non-goals). Forgetting the master password *and* losing the recovery code
+together is unrecoverable, by design: nothing server-side can stand in
+for either, because the server never has enough information to
+reconstruct `vaultKey` on its own. What Phase 1 changes is that forgetting
+*just* the master password is no longer permanent, provided the recovery
+code was kept — see "Recovery, not just reset" above.

@@ -24,7 +24,6 @@
     "confirmPasswordLabel": "Confirma a palavra-passe mestra",
     "setupTitle": "Configura a tua conta",
     "loginTitle": "Entrar",
-    "recoveryWarning": "Anota o teu código de recuperação e guarda-o em local seguro. Se perderes a palavra-passe mestra e o código de recuperação, ninguém — nem nós — consegue recuperar os teus dados.",
     "passwordMismatch": "As palavras-passe não coincidem.",
     "passwordTooShort": "A palavra-passe mestra tem de ter pelo menos {{min}} caracteres.",
     "forgotPassword": "Esqueceste a palavra-passe mestra?",
