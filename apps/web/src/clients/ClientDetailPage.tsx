@@ -9,6 +9,7 @@ import type { SupportedLocale } from '../i18n/format'
 import { archiveClient, getClient, getFiscalProfile, restoreClient } from './api'
 import { FiscalProfileForm } from './FiscalProfileForm'
 import { EmploymentSection } from '../employments/EmploymentSection'
+import { CredentialsSection } from '../vault/CredentialsSection'
 
 export function ClientDetailPage() {
   const { clientId } = useParams({ from: '/clients/$clientId' })
@@ -146,6 +147,7 @@ export function ClientDetailPage() {
       )}
 
       <EmploymentSection client={{ id: record.id, kind: record.kind, name: record.name }} />
+      <CredentialsSection clientId={clientId} />
     </section>
   )
 }

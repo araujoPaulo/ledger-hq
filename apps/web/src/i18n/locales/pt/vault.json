@@ -22,5 +22,23 @@
       "url": { "label": "URL", "invalid": "Indica um URL válido." },
       "authKind": { "label": "Tipo de autenticação" }
     }
+  },
+  "credentials": {
+    "title": "Credenciais",
+    "empty": "Ainda não há credenciais para este cliente.",
+    "newTitle": "Nova credencial",
+    "reveal": "Ver",
+    "hide": "Ocultar",
+    "copy": "Copiar",
+    "totp": "Código atual",
+    "rotate": "Mudar palavra-passe",
+    "rotateConfirm": "Confirmar",
+    "form": {
+      "platform": { "label": "Plataforma" },
+      "label": { "label": "Designação" },
+      "username": { "label": "Utilizador" },
+      "password": { "label": "Palavra-passe" },
+      "totpSecret": { "label": "Segredo TOTP (opcional)" }
+    }
   }
 }
