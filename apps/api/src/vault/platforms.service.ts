@@ -49,16 +49,17 @@ export class PlatformsService {
  * needed before this task) is really just this catch, turning the
  * database's own unique-constraint violation into the specific domain
  * error instead of an opaque 500.
+ *
+ * `Platform` carries exactly one unique constraint (`name`) — `id` is a
+ * uuidv7, so a primary-key collision is not a realistic source of P2002 —
+ * so, like `credentials.service.ts`'s `toLabelConflictOr`, no target-column
+ * check is needed to know which constraint fired. (Such a check would also
+ * be unreliable here: the driver adapter in use does not populate
+ * `error.meta.target` for a unique-constraint violation.)
  */
 function toNameConflictOr(error: unknown, name: string): unknown {
-  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002' && targetsName(error.meta)) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
     return new AppError('platforms.name_taken', { name }, 409)
   }
   return error
-}
-
-function targetsName(meta: Record<string, unknown> | undefined): boolean {
-  const target = meta?.target
-  if (Array.isArray(target)) return target.includes('name')
-  return typeof target === 'string' && target.includes('name')
 }

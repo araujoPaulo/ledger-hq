@@ -30,5 +30,16 @@
     "self_employment": "Um cliente não pode empregar-se a si próprio.",
     "overlapping_spell": "Já existe um vínculo sobreposto para este par.",
     "ended_before_started": "A data de cessação é anterior à de admissão."
+  },
+  "vault": {
+    "not_set_up": "O cofre ainda não foi configurado.",
+    "already_set_up": "O cofre já está configurado.",
+    "invalid_recovery_code": "Código de recuperação inválido."
+  },
+  "platforms": {
+    "name_taken": "Já existe uma plataforma com o nome {{name}}."
+  },
+  "credentials": {
+    "label_taken": "Já existe uma credencial com a designação {{label}} para esta plataforma."
   }
 }
