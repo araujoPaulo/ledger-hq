@@ -15,6 +15,9 @@ export async function resetDatabase(): Promise<void> {
   const prisma = getTestPrisma()
 
   await prisma.systemHealth.deleteMany()
+  await prisma.credentialVersion.deleteMany()
+  await prisma.credential.deleteMany()
+  await prisma.platform.deleteMany()
   await prisma.employment.deleteMany()
   await prisma.fiscalProfile.deleteMany()
   await prisma.auditEvent.deleteMany()
