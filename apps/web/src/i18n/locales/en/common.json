@@ -26,6 +26,13 @@
     "loginTitle": "Sign in",
     "recoveryWarning": "Write down your recovery code and keep it somewhere safe. If you lose both your master password and your recovery code, no one — not even us — can recover your data.",
     "passwordMismatch": "The passwords do not match.",
-    "passwordTooShort": "The master password must be at least {{min}} characters long."
+    "passwordTooShort": "The master password must be at least {{min}} characters long.",
+    "forgotPassword": "Forgot your master password?",
+    "recoverTitle": "Regain access",
+    "recoveryCodeLabel": "Recovery code",
+    "newMasterPasswordLabel": "New master password",
+    "confirmNewMasterPasswordLabel": "Confirm the new master password",
+    "backToLogin": "Back to sign in",
+    "recoverButton": "Regain access"
   }
 }
