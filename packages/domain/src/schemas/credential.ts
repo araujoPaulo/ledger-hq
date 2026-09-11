@@ -19,6 +19,22 @@ export const rotateCredentialSchema = z
   .strict()
 
 /**
+ * `since` as a strict UTC ISO-8601 instant, matching how `updatedAt` columns
+ * serialise. A plain regex rather than a datetime-format keyword, to stay on
+ * the validation style already used for `isoDateSchema` in `./common`.
+ */
+export const syncCredentialsQuerySchema = z
+  .object({
+    since: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/)
+      .optional(),
+  })
+  .strict()
+
+export type SyncCredentialsQuery = z.infer<typeof syncCredentialsQuerySchema>
+
+/**
  * The plaintext shape a credential item decrypts to (spec 9.3). Never sent
  * to the server — validated client-side before encryption, and used as the
  * shared type between the vault UI's form and `encryptCredentialItem`.

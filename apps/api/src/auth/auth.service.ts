@@ -114,6 +114,11 @@ export class AuthService {
     }
   }
 
+  async assertVaultSetUp(): Promise<void> {
+    const user = await this.prisma.user.findFirst()
+    if (!user || user.vaultSetUpAt === null) throw new AppError('vault.not_set_up', {}, 409)
+  }
+
   async getRecoveryEnvelope(): Promise<{ recoveryVaultKey: string | null }> {
     const user = await this.prisma.user.findFirst()
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createCredentialSchema, credentialItemSchema, rotateCredentialSchema } from './credential'
+import { createCredentialSchema, credentialItemSchema, rotateCredentialSchema, syncCredentialsQuerySchema } from './credential'
 
 const uuid = '01927e6a-0000-7000-8000-000000000000'
 
@@ -30,6 +30,20 @@ describe('createCredentialSchema', () => {
 describe('rotateCredentialSchema', () => {
   it('accepts just ciphertext and iv', () => {
     expect(rotateCredentialSchema.safeParse({ ciphertext: 'AAAA', iv: 'AAAA' }).success).toBe(true)
+  })
+})
+
+describe('syncCredentialsQuerySchema', () => {
+  it('accepts an absent since', () => {
+    expect(syncCredentialsQuerySchema.safeParse({}).success).toBe(true)
+  })
+
+  it('accepts a valid UTC instant', () => {
+    expect(syncCredentialsQuerySchema.safeParse({ since: '2026-09-10T12:00:00.000Z' }).success).toBe(true)
+  })
+
+  it('rejects a bare date', () => {
+    expect(syncCredentialsQuerySchema.safeParse({ since: '2026-09-10' }).success).toBe(false)
   })
 })
 
