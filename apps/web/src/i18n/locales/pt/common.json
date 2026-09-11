@@ -9,7 +9,8 @@
     "archive": "Arquivar",
     "restore": "Restaurar",
     "signIn": "Entrar",
-    "signOut": "Sair"
+    "signOut": "Sair",
+    "lockVault": "Bloquear cofre"
   },
   "connection": {
     "online": "Ligado",

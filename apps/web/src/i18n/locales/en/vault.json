@@ -5,5 +5,12 @@
     "recoveryCodeIntro": "This is your recovery code. It is the only way to regain access if you lose your master password.",
     "acknowledgeLabel": "I have written down the recovery code and stored it somewhere safe.",
     "continueButton": "Continue"
+  },
+  "unlock": {
+    "notSetUp": "The vault has not been set up yet.",
+    "setUpLink": "Set it up now",
+    "passwordLabel": "Master password",
+    "wrongPassword": "Incorrect password.",
+    "unlockButton": "Unlock"
   }
 }

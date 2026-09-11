@@ -5,5 +5,12 @@
     "recoveryCodeIntro": "Este é o teu código de recuperação. É a única forma de recuperares o acesso se perderes a palavra-passe mestra.",
     "acknowledgeLabel": "Anotei o código de recuperação e guardei-o em local seguro.",
     "continueButton": "Continuar"
+  },
+  "unlock": {
+    "notSetUp": "O cofre ainda não foi configurado.",
+    "setUpLink": "Configurar agora",
+    "passwordLabel": "Palavra-passe mestra",
+    "wrongPassword": "Palavra-passe incorreta.",
+    "unlockButton": "Desbloquear"
   }
 }
