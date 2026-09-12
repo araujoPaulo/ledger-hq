@@ -9,6 +9,7 @@
   "unlock": {
     "notSetUp": "O cofre ainda não foi configurado.",
     "setUpLink": "Configurar agora",
+    "offlineUnknown": "Sem ligação ao servidor e ainda não há nada em cache neste dispositivo. Liga-te à internet para verificar o estado do cofre.",
     "passwordLabel": "Palavra-passe mestra",
     "wrongPassword": "Palavra-passe incorreta.",
     "unlockButton": "Desbloquear"

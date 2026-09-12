@@ -33,10 +33,18 @@ export async function resolveEnvelope(email: string): Promise<ResolvedEnvelope |
   }
 }
 
-/** Throws when the vault was never set up, or when `masterPassword` is wrong (AES-KW's own integrity check). */
+/**
+ * Throws `Error('vault unknown offline')` when the envelope could not be
+ * resolved at all (unreachable, nothing ever cached — a different situation
+ * from a vault confirmed never set up); `Error('vault not set up')` when it
+ * was confirmed; or an AES-KW integrity-check rejection when `masterPassword`
+ * is wrong. Callers should distinguish these rather than showing one message
+ * for all three.
+ */
 export async function unlockWithPassword(email: string, masterPassword: string): Promise<void> {
   const envelope = await resolveEnvelope(email)
-  if (!envelope || !envelope.setUp) throw new Error('vault not set up')
+  if (!envelope) throw new Error('vault unknown offline')
+  if (!envelope.setUp) throw new Error('vault not set up')
 
   const masterKey = await deriveMasterKey(masterPassword, fromBase64(envelope.kdfSalt))
   const stretched = await deriveStretchedKey(masterKey)

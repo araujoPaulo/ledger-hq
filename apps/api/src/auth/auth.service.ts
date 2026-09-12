@@ -185,6 +185,13 @@ export class AuthService {
       },
     })
 
+    // Recovery is precisely the flow reached for after losing control of the
+    // account credential — the one place where "reset the password, leave
+    // every other session valid" is the wrong default. Every prior session
+    // (up to SESSION_TTL_DAYS old) is revoked; only the fresh one below
+    // remains.
+    await this.prisma.session.deleteMany({ where: { userId: user.id } })
+
     return this.createSession(user.id)
   }
 

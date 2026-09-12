@@ -26,7 +26,7 @@ function fakePrisma(user: unknown): PrismaService {
       findFirst: vi.fn().mockResolvedValue(user),
       update: vi.fn().mockResolvedValue(user),
     },
-    session: { create: vi.fn().mockResolvedValue({}) },
+    session: { create: vi.fn().mockResolvedValue({}), deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
   } as unknown as PrismaService
 }
 
@@ -123,5 +123,44 @@ describe('AuthService#recoverVault', () => {
     })
 
     expect(argon2VerifyMock).toHaveBeenCalledWith(expect.objectContaining({ hash: 'stored-recovery-digest' }))
+  })
+
+  it('revokes every existing session for the account on a successful recovery', async () => {
+    argon2VerifyMock.mockResolvedValue(true)
+    const user = { id: 'u1', email: 'paulo@example.com', vaultRecoveryAuthDigest: 'stored-recovery-digest' }
+    const prisma = fakePrisma(user)
+    const service = new AuthService(prisma, fakeConfig())
+
+    await service.recoverVault({
+      recoveryAuthHash: SOME_AUTH_HASH,
+      kdfSalt: SOME_AUTH_HASH,
+      authHash: SOME_AUTH_HASH,
+      protectedVaultKey: SOME_AUTH_HASH,
+    })
+
+    expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } })
+    // Revocation must happen before the fresh session is created, or the
+    // brand-new session this call returns would itself be deleted.
+    const deleteOrder = vi.mocked(prisma.session.deleteMany).mock.invocationCallOrder[0]
+    const createOrder = vi.mocked(prisma.session.create).mock.invocationCallOrder[0]
+    expect(deleteOrder).toBeLessThan(createOrder!)
+  })
+
+  it('does not revoke any session when the recovery code is wrong', async () => {
+    argon2VerifyMock.mockResolvedValue(false)
+    const user = { id: 'u1', email: 'paulo@example.com', vaultRecoveryAuthDigest: 'stored-recovery-digest' }
+    const prisma = fakePrisma(user)
+    const service = new AuthService(prisma, fakeConfig())
+
+    await expect(
+      service.recoverVault({
+        recoveryAuthHash: SOME_AUTH_HASH,
+        kdfSalt: SOME_AUTH_HASH,
+        authHash: SOME_AUTH_HASH,
+        protectedVaultKey: SOME_AUTH_HASH,
+      }),
+    ).rejects.toMatchObject({ code: 'vault.invalid_recovery_code' })
+
+    expect(prisma.session.deleteMany).not.toHaveBeenCalled()
   })
 })
