@@ -95,6 +95,17 @@ describe('VaultUnlockGate', () => {
     await userEvent.type(await screen.findByLabelText(/palavra-passe mestra/i), 'a long master password')
     await userEvent.click(screen.getByRole('button', { name: /desbloquear/i }))
 
-    expect(await screen.findByRole('alert')).not.toHaveTextContent(/incorreta/i)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/ainda não foi configurado/i)
+  })
+
+  it('distinguishes a submit-time "gone offline with nothing cached" failure from a wrong password', async () => {
+    resolveEnvelopeMock.mockResolvedValue({ kdfSalt: 'AAAA', protectedVaultKey: 'BBBB', setUp: true, fromCache: false })
+    unlockWithPasswordMock.mockRejectedValue(new Error('vault unknown offline'))
+    renderGate()
+
+    await userEvent.type(await screen.findByLabelText(/palavra-passe mestra/i), 'a long master password')
+    await userEvent.click(screen.getByRole('button', { name: /desbloquear/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/sem ligação ao servidor/i)
   })
 })

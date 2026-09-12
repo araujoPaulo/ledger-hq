@@ -227,6 +227,10 @@ A successful verification is what authorises resetting `kdfSalt`,
 `authHashDigest` and `protectedVaultKey` in the same request — the one
 case in this system where an unauthenticated endpoint can change login
 credentials, because proving the recovery code stands in for a session.
+Every session that predates a successful recovery is revoked in the same
+request: recovery is precisely the flow reached for when account control
+may have been lost, so a stale session must not remain valid alongside
+the new login credentials it just established.
 
 There is still no password-reset flow that does not require the recovery
 code — that remains deliberate, a consequence of being a single-user

@@ -60,14 +60,16 @@ export function VaultUnlockGate({ children }: { children: ReactNode }) {
         unlockWithPassword(email, masterPassword)
           .then(() => setMasterPassword(''))
           .catch((error: unknown) => {
-            // `unlockWithPassword` throws a plain `Error('vault not set up')`
-            // when its own (re-resolved) envelope says there is nothing to
-            // unlock — distinct from a wrong password, which surfaces as
-            // AES-KW's own integrity-check rejection. Collapsing both into
-            // "incorrect password" told a user with no vault that their
-            // (irrelevant) password was wrong.
+            // `unlockWithPassword` throws two distinguishable, non-password
+            // errors — see its own doc comment — on top of a genuine
+            // wrong-password rejection (AES-KW's own integrity check).
+            // Collapsing all three into "incorrect password" told a user
+            // with no vault, or one who went offline between page load and
+            // submit, that their (irrelevant) password was wrong.
             const message = error instanceof Error ? error.message : ''
-            setError(message === 'vault not set up' ? t('unlock.notSetUp') : t('unlock.wrongPassword'))
+            if (message === 'vault not set up') setError(t('unlock.notSetUp'))
+            else if (message === 'vault unknown offline') setError(t('unlock.offlineUnknown'))
+            else setError(t('unlock.wrongPassword'))
           })
           .finally(() => setPending(false))
       }}
