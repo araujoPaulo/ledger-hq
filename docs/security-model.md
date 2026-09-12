@@ -1,16 +1,13 @@
 # Security model
 
 This states plainly what Ledger HQ protects against and what it does not.
-It covers two things that are at different stages of completion, and says
-which is which throughout:
+It covers two things, both built and live today:
 
-1. **The login/session layer** — built and live today.
+1. **The login/session layer.**
 2. **The credential vault** (key envelope, item encryption, recovery code) —
    designed in the [spec](superpowers/specs/2026-09-04-ledger-hq-design.md#9-vault-and-offline)
-   and depended on by the login flow's own key derivation, but not built:
-   it is Phase 1 scope. Every claim below about the vault, the recovery
-   code, or anything downstream of the `stretched` key is a description of
-   *design intent*, not of running code — marked as such inline.
+   and implemented in Phase 1 (`packages/crypto`, `apps/api/src/vault`,
+   `apps/api/src/auth`'s envelope/recovery endpoints, `apps/web/src/vault`).
 
 ## What is mitigated
 
