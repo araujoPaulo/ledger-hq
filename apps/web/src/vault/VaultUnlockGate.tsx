@@ -25,7 +25,21 @@ export function VaultUnlockGate({ children }: { children: ReactNode }) {
   if (vaultState.status === 'unlocked') return <>{children}</>
   if (envelope.isPending) return null
 
-  if (!envelope.data || !envelope.data.setUp) {
+  // `resolveEnvelope` returns `null` only when it could not reach the server
+  // AND nothing was ever cached — a fundamentally different situation from a
+  // vault that was checked live and confirmed never set up. Collapsing both
+  // into "not set up" tells a user with a genuinely configured vault, who
+  // simply hasn't unlocked on this device before, that they need to set one
+  // up — which they can't do offline anyway.
+  if (envelope.data === null || envelope.data === undefined) {
+    return (
+      <p className="text-sm" role="status">
+        {t('unlock.offlineUnknown')}
+      </p>
+    )
+  }
+
+  if (!envelope.data.setUp) {
     return (
       <p className="text-sm">
         {t('unlock.notSetUp')}{' '}
@@ -45,7 +59,18 @@ export function VaultUnlockGate({ children }: { children: ReactNode }) {
         setError(null)
         unlockWithPassword(email, masterPassword)
           .then(() => setMasterPassword(''))
-          .catch(() => setError(t('unlock.wrongPassword')))
+          .catch((error: unknown) => {
+            // `unlockWithPassword` throws two distinguishable, non-password
+            // errors — see its own doc comment — on top of a genuine
+            // wrong-password rejection (AES-KW's own integrity check).
+            // Collapsing all three into "incorrect password" told a user
+            // with no vault, or one who went offline between page load and
+            // submit, that their (irrelevant) password was wrong.
+            const message = error instanceof Error ? error.message : ''
+            if (message === 'vault not set up') setError(t('unlock.notSetUp'))
+            else if (message === 'vault unknown offline') setError(t('unlock.offlineUnknown'))
+            else setError(t('unlock.wrongPassword'))
+          })
           .finally(() => setPending(false))
       }}
     >
