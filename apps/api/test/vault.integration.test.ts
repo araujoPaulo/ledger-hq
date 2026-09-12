@@ -118,4 +118,29 @@ describe('vault recovery', () => {
       .expect(200)
     expect(envelope.body.protectedVaultKey).toBe('TkVXLVBST1RFQ1RFRC1LRVk=')
   })
+
+  it('invalidates every session that existed before recovery', async () => {
+    // `cookie` is the session `authenticate(app)` already established in
+    // `beforeEach`, before recovery ever runs — recovery exists precisely
+    // for when account control may have been lost, so every session that
+    // predates it must stop working once it succeeds.
+    await post('/api/v1/auth/vault-setup', {
+      protectedVaultKey: 'AAAA',
+      recoveryVaultKey: 'BBBB',
+      recoveryAuthHash: 'dGhlLXJlYWwtcmVjb3ZlcnktaGFzaA==',
+    }).expect(204)
+
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/vault-recover')
+      .set('X-Requested-With', 'ledger-hq')
+      .send({
+        recoveryAuthHash: 'dGhlLXJlYWwtcmVjb3ZlcnktaGFzaA==',
+        kdfSalt: 'TkVXLVNBTFQ=',
+        authHash: 'TkVXLUFVVEgtSEFTSA==',
+        protectedVaultKey: 'TkVXLVBST1RFQ1RFRC1LRVk=',
+      })
+      .expect(200)
+
+    await request(app.getHttpServer()).get('/api/v1/auth/vault-envelope').set('Cookie', cookie).expect(401)
+  })
 })
