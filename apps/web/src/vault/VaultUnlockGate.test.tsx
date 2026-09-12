@@ -49,10 +49,17 @@ describe('VaultUnlockGate', () => {
     useSessionMock.mockReturnValue({ data: { id: 'u1', email: 'paulo@example.com', locale: 'pt-PT' } })
   })
 
-  it('prompts to set up the vault when none exists', async () => {
-    resolveEnvelopeMock.mockResolvedValue(null)
+  it('prompts to set up the vault when the live check confirms none exists', async () => {
+    resolveEnvelopeMock.mockResolvedValue({ kdfSalt: '', protectedVaultKey: '', setUp: false, fromCache: false })
     renderGate()
     expect(await screen.findByText(/ainda não foi configurado/i)).toBeInTheDocument()
+  })
+
+  it('shows an offline-unknown message, not "not set up", when unreachable with nothing cached', async () => {
+    resolveEnvelopeMock.mockResolvedValue(null)
+    renderGate()
+    expect(await screen.findByText(/sem ligação ao servidor/i)).toBeInTheDocument()
+    expect(screen.queryByText(/ainda não foi configurado/i)).not.toBeInTheDocument()
   })
 
   it('shows an unlock form and reveals children once unlocked', async () => {
@@ -78,5 +85,16 @@ describe('VaultUnlockGate', () => {
     await userEvent.click(screen.getByRole('button', { name: /desbloquear/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/incorreta/i)
+  })
+
+  it('distinguishes a "vault not set up" submit failure from a wrong password', async () => {
+    resolveEnvelopeMock.mockResolvedValue({ kdfSalt: 'AAAA', protectedVaultKey: 'BBBB', setUp: true, fromCache: false })
+    unlockWithPasswordMock.mockRejectedValue(new Error('vault not set up'))
+    renderGate()
+
+    await userEvent.type(await screen.findByLabelText(/palavra-passe mestra/i), 'a long master password')
+    await userEvent.click(screen.getByRole('button', { name: /desbloquear/i }))
+
+    expect(await screen.findByRole('alert')).not.toHaveTextContent(/incorreta/i)
   })
 })

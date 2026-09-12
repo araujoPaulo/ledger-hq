@@ -25,7 +25,21 @@ export function VaultUnlockGate({ children }: { children: ReactNode }) {
   if (vaultState.status === 'unlocked') return <>{children}</>
   if (envelope.isPending) return null
 
-  if (!envelope.data || !envelope.data.setUp) {
+  // `resolveEnvelope` returns `null` only when it could not reach the server
+  // AND nothing was ever cached — a fundamentally different situation from a
+  // vault that was checked live and confirmed never set up. Collapsing both
+  // into "not set up" tells a user with a genuinely configured vault, who
+  // simply hasn't unlocked on this device before, that they need to set one
+  // up — which they can't do offline anyway.
+  if (envelope.data === null || envelope.data === undefined) {
+    return (
+      <p className="text-sm" role="status">
+        {t('unlock.offlineUnknown')}
+      </p>
+    )
+  }
+
+  if (!envelope.data.setUp) {
     return (
       <p className="text-sm">
         {t('unlock.notSetUp')}{' '}
@@ -45,7 +59,16 @@ export function VaultUnlockGate({ children }: { children: ReactNode }) {
         setError(null)
         unlockWithPassword(email, masterPassword)
           .then(() => setMasterPassword(''))
-          .catch(() => setError(t('unlock.wrongPassword')))
+          .catch((error: unknown) => {
+            // `unlockWithPassword` throws a plain `Error('vault not set up')`
+            // when its own (re-resolved) envelope says there is nothing to
+            // unlock — distinct from a wrong password, which surfaces as
+            // AES-KW's own integrity-check rejection. Collapsing both into
+            // "incorrect password" told a user with no vault that their
+            // (irrelevant) password was wrong.
+            const message = error instanceof Error ? error.message : ''
+            setError(message === 'vault not set up' ? t('unlock.notSetUp') : t('unlock.wrongPassword'))
+          })
           .finally(() => setPending(false))
       }}
     >

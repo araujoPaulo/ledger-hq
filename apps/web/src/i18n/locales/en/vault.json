@@ -9,6 +9,7 @@
   "unlock": {
     "notSetUp": "The vault has not been set up yet.",
     "setUpLink": "Set it up now",
+    "offlineUnknown": "No connection to the server, and nothing is cached on this device yet. Connect to the internet to check the vault's status.",
     "passwordLabel": "Master password",
     "wrongPassword": "Incorrect password.",
     "unlockButton": "Unlock"
