@@ -1,17 +1,25 @@
 import { Injectable } from '@nestjs/common'
 import { uuidv7 } from 'uuidv7'
 import {
+  AppError,
   FISCAL_CATALOG,
   appliesTo,
   generatePeriods,
   resolveDueDate,
 } from '@ledger-hq/domain'
-import type { CatalogEntry, ClientKind, ObligationSubject } from '@ledger-hq/domain'
+import type {
+  CatalogEntry,
+  ClientKind,
+  CreateAdHocObligationInput,
+  ObligationStatus,
+  ObligationSubject,
+  PatchObligationInput,
+} from '@ledger-hq/domain'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { PrismaService } from '../common/prisma.service.js'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { ClientsService } from '../clients/clients.service.js'
-import type { FiscalProfile } from '../generated/prisma/client.js'
+import type { Client, FiscalProfile, ObligationDefinition, ObligationInstance } from '../generated/prisma/client.js'
 
 const HORIZON_MONTHS = 12
 
@@ -19,6 +27,8 @@ export type GenerateResult = {
   toCreate: Array<{ clientId: string; definitionCode: string; periodLabel: string; dueDate: string }>
   toRetract: Array<{ clientId: string; definitionCode: string; periodLabel: string }>
 }
+
+export type ObligationWithDefinition = ObligationInstance & { definition: ObligationDefinition; client: Client }
 
 @Injectable()
 export class ObligationsService {
@@ -139,6 +149,73 @@ export class ObligationsService {
         periodLabel: item.periodLabel,
       })),
     }
+  }
+
+  async list(filters: { clientId?: string; status?: ObligationStatus[] }): Promise<ObligationWithDefinition[]> {
+    return this.prisma.obligationInstance.findMany({
+      where: {
+        ...(filters.clientId ? { clientId: filters.clientId } : {}),
+        status: { in: filters.status ?? ['PENDING', 'IN_PROGRESS'] },
+      },
+      include: { definition: true, client: true },
+      orderBy: { dueDate: 'asc' },
+    })
+  }
+
+  async findOne(id: string): Promise<ObligationWithDefinition> {
+    const instance = await this.prisma.obligationInstance.findUnique({
+      where: { id },
+      include: { definition: true, client: true },
+    })
+    if (!instance) throw new AppError('common.not_found', {}, 404)
+    return instance
+  }
+
+  async patch(id: string, input: PatchObligationInput): Promise<ObligationWithDefinition> {
+    await this.findOne(id)
+
+    await this.prisma.obligationInstance.update({
+      where: { id },
+      data: {
+        ...(input.dueDate !== undefined ? { dueDate: new Date(`${input.dueDate}T00:00:00Z`), dueDateOverridden: true } : {}),
+        ...(input.status !== undefined
+          ? { status: input.status, completedAt: input.status === 'DONE' ? new Date() : null }
+          : {}),
+        ...(input.reference !== undefined ? { reference: input.reference } : {}),
+        ...(input.amountCents !== undefined ? { amountCents: input.amountCents } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      },
+    })
+
+    return this.findOne(id)
+  }
+
+  async createAdHoc(input: CreateAdHocObligationInput): Promise<ObligationWithDefinition> {
+    await this.clients.findOne(input.clientId)
+
+    const existingDefinition = await this.prisma.obligationDefinition.findUnique({ where: { code: input.code } })
+    if (existingDefinition && existingDefinition.source === 'CATALOG') {
+      throw new AppError('obligations.definition_code_taken', { code: input.code }, 409)
+    }
+
+    await this.prisma.obligationDefinition.upsert({
+      where: { code: input.code },
+      create: { code: input.code, name: input.name, authority: 'OTHER', periodicity: input.periodicity, source: 'CUSTOM', active: true },
+      update: {},
+    })
+
+    return this.prisma.obligationInstance.create({
+      data: {
+        id: uuidv7(),
+        clientId: input.clientId,
+        definitionCode: input.code,
+        periodStart: new Date(`${input.periodStart}T00:00:00Z`),
+        periodEnd: new Date(`${input.periodEnd}T00:00:00Z`),
+        periodLabel: input.periodLabel,
+        dueDate: new Date(`${input.dueDate}T00:00:00Z`),
+      },
+      include: { definition: true, client: true },
+    })
   }
 }
 
