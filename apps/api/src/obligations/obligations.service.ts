@@ -104,7 +104,17 @@ export class ObligationsService {
         }
 
         for (const instance of existingForCode) {
-          if (instance.status === 'PENDING' && !periodKeys.has(isoKey(instance.periodStart))) {
+          // periodKeys only spans [floor, horizonEnd] — an old PENDING
+          // instance whose period already ended (genuine arrears, rule
+          // unchanged) falls outside that window and would otherwise look
+          // indistinguishable from "the rule stopped applying." Retraction
+          // must stay forward-only (master spec §7.3, invariant 4): only an
+          // instance whose period hasn't ended yet can be retracted.
+          if (
+            instance.status === 'PENDING' &&
+            instance.periodEnd >= input.asOf &&
+            !periodKeys.has(isoKey(instance.periodStart))
+          ) {
             toRetract.push({
               id: instance.id,
               clientId: client.id,
