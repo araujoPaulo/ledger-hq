@@ -41,5 +41,9 @@
   },
   "credentials": {
     "label_taken": "A credential named {{label}} already exists for this platform."
+  },
+  "obligations": {
+    "waived_reason_required": "Enter a reason for waiving this obligation.",
+    "definition_code_taken": "An obligation definition with this code already exists."
   }
 }
