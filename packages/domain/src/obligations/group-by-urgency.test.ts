@@ -36,6 +36,22 @@ describe('groupByUrgency', () => {
     expect(groupByUrgency(items, today).later).toEqual(items)
   })
 
+  it('buckets an item due exactly 7 days out as this month, not this week', () => {
+    const items: Item[] = [{ id: 'a', dueDate: '2026-03-25' }]
+    expect(groupByUrgency(items, today).thisMonth).toEqual(items)
+    expect(groupByUrgency(items, today).thisWeek).toEqual([])
+  })
+
+  it('buckets the last day of the month as this month, and the first day of the next as later', () => {
+    const items: Item[] = [
+      { id: 'lastDayOfMonth', dueDate: '2026-03-31' },
+      { id: 'firstDayOfNextMonth', dueDate: '2026-04-01' },
+    ]
+    const result = groupByUrgency(items, today)
+    expect(result.thisMonth).toEqual([items[0]])
+    expect(result.later).toEqual([items[1]])
+  })
+
   it('sorts each bucket by due date ascending', () => {
     const items: Item[] = [
       { id: 'later', dueDate: '2026-03-30' },

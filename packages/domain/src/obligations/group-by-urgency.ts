@@ -1,6 +1,7 @@
 export type UrgencyGroup = 'overdue' | 'thisWeek' | 'thisMonth' | 'later'
 
 function parseIsoDate(value: string): Date {
+  // value is always 'YYYY-MM-DD' (3 parts) per the dueDate contract
   const [year, month, day] = value.split('-').map(Number) as [number, number, number]
   return new Date(Date.UTC(year, month - 1, day))
 }
