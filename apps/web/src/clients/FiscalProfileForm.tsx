@@ -71,6 +71,7 @@ export function FiscalProfileForm({ clientId, kind, initial }: Props) {
     mutationFn: (input: FiscalProfileInput) => putFiscalProfile(clientId, input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['fiscal-profile', clientId] })
+      await queryClient.invalidateQueries({ queryKey: ['obligations-preview', clientId] })
     },
   })
 

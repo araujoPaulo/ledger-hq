@@ -10,6 +10,7 @@ import { archiveClient, getClient, getFiscalProfile, restoreClient } from './api
 import { FiscalProfileForm } from './FiscalProfileForm'
 import { EmploymentSection } from '../employments/EmploymentSection'
 import { CredentialsSection } from '../vault/CredentialsSection'
+import { ObligationsSection } from '../obligations/ObligationsSection'
 
 export function ClientDetailPage() {
   const { clientId } = useParams({ from: '/clients/$clientId' })
@@ -145,6 +146,8 @@ export function ClientDetailPage() {
       ) : (
         <FiscalProfileForm clientId={clientId} kind={record.kind} initial={fiscalProfile.data ?? null} />
       )}
+
+      <ObligationsSection clientId={clientId} />
 
       <EmploymentSection client={{ id: record.id, kind: record.kind, name: record.name }} />
       <CredentialsSection clientId={clientId} />
