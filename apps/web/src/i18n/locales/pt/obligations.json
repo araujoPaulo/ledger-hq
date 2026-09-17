@@ -1,0 +1,37 @@
+{
+  "dashboard": {
+    "title": "Prazos",
+    "overdue": "Atrasadas",
+    "thisWeek": "Esta semana",
+    "thisMonth": "Este mês",
+    "later": "Mais tarde",
+    "empty": "Sem obrigações pendentes."
+  },
+  "section": {
+    "title": "Obrigações fiscais",
+    "empty": "Ainda não há obrigações para este cliente.",
+    "previewMessage": "{{toCreate}} a criar, {{toRetract}} a retirar",
+    "apply": "Aplicar"
+  },
+  "row": {
+    "markDone": "Marcar como feita",
+    "edit": "Editar",
+    "waive": "Dispensar"
+  },
+  "form": {
+    "dueDate": { "label": "Prazo" },
+    "status": { "label": "Estado" },
+    "reference": { "label": "N.º de referência" },
+    "amountCents": { "label": "Valor (€)" },
+    "notes": { "label": "Notas" },
+    "waiveReasonRequired": "Indica o motivo da dispensa."
+  },
+  "adHoc": {
+    "newTitle": "Nova obrigação personalizada",
+    "code": { "label": "Código" },
+    "name": { "label": "Designação" },
+    "periodicity": { "label": "Periodicidade" },
+    "periodLabel": { "label": "Período" },
+    "dueDate": { "label": "Prazo" }
+  }
+}
