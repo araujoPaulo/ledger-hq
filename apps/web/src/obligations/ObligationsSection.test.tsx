@@ -9,10 +9,12 @@ import { initI18n } from '../i18n'
 const listObligationsMock = vi.hoisted(() => vi.fn())
 const generateObligationsMock = vi.hoisted(() => vi.fn())
 const patchObligationMock = vi.hoisted(() => vi.fn())
+const createAdHocObligationMock = vi.hoisted(() => vi.fn())
 vi.mock('./api', () => ({
   listObligations: listObligationsMock,
   generateObligations: generateObligationsMock,
   patchObligation: patchObligationMock,
+  createAdHocObligation: createAdHocObligationMock,
 }))
 
 const { ObligationsSection } = await import('./ObligationsSection')
@@ -53,6 +55,7 @@ describe('ObligationsSection', () => {
     listObligationsMock.mockReset()
     generateObligationsMock.mockReset().mockResolvedValue({ toCreate: [], toRetract: [] })
     patchObligationMock.mockReset()
+    createAdHocObligationMock.mockReset()
   })
 
   it('shows the empty state when there are no obligations and no preview diff', async () => {
@@ -98,7 +101,10 @@ describe('ObligationsSection', () => {
     renderSection()
 
     await userEvent.click(await screen.findByRole('button', { name: /^editar$/i }))
-    const dueDateInput = screen.getByLabelText(/prazo/i)
+    // The ad-hoc creation form (always rendered) also has a "Prazo" field, so
+    // scope to the first match: the edit form's due-date input, which renders
+    // before the ad-hoc form in the section.
+    const dueDateInput = screen.getAllByLabelText(/prazo/i)[0]!
     await userEvent.clear(dueDateInput)
     await userEvent.type(dueDateInput, '2026-04-01')
     await userEvent.click(screen.getByRole('button', { name: /guardar/i }))
@@ -116,5 +122,23 @@ describe('ObligationsSection', () => {
 
     expect(patchObligationMock).not.toHaveBeenCalled()
     expect(screen.getByRole('alert')).toHaveTextContent(/indica o motivo/i)
+  })
+
+  it('creates an ad-hoc obligation with the entered fields', async () => {
+    listObligationsMock.mockResolvedValue([])
+    createAdHocObligationMock.mockResolvedValue({ ...obligation, id: 'o2', definitionCode: 'BACKUP_RESTORE_DRILL' })
+    renderSection()
+
+    await userEvent.type(await screen.findByLabelText(/código/i), 'BACKUP_RESTORE_DRILL')
+    await userEvent.type(screen.getByLabelText(/designação/i), 'Backup restore drill')
+    await userEvent.type(screen.getByLabelText(/período/i), '2026')
+    await userEvent.type(screen.getByLabelText(/prazo/i), '2026-06-30')
+    await userEvent.click(screen.getByRole('button', { name: /criar/i }))
+
+    await vi.waitFor(() =>
+      expect(createAdHocObligationMock).toHaveBeenCalledWith(
+        expect.objectContaining({ clientId: 'c1', code: 'BACKUP_RESTORE_DRILL', name: 'Backup restore drill' }),
+      ),
+    )
   })
 })

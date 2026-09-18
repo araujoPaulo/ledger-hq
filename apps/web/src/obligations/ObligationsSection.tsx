@@ -5,6 +5,7 @@ import { ErrorMessage } from '../shell/ErrorMessage'
 import { generateObligations, listObligations, patchObligation } from './api'
 import type { ObligationResponse } from './api'
 import { AdjustObligationForm } from './AdjustObligationForm'
+import { AddAdHocObligationForm } from './AddAdHocObligationForm'
 import { ObligationRow } from './ObligationRow'
 
 export function ObligationsSection({ clientId }: { clientId: string }) {
@@ -90,6 +91,11 @@ export function ObligationsSection({ clientId }: { clientId: string }) {
           onSaved={() => queryClient.invalidateQueries({ queryKey: ['obligations', clientId] })}
         />
       )}
+
+      <AddAdHocObligationForm
+        clientId={clientId}
+        onCreated={() => queryClient.invalidateQueries({ queryKey: ['obligations', clientId] })}
+      />
     </section>
   )
 }
