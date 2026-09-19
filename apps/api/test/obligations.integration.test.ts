@@ -121,6 +121,39 @@ describe('manual adjustment', () => {
   it('404s adjusting an unknown instance', async () => {
     await patch('/api/v1/obligations/00000000-0000-7000-8000-000000000099', { notes: 'x' }).expect(404)
   })
+
+  it('waiving an instance that already has notes needs no new text — the server checks the payload, and the client always resends it', async () => {
+    const clientId = await createCompanyWithProfile()
+    await post(`/api/v1/obligations/generate?dryRun=false`, { asOf: '2026-03-18', clientId }).expect(201)
+    const listed = await request(app.getHttpServer()).get('/api/v1/obligations').set('Cookie', cookie).expect(200)
+    const target = listed.body[0]
+    await patch(`/api/v1/obligations/${target.id}`, { notes: 'Pre-existing note' }).expect(200)
+
+    // A client that resends the existing notes alongside the status change
+    // (the fixed AdjustObligationForm's own behaviour) must succeed — this
+    // is the server-side half of that fix's contract.
+    const response = await patch(`/api/v1/obligations/${target.id}`, { status: 'WAIVED', notes: 'Pre-existing note' })
+
+    expect(response.status).toBe(200)
+    expect(response.body.status).toBe('WAIVED')
+  })
+
+  it('an overridden due date is not touched by a later generate run for the same client', async () => {
+    const clientId = await createCompanyWithProfile()
+    await post(`/api/v1/obligations/generate?dryRun=false`, { asOf: '2026-03-18', clientId }).expect(201)
+    const listed = await request(app.getHttpServer()).get('/api/v1/obligations').set('Cookie', cookie).expect(200)
+    const target = listed.body[0]
+    await patch(`/api/v1/obligations/${target.id}`, { dueDate: '2026-12-31' }).expect(200)
+
+    // Re-running generate for the same client/asOf must not recreate,
+    // duplicate, or revert this instance's manually-overridden date (master
+    // spec §7.4) — proven end to end, not just by the flag being set once.
+    await post(`/api/v1/obligations/generate?dryRun=false`, { asOf: '2026-03-18', clientId }).expect(201)
+
+    const refetched = await request(app.getHttpServer()).get(`/api/v1/obligations?clientId=${clientId}`).set('Cookie', cookie).expect(200)
+    const stillThere = refetched.body.find((item: { id: string }) => item.id === target.id)
+    expect(stillThere).toMatchObject({ dueDate: '2026-12-31', dueDateOverridden: true })
+  })
 })
 
 describe('ad-hoc obligations', () => {
@@ -158,5 +191,25 @@ describe('ad-hoc obligations', () => {
 
     expect(response.status).toBe(409)
     expect(response.body.error.code).toBe('obligations.definition_code_taken')
+  })
+
+  it('rejects creating the exact same ad-hoc obligation twice, as a 409 rather than a 500', async () => {
+    const clientId = await createCompanyWithProfile()
+    const body = {
+      clientId,
+      code: 'BACKUP_RESTORE_DRILL',
+      name: 'Backup restore drill',
+      periodicity: 'ONE_OFF',
+      periodStart: '2026-01-01',
+      periodEnd: '2026-01-01',
+      periodLabel: '2026',
+      dueDate: '2026-06-30',
+    }
+    await post('/api/v1/obligations', body).expect(201)
+
+    const response = await post('/api/v1/obligations', body)
+
+    expect(response.status).toBe(409)
+    expect(response.body.error.code).toBe('obligations.ad_hoc_already_exists')
   })
 })
