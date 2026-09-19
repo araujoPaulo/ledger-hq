@@ -37,6 +37,8 @@ export function ObligationsDashboard() {
     <section className="flex flex-col gap-6">
       <h1 className="text-lg font-semibold">{t('dashboard.title')}</h1>
 
+      <ErrorMessage error={markDone.error} />
+
       {SECTIONS.filter((key) => groups[key].length > 0).map((key) => (
         <div key={key}>
           <h2 className="mb-2 text-sm font-semibold text-slate-500">{t(`dashboard.${key}`)}</h2>
