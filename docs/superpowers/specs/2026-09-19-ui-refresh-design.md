@@ -25,19 +25,19 @@ want to open every day.
   screen after login) — to prove the system and deliver visible value
   quickly.
 - Leave every other screen (auth, clients, vault) on the current
-  styling for now; they get their own phases later, each with its own
+  styling for now; they get their own stages later, each with its own
   plan.
 
 ## Non-goals
 
 - Dark mode. Tokens are structured so it can be added later without
-  rework, but it is not implemented in this phase.
+  rework, but it is not implemented in this stage.
 - A new shared `packages/ui` workspace package. Only `apps/web`
   consumes the design system; a separate package would be an
   abstraction with a single consumer. The component library lives at
   `apps/web/src/ui/`.
 - Redesigning clients, vault, or auth screens. Out of scope for this
-  spec; tracked as later phases.
+  spec; tracked as later stages.
 - Changing any backend/API contract, routing structure, or business
   logic. This is a presentation-layer change only.
 
@@ -81,7 +81,7 @@ New dependencies: `@radix-ui/react-dialog`, `@radix-ui/react-dropdown-menu`,
 `@radix-ui/react-select`, `@radix-ui/react-checkbox`, `@radix-ui/react-toast`,
 `class-variance-authority`, `lucide-react`, `@fontsource/inter`.
 
-Components built in this phase (only what the shell and dashboard need):
+Components built in this stage (only what the shell and dashboard need):
 
 | Component | Replaces | Notes |
 |---|---|---|
@@ -93,17 +93,17 @@ Components built in this phase (only what the shell and dashboard need):
 | `PageHeader` | each page's own `<header className="flex items-center justify-between">` | title + optional description + action slot (buttons/links) |
 | `DropdownMenu` | none exists yet | Radix-backed; first consumer is the account/sign-out menu in the shell |
 
-`Dialog` and `Toast` are added as primitives now (used by later phases)
-but have no consumer in this phase's two screens — including them here
+`Dialog` and `Toast` are added as primitives now (used by later stages)
+but have no consumer in this stage's two screens — including them here
 avoids a second dependency-install round when Clients/Vault redesign
 lands.
 
-Components not touched this phase: `Input`, `Select`, `Checkbox` — the
+Components not touched this stage: `Input`, `Select`, `Checkbox` — the
 two target screens (shell, dashboard) don't have forms. They're built
-in the phase that redesigns the first screen that needs them (Clients,
+in the stage that redesigns the first screen that needs them (Clients,
 most likely), so the component and its first real usage land together.
 
-## Screens — Phase 1
+## Screens — Stage 1
 
 ### App shell (`apps/web/src/shell/AppLayout.tsx`)
 
@@ -139,7 +139,7 @@ most likely), so the component and its first real usage land together.
   (checkmark icon, the existing translated copy, no CTA — there's
   nothing to create from an empty obligations list, it populates from
   the catalog generator).
-- `ObligationRow` itself is not restructured in this phase — it
+- `ObligationRow` itself is not restructured in this stage — it
   already renders inside the new `Card`/`Badge` context without
   changing its internal layout; only its container changes.
 
@@ -177,26 +177,32 @@ most likely), so the component and its first real usage land together.
 
 ## Rollout plan
 
-1. **This phase (branch `design/ui-refresh`)**: tokens, `apps/web/src/ui/`
+Named "Stage N" rather than "Phase N" to avoid colliding with the
+product's own phase numbering (Phase 0 Foundation, Phase 1 Vault,
+Phase 2 Obligations, Phase 3 Billing) — the UI refresh cuts across
+those phases. Full detail, including why this order, in
+[`docs/design/roadmap.md`](../../design/roadmap.md).
+
+1. **This stage (branch `design/ui-refresh`)**: tokens, `apps/web/src/ui/`
    component library, App shell, Obligations Dashboard. One PR.
-2. **Phase 2**: Clients (list, detail, form, fiscal profile form) —
+2. **Stage 2**: Clients (list, detail, form, fiscal profile form) —
    introduces `Input`/`Select`/`Checkbox` to the component library
    against real forms.
-3. **Phase 3**: Vault (platforms, credentials, unlock gate, setup) —
+3. **Stage 3**: Vault (platforms, credentials, unlock gate, setup) —
    introduces `Dialog` (credential detail/add) and `Toast`
    (copy-to-clipboard confirmation).
-4. **Phase 4**: Auth (login, setup, recovery) — last because it's the
+4. **Stage 4**: Auth (login, setup, recovery) — last because it's the
    least-frequently-seen screen (logged into once per session) and has
-   no dependency on new primitives beyond what phases 1-3 already add.
+   no dependency on new primitives beyond what stages 1-3 already add.
 
-Each later phase gets its own brainstorming pass and its own spec —
-this document only commits to Phase 1's design in detail; phases 2-4
+Each later stage gets its own brainstorming pass and its own spec —
+this document only commits to Stage 1's design in detail; stages 2-4
 are named here to show the target shape of the component library, not
 as approved designs.
 
 ## Guidelines document
 
-`docs/design/guidelines.md`, written alongside the Phase 1
+`docs/design/guidelines.md`, written alongside the Stage 1
 implementation: token reference table, "when to use which component"
 decision notes (e.g. `Badge` vs `Card` vs plain text for status),
 accessibility checklist above turned into a reusable checklist, and
