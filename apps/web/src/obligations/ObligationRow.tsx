@@ -1,4 +1,6 @@
 import { useTranslation } from 'react-i18next'
+import { formatDate } from '../i18n/format'
+import type { SupportedLocale } from '../i18n/format'
 import type { ObligationResponse } from './api'
 
 type Props = {
@@ -10,7 +12,7 @@ type Props = {
 }
 
 export function ObligationRow({ obligation, showClient, onMarkDone, onEdit }: Props) {
-  const { t } = useTranslation('obligations')
+  const { t, i18n } = useTranslation('obligations')
   const isActionable = obligation.status === 'PENDING' || obligation.status === 'IN_PROGRESS'
 
   return (
@@ -19,7 +21,7 @@ export function ObligationRow({ obligation, showClient, onMarkDone, onEdit }: Pr
         {showClient ? `${obligation.clientName} — ` : ''}
         {obligation.definitionName}
       </span>
-      <span className="text-slate-500">{obligation.dueDate}</span>
+      <span className="text-slate-500">{formatDate(obligation.dueDate, i18n.language as SupportedLocale)}</span>
 
       {isActionable && (
         <div className="flex gap-2">
