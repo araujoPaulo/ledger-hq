@@ -4,17 +4,22 @@ import type { ClientsService } from '../clients/clients.service.js'
 import { ObligationsService } from './obligations.service.js'
 
 function fakePrisma(overrides: Record<string, unknown> = {}): PrismaService {
-  return {
+  const prisma = {
     obligationDefinition: { upsert: vi.fn().mockResolvedValue({}) },
     client: { findMany: vi.fn().mockResolvedValue([]) },
     fiscalProfile: { findUnique: vi.fn().mockResolvedValue(null) },
     obligationInstance: {
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({}),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     ...overrides,
-  } as unknown as PrismaService
+  }
+  // `generate`'s apply path runs inside `$transaction(async (tx) => ...)` —
+  // the fake `tx` is the same mocked object, so a test's assertions against
+  // e.g. `prisma.obligationInstance.createMany` see the calls made through it.
+  return { ...prisma, $transaction: vi.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn(prisma)) } as unknown as PrismaService
 }
 
 function fakeClientsService(client: unknown): ClientsService {
@@ -209,7 +214,7 @@ describe('ObligationsService#generate', () => {
     expect(prisma.obligationInstance.deleteMany).not.toHaveBeenCalled()
   })
 
-  it('apply (dryRun=false) calls create for every proposed instance', async () => {
+  it('apply (dryRun=false) creates every proposed instance in one createMany call, inside a transaction', async () => {
     const prisma = fakePrisma({
       client: { findMany: vi.fn().mockResolvedValue([client]) },
       fiscalProfile: { findUnique: vi.fn().mockResolvedValue(COMPANY_PROFILE) },
@@ -219,6 +224,14 @@ describe('ObligationsService#generate', () => {
     const dryRunResult = await service.generate({ asOf: new Date('2026-03-18T00:00:00Z'), clientId: 'c1' }, true)
     await service.generate({ asOf: new Date('2026-03-18T00:00:00Z'), clientId: 'c1' }, false)
 
-    expect(vi.mocked(prisma.obligationInstance.create)).toHaveBeenCalledTimes(dryRunResult.toCreate.length)
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(prisma.obligationInstance.createMany)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(prisma.obligationInstance.createMany).mock.calls[0]![0]).toMatchObject({
+      data: expect.arrayContaining([expect.anything()]),
+      skipDuplicates: true,
+    })
+    expect((vi.mocked(prisma.obligationInstance.createMany).mock.calls[0]![0] as { data: unknown[] }).data).toHaveLength(
+      dryRunResult.toCreate.length,
+    )
   })
 })

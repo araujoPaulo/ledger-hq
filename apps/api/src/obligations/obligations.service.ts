@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { uuidv7 } from 'uuidv7'
+import { Prisma } from '../generated/prisma/client.js'
 import {
   AppError,
   FISCAL_CATALOG,
@@ -127,23 +128,33 @@ export class ObligationsService {
     }
 
     if (!dryRun) {
-      for (const item of toCreate) {
-        await this.prisma.obligationInstance.create({
-          data: {
-            id: uuidv7(),
-            clientId: item.clientId,
-            definitionCode: item.definitionCode,
-            periodStart: item.period.start,
-            periodEnd: item.period.end,
-            periodLabel: item.period.label,
-            dueDate: item.dueDate,
-          },
-        })
-      }
+      // One transaction for the whole apply: the cron and a user's "Apply"
+      // click can race on the same client, and without this, both would
+      // read the same "missing" periods and then both attempt to create
+      // them — the loser hitting the unique constraint mid-loop with the
+      // winner's rows already committed, a half-generated state. skipDuplicates
+      // makes the create side itself idempotent under that race too, not
+      // just reliant on the constraint to reject the whole request.
+      await this.prisma.$transaction(async (tx) => {
+        if (toCreate.length > 0) {
+          await tx.obligationInstance.createMany({
+            data: toCreate.map((item) => ({
+              id: uuidv7(),
+              clientId: item.clientId,
+              definitionCode: item.definitionCode,
+              periodStart: item.period.start,
+              periodEnd: item.period.end,
+              periodLabel: item.period.label,
+              dueDate: item.dueDate,
+            })),
+            skipDuplicates: true,
+          })
+        }
 
-      if (toRetract.length > 0) {
-        await this.prisma.obligationInstance.deleteMany({ where: { id: { in: toRetract.map((item) => item.id) } } })
-      }
+        if (toRetract.length > 0) {
+          await tx.obligationInstance.deleteMany({ where: { id: { in: toRetract.map((item) => item.id) } } })
+        }
+      })
     }
 
     return {
@@ -214,19 +225,38 @@ export class ObligationsService {
       update: {},
     })
 
-    return this.prisma.obligationInstance.create({
-      data: {
-        id: uuidv7(),
-        clientId: input.clientId,
-        definitionCode: input.code,
-        periodStart: new Date(`${input.periodStart}T00:00:00Z`),
-        periodEnd: new Date(`${input.periodEnd}T00:00:00Z`),
-        periodLabel: input.periodLabel,
-        dueDate: new Date(`${input.dueDate}T00:00:00Z`),
-      },
-      include: { definition: true, client: true },
-    })
+    return this.prisma.obligationInstance
+      .create({
+        data: {
+          id: uuidv7(),
+          clientId: input.clientId,
+          definitionCode: input.code,
+          periodStart: new Date(`${input.periodStart}T00:00:00Z`),
+          periodEnd: new Date(`${input.periodEnd}T00:00:00Z`),
+          periodLabel: input.periodLabel,
+          dueDate: new Date(`${input.dueDate}T00:00:00Z`),
+        },
+        include: { definition: true, client: true },
+      })
+      .catch((error: unknown) => {
+        throw toAdHocConflictOr(error)
+      })
   }
+}
+
+/**
+ * `ObligationInstance` carries exactly one relevant unique constraint here
+ * (`[clientId, definitionCode, periodStart]`) — like `platforms.service.ts`'s
+ * `toNameConflictOr`, no target-column check is needed to know which
+ * constraint fired, and such a check would be unreliable regardless: the
+ * driver adapter in use does not populate `error.meta.target` for a
+ * unique-constraint violation.
+ */
+function toAdHocConflictOr(error: unknown): unknown {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    return new AppError('obligations.ad_hoc_already_exists', {}, 409)
+  }
+  return error
 }
 
 function toSubject(kind: ClientKind, profile: FiscalProfile): ObligationSubject {

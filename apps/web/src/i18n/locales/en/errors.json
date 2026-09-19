@@ -44,6 +44,7 @@
   },
   "obligations": {
     "waived_reason_required": "Enter a reason for waiving this obligation.",
-    "definition_code_taken": "A catalog obligation with the code {{code}} already exists."
+    "definition_code_taken": "A catalog obligation with the code {{code}} already exists.",
+    "ad_hoc_already_exists": "An obligation with this code already exists for this date."
   }
 }
