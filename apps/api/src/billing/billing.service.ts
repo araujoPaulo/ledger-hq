@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { uuidv7 } from 'uuidv7'
-import { AppError, chargeDueDate, chargePeriodsSince } from '@ledger-hq/domain'
-import type { CreateRetainerPlanInput, RenewRetainerPlanInput } from '@ledger-hq/domain'
+import { AppError, chargeDueDate, chargePeriodsSince, proposeAllocation } from '@ledger-hq/domain'
+import type { ChargeBalance, CreateAdHocChargeInput, CreateRetainerPlanInput, ProposedAllocation, RecordPaymentInput, RenewRetainerPlanInput } from '@ledger-hq/domain'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { PrismaService } from '../common/prisma.service.js'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { ClientsService } from '../clients/clients.service.js'
-import type { RetainerPlan } from '../generated/prisma/client.js'
+import type { Charge, RetainerPlan } from '../generated/prisma/client.js'
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
@@ -136,5 +136,76 @@ export class BillingService {
 
       return { closedPlanId: current?.id ?? null, newPlanId: created.id }
     })
+  }
+
+  async proposeAllocationForClient(clientId: string, amountCents: number): Promise<{ proposed: ProposedAllocation[]; excessCents: number }> {
+    const openCharges = await this.prisma.$queryRaw<ChargeBalance[]>`
+      SELECT * FROM charge_balances WHERE "clientId" = ${clientId}::uuid AND "outstandingCents" > 0 ORDER BY "dueOn" ASC
+    `
+    const proposed = proposeAllocation(amountCents, openCharges)
+    const allocatedCents = proposed.reduce((sum, allocation) => sum + allocation.amountCents, 0)
+    return { proposed, excessCents: amountCents - allocatedCents }
+  }
+
+  /**
+   * Persists the payment and every requested allocation atomically. Never
+   * trusts the caller's arithmetic: re-validates against the payment's own
+   * amount and each charge's *current* outstanding balance from
+   * `charge_balances`, inside the same transaction, so a stale client-side
+   * preview can never write an allocation the database wouldn't itself
+   * justify.
+   */
+  async recordPayment(input: RecordPaymentInput): Promise<{ paymentId: string }> {
+    const sumAllocated = input.allocations.reduce((sum, allocation) => sum + allocation.amountCents, 0)
+    if (sumAllocated > input.amountCents) throw new AppError('billing.allocation_exceeds_payment', {}, 422)
+
+    return this.prisma.$transaction(async (tx) => {
+      const paymentId = uuidv7()
+      await tx.payment.create({
+        data: {
+          id: paymentId,
+          clientId: input.clientId,
+          amountCents: input.amountCents,
+          receivedOn: new Date(`${input.receivedOn}T00:00:00Z`),
+          method: input.method,
+          reference: input.reference ?? null,
+        },
+      })
+
+      for (const allocation of input.allocations) {
+        const [balance] = await tx.$queryRaw<Array<{ outstandingCents: number }>>`
+          SELECT "outstandingCents" FROM charge_balances WHERE id = ${allocation.chargeId}::uuid
+        `
+        if (!balance || allocation.amountCents > balance.outstandingCents) {
+          throw new AppError('billing.allocation_exceeds_charge_balance', { chargeId: allocation.chargeId }, 422)
+        }
+        await tx.paymentAllocation.create({ data: { paymentId, chargeId: allocation.chargeId, amountCents: allocation.amountCents } })
+      }
+
+      return { paymentId }
+    })
+  }
+
+  async createAdHocCharge(input: CreateAdHocChargeInput): Promise<Charge> {
+    return this.prisma.charge.create({
+      data: {
+        id: uuidv7(),
+        clientId: input.clientId,
+        kind: 'EXTRA',
+        description: input.description,
+        periodLabel: null,
+        amountCents: input.amountCents,
+        issuedOn: new Date(),
+        dueOn: new Date(`${input.dueOn}T00:00:00Z`),
+        planId: null,
+      },
+    })
+  }
+
+  async writeOffCharge(id: string, reason: string): Promise<Charge> {
+    const charge = await this.prisma.charge.findUnique({ where: { id } })
+    if (!charge) throw new AppError('common.not_found', {}, 404)
+
+    return this.prisma.charge.update({ where: { id }, data: { writtenOffAt: new Date(), writeOffReason: reason } })
   }
 }

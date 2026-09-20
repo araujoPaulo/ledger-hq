@@ -15,7 +15,16 @@ function fakePrisma(overrides: Record<string, unknown> = {}): PrismaService {
     charge: {
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({}),
+      findUnique: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockResolvedValue({}),
     },
+    payment: {
+      create: vi.fn().mockResolvedValue({}),
+    },
+    paymentAllocation: {
+      create: vi.fn().mockResolvedValue({}),
+    },
+    $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn(overrides)),
     ...overrides,
   } as unknown as PrismaService
@@ -184,5 +193,134 @@ describe('BillingService#renewRetainerPlan', () => {
     await expect(
       service.renewRetainerPlan('c1', { newAmountCents: 12000, effectiveFrom: '2026-01-01' }),
     ).rejects.toThrow('billing.plan_overlap')
+  })
+})
+
+describe('BillingService#proposeAllocationForClient', () => {
+  it('reads open charges from charge_balances and proposes FIFO', async () => {
+    const openCharges = [
+      { id: 'a', clientId: 'c1', kind: 'RETAINER', periodLabel: '2026-01', dueOn: '2026-01-08', amountCents: 9000, allocatedCents: 0, outstandingCents: 9000, status: 'OPEN' },
+    ]
+    const prisma = fakePrisma({ $queryRaw: vi.fn().mockResolvedValue(openCharges) })
+    const service = new BillingService(prisma, fakeClientsService(client))
+
+    const result = await service.proposeAllocationForClient('c1', 9000)
+
+    expect(result).toEqual({ proposed: [{ chargeId: 'a', amountCents: 9000 }], excessCents: 0 })
+  })
+
+  it('reports the unallocated remainder as excess', async () => {
+    const openCharges = [
+      { id: 'a', clientId: 'c1', kind: 'RETAINER', periodLabel: '2026-01', dueOn: '2026-01-08', amountCents: 9000, allocatedCents: 0, outstandingCents: 9000, status: 'OPEN' },
+    ]
+    const prisma = fakePrisma({ $queryRaw: vi.fn().mockResolvedValue(openCharges) })
+    const service = new BillingService(prisma, fakeClientsService(client))
+
+    const result = await service.proposeAllocationForClient('c1', 15000)
+
+    expect(result).toEqual({ proposed: [{ chargeId: 'a', amountCents: 9000 }], excessCents: 6000 })
+  })
+})
+
+describe('BillingService#recordPayment', () => {
+  it('creates the payment and every requested allocation in one transaction', async () => {
+    const tx = {
+      payment: { create: vi.fn().mockResolvedValue({}) },
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 'a', outstandingCents: 9000 }]),
+      paymentAllocation: { create: vi.fn().mockResolvedValue({}) },
+    }
+    const prisma = fakePrisma({ $transaction: vi.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn(tx)) })
+    const service = new BillingService(prisma, fakeClientsService(client))
+
+    const result = await service.recordPayment({
+      clientId: 'c1',
+      amountCents: 9000,
+      receivedOn: '2026-09-03',
+      method: 'TRANSFER',
+      allocations: [{ chargeId: 'a', amountCents: 9000 }],
+    })
+
+    expect(result.paymentId).toEqual(expect.any(String))
+    expect(tx.paymentAllocation.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects allocations that sum to more than the payment', async () => {
+    const prisma = fakePrisma({ $transaction: vi.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn({})) })
+    const service = new BillingService(prisma, fakeClientsService(client))
+
+    await expect(
+      service.recordPayment({
+        clientId: 'c1',
+        amountCents: 5000,
+        receivedOn: '2026-09-03',
+        method: 'TRANSFER',
+        allocations: [{ chargeId: 'a', amountCents: 9000 }],
+      }),
+    ).rejects.toThrow('billing.allocation_exceeds_payment')
+  })
+
+  it('rejects an allocation that exceeds its own charge\'s outstanding balance', async () => {
+    const tx = {
+      payment: { create: vi.fn().mockResolvedValue({}) },
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 'a', outstandingCents: 3000 }]),
+      paymentAllocation: { create: vi.fn() },
+    }
+    const prisma = fakePrisma({ $transaction: vi.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn(tx)) })
+    const service = new BillingService(prisma, fakeClientsService(client))
+
+    await expect(
+      service.recordPayment({
+        clientId: 'c1',
+        amountCents: 9000,
+        receivedOn: '2026-09-03',
+        method: 'TRANSFER',
+        allocations: [{ chargeId: 'a', amountCents: 9000 }],
+      }),
+    ).rejects.toThrow('billing.allocation_exceeds_charge_balance')
+  })
+
+  it('accepts an empty allocations array — a payment recorded as pure credit', async () => {
+    const tx = { payment: { create: vi.fn().mockResolvedValue({}) }, $queryRaw: vi.fn(), paymentAllocation: { create: vi.fn() } }
+    const prisma = fakePrisma({ $transaction: vi.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn(tx)) })
+    const service = new BillingService(prisma, fakeClientsService(client))
+
+    const result = await service.recordPayment({ clientId: 'c1', amountCents: 9000, receivedOn: '2026-09-03', method: 'TRANSFER', allocations: [] })
+
+    expect(result.paymentId).toEqual(expect.any(String))
+    expect(tx.paymentAllocation.create).not.toHaveBeenCalled()
+  })
+})
+
+describe('BillingService#createAdHocCharge', () => {
+  it('creates an EXTRA charge with no plan', async () => {
+    const prisma = fakePrisma({ charge: { create: vi.fn().mockImplementation(({ data }: { data: unknown }) => Promise.resolve(data)) } })
+    const service = new BillingService(prisma, fakeClientsService(client))
+
+    const created = await service.createAdHocCharge({ clientId: 'c1', description: 'Consultoria extra', amountCents: 15000, dueOn: '2026-10-01' })
+
+    expect(created).toMatchObject({ clientId: 'c1', kind: 'EXTRA', planId: null, periodLabel: null, amountCents: 15000 })
+  })
+})
+
+describe('BillingService#writeOffCharge', () => {
+  it('sets writtenOffAt and the reason', async () => {
+    const prisma = fakePrisma({
+      charge: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'a' }),
+        update: vi.fn().mockImplementation(({ data }: { data: unknown }) => Promise.resolve({ id: 'a', ...(data as object) })),
+      },
+    })
+    const service = new BillingService(prisma, fakeClientsService(client))
+
+    const result = await service.writeOffCharge('a', 'Cliente insolvente')
+
+    expect(result).toMatchObject({ writeOffReason: 'Cliente insolvente', writtenOffAt: expect.any(Date) })
+  })
+
+  it('404s on an unknown charge', async () => {
+    const prisma = fakePrisma({ charge: { findUnique: vi.fn().mockResolvedValue(null) } })
+    const service = new BillingService(prisma, fakeClientsService(client))
+
+    await expect(service.writeOffCharge('missing', 'reason')).rejects.toThrow('common.not_found')
   })
 })
