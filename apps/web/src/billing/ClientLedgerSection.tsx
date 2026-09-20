@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { formatCurrency } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
-import { getClientLedger, writeOffCharge } from './api'
+import { getClientLedger, getCurrentRetainerPlan, writeOffCharge } from './api'
 import { RecordPaymentForm } from './RecordPaymentForm'
 import { RetainerPlanForm } from './RetainerPlanForm'
 
@@ -16,6 +16,7 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
   const [writeOffReason, setWriteOffReason] = useState('')
 
   const ledger = useQuery({ queryKey: ['client-ledger', clientId], queryFn: () => getClientLedger(clientId) })
+  const currentPlan = useQuery({ queryKey: ['current-retainer-plan', clientId], queryFn: () => getCurrentRetainerPlan(clientId) })
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['client-ledger', clientId] })
 
@@ -41,13 +42,14 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
         </button>
       </div>
 
-      {showPlanForm && (
+      {showPlanForm && currentPlan.data !== undefined && (
         <RetainerPlanForm
           clientId={clientId}
-          currentPlan={null}
+          currentPlan={currentPlan.data}
           onSaved={() => {
             setShowPlanForm(false)
             invalidate()
+            queryClient.invalidateQueries({ queryKey: ['current-retainer-plan', clientId] })
           }}
         />
       )}

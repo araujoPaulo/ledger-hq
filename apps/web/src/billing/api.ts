@@ -87,6 +87,10 @@ export function renewRetainerPlan(
   return apiFetch(`/billing/clients/${clientId}/retainer-plan/renew`, { method: 'POST', body: input })
 }
 
+export function getCurrentRetainerPlan(clientId: string): Promise<RetainerPlan | null> {
+  return apiFetch(`/billing/clients/${clientId}/retainer-plan`)
+}
+
 export function createAdHocCharge(input: { clientId: string; description: string; amountCents: number; dueOn: string }): Promise<Charge> {
   return apiFetch('/billing/charges', { method: 'POST', body: input })
 }

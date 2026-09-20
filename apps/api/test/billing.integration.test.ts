@@ -294,3 +294,24 @@ describe('BillingController', () => {
     expect(response.body).toEqual({ entries: [], balanceCents: 0 })
   })
 })
+
+describe('GET /billing/clients/:clientId/retainer-plan', () => {
+  it('returns the in-force plan', async () => {
+    const clientId = await createClient('600000020')
+    await post(`/api/v1/billing/clients/${clientId}/retainer-plan`, { amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: '2026-01-01' })
+
+    const response = await get(`/api/v1/billing/clients/${clientId}/retainer-plan`)
+
+    expect(response.status).toBe(200)
+    expect(response.body).toMatchObject({ clientId, amountCents: 9000 })
+  })
+
+  it('returns null for a client with no plan', async () => {
+    const clientId = await createClient('600000021')
+
+    const response = await get(`/api/v1/billing/clients/${clientId}/retainer-plan`)
+
+    expect(response.status).toBe(200)
+    expect(response.body).toBeNull()
+  })
+})

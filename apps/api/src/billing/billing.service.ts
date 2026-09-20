@@ -138,6 +138,10 @@ export class BillingService {
     })
   }
 
+  async getCurrentRetainerPlan(clientId: string): Promise<RetainerPlan | null> {
+    return this.prisma.retainerPlan.findFirst({ where: { clientId, validTo: null } })
+  }
+
   async proposeAllocationForClient(clientId: string, amountCents: number): Promise<{ proposed: ProposedAllocation[]; excessCents: number }> {
     const openCharges = await this.prisma.$queryRaw<ChargeBalance[]>`
       SELECT * FROM charge_balances WHERE "clientId" = ${clientId}::uuid AND "outstandingCents" > 0 ORDER BY "dueOn" ASC

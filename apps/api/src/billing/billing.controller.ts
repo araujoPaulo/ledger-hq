@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common'
+import type { Response } from 'express'
 import {
   createAdHocChargeSchema,
   createRetainerPlanSchema,
@@ -58,6 +59,16 @@ export class BillingController {
     @Body(new ZodValidationPipe(renewRetainerPlanSchema)) body: RenewRetainerPlanInput,
   ) {
     return this.billing.renewRetainerPlan(clientId, body)
+  }
+
+  // Nest's default reply path treats a `null` return value as "no body" (it calls
+  // `response.send()` with no argument), which would send an empty 200 rather than the
+  // JSON literal `null` the web client expects. Writing the response directly is the
+  // one deviation from the sibling handlers above, forced by that framework behavior.
+  @Get('clients/:clientId/retainer-plan')
+  async getCurrentRetainerPlan(@Param('clientId') clientId: string, @Res() response: Response): Promise<void> {
+    const plan = await this.billing.getCurrentRetainerPlan(clientId)
+    response.json(plan)
   }
 
   @Post('payments/propose-allocation')

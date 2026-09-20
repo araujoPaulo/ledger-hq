@@ -10,11 +10,13 @@ const getClientLedgerMock = vi.hoisted(() => vi.fn())
 const proposeAllocationMock = vi.hoisted(() => vi.fn())
 const recordPaymentMock = vi.hoisted(() => vi.fn())
 const writeOffChargeMock = vi.hoisted(() => vi.fn())
+const getCurrentRetainerPlanMock = vi.hoisted(() => vi.fn())
 vi.mock('./api', () => ({
   getClientLedger: getClientLedgerMock,
   proposeAllocation: proposeAllocationMock,
   recordPayment: recordPaymentMock,
   writeOffCharge: writeOffChargeMock,
+  getCurrentRetainerPlan: getCurrentRetainerPlanMock,
 }))
 
 const { ClientLedgerSection } = await import('./ClientLedgerSection')
@@ -73,5 +75,16 @@ describe('ClientLedgerSection', () => {
     expect(recordPaymentMock).toHaveBeenCalledWith(
       expect.objectContaining({ amountCents: 9000, allocations: [{ chargeId: 'charge-1', amountCents: 9000 }] }),
     )
+  })
+
+  it('shows the renew form, not the create form, when a plan is already in force', async () => {
+    getClientLedgerMock.mockResolvedValue({ entries: [], balanceCents: 0 })
+    getCurrentRetainerPlanMock.mockResolvedValue({ id: 'plan-1', clientId: 'c1', amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: '2026-01-01', validTo: null })
+    renderSection()
+
+    await userEvent.click(await screen.findByRole('button', { name: /^editar$/i }))
+
+    expect(await screen.findByText(/atualizar valor/i)).toBeInTheDocument()
+    expect(screen.queryByText(/criar plano de retainer/i)).not.toBeInTheDocument()
   })
 })
