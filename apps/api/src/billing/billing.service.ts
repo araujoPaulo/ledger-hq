@@ -248,19 +248,19 @@ export class BillingService {
     return rows.map((row) => ({ clientId: row.clientId, clientName: row.clientName, paid: (row.outstandingCents ?? 0) === 0, outstandingCents: row.outstandingCents ?? 0 }))
   }
 
-  async getClientLedger(clientId: string): Promise<{ entries: Array<{ type: 'CHARGE' | 'PAYMENT'; date: string; description: string; amountCents: number; runningBalanceCents: number }>; balanceCents: number }> {
+  async getClientLedger(clientId: string): Promise<{ entries: Array<{ type: 'CHARGE' | 'PAYMENT'; date: string; description: string; amountCents: number; runningBalanceCents: number; chargeId: string | null }>; balanceCents: number }> {
     const charges = await this.prisma.charge.findMany({ where: { clientId }, orderBy: { issuedOn: 'asc' } })
     const payments = await this.prisma.payment.findMany({ where: { clientId }, orderBy: { receivedOn: 'asc' } })
 
     const events = [
-      ...charges.map((charge) => ({ type: 'CHARGE' as const, date: charge.issuedOn, description: charge.description, amountCents: charge.amountCents })),
-      ...payments.map((payment) => ({ type: 'PAYMENT' as const, date: payment.receivedOn, description: `Pagamento — ${payment.method}`, amountCents: -payment.amountCents })),
+      ...charges.map((charge) => ({ type: 'CHARGE' as const, date: charge.issuedOn, description: charge.description, amountCents: charge.amountCents, chargeId: charge.id })),
+      ...payments.map((payment) => ({ type: 'PAYMENT' as const, date: payment.receivedOn, description: `Pagamento — ${payment.method}`, amountCents: -payment.amountCents, chargeId: null })),
     ].sort((a, b) => a.date.getTime() - b.date.getTime())
 
     let runningBalanceCents = 0
     const entries = events.map((event) => {
       runningBalanceCents += event.amountCents
-      return { type: event.type, date: isoDate(event.date), description: event.description, amountCents: event.amountCents, runningBalanceCents }
+      return { type: event.type, date: isoDate(event.date), description: event.description, amountCents: event.amountCents, runningBalanceCents, chargeId: event.chargeId }
     })
 
     return { entries, balanceCents: runningBalanceCents }

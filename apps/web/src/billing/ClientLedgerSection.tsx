@@ -1,20 +1,32 @@
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { formatCurrency } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
-import { getClientLedger } from './api'
+import { getClientLedger, writeOffCharge } from './api'
+import { RecordPaymentForm } from './RecordPaymentForm'
 import { RetainerPlanForm } from './RetainerPlanForm'
 
 export function ClientLedgerSection({ clientId }: { clientId: string }) {
   const { t, i18n } = useTranslation(['billing', 'common'])
   const queryClient = useQueryClient()
   const [showPlanForm, setShowPlanForm] = useState(false)
+  const [writingOffChargeId, setWritingOffChargeId] = useState<string | null>(null)
+  const [writeOffReason, setWriteOffReason] = useState('')
 
   const ledger = useQuery({ queryKey: ['client-ledger', clientId], queryFn: () => getClientLedger(clientId) })
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['client-ledger', clientId] })
+
+  const writeOff = useMutation({
+    mutationFn: () => writeOffCharge(writingOffChargeId!, writeOffReason),
+    onSuccess: () => {
+      setWritingOffChargeId(null)
+      setWriteOffReason('')
+      invalidate()
+    },
+  })
 
   return (
     <section className="flex flex-col gap-3">
@@ -50,8 +62,38 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
             {ledger.data.entries.map((entry, index) => (
               <li key={index} className="flex items-center justify-between text-sm">
                 <span>{entry.description}</span>
-                <span className={entry.amountCents < 0 ? 'text-green-700' : ''}>
-                  {formatCurrency(entry.amountCents, i18n.language as SupportedLocale)}
+                <span className="flex items-center gap-2">
+                  <span className={entry.amountCents < 0 ? 'text-green-700' : ''}>
+                    {formatCurrency(entry.amountCents, i18n.language as SupportedLocale)}
+                  </span>
+                  {entry.type === 'CHARGE' && entry.chargeId !== null && (
+                    writingOffChargeId === entry.chargeId ? (
+                      <span className="flex items-center gap-1">
+                        <input
+                          value={writeOffReason}
+                          onChange={(event) => setWriteOffReason(event.target.value)}
+                          placeholder={t('billing:writeOff.reason.label')}
+                          className="rounded border border-slate-300 px-1 py-0.5 text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => writeOff.mutate()}
+                          disabled={writeOffReason.trim() === '' || writeOff.isPending}
+                          className="text-xs text-red-700 underline disabled:opacity-50"
+                        >
+                          {t('common:actions.save')}
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setWritingOffChargeId(entry.chargeId)}
+                        className="text-xs text-red-700 underline"
+                      >
+                        {t('billing:writeOff.action')}
+                      </button>
+                    )
+                  )}
                 </span>
               </li>
             ))}
@@ -62,6 +104,10 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
           </div>
         </>
       )}
+
+      <ErrorMessage error={writeOff.error} />
+
+      <RecordPaymentForm clientId={clientId} onRecorded={invalidate} />
     </section>
   )
 }

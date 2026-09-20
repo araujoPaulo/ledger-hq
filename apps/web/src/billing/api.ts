@@ -10,7 +10,7 @@ export type ReceivablesRow = {
 
 export type CurrentMonthRow = { clientId: string; clientName: string; paid: boolean; outstandingCents: number }
 
-export type LedgerEntry = { type: 'CHARGE' | 'PAYMENT'; date: string; description: string; amountCents: number; runningBalanceCents: number }
+export type LedgerEntry = { type: 'CHARGE' | 'PAYMENT'; date: string; description: string; amountCents: number; runningBalanceCents: number; chargeId: string | null }
 
 export type ClientLedger = { entries: LedgerEntry[]; balanceCents: number }
 
