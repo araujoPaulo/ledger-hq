@@ -43,6 +43,11 @@ describe('chargePeriodsSince', () => {
     const periods = chargePeriodsSince('MONTHLY', utc(2026, 5, 1), utc(2026, 3, 1))
     expect(periods).toEqual([])
   })
+
+  it('ONE_OFF: never generates a period — one-off charges are created directly, not swept', () => {
+    const periods = chargePeriodsSince('ONE_OFF', utc(2026, 1, 1), utc(2026, 12, 31))
+    expect(periods).toEqual([])
+  })
 })
 
 describe('chargeDueDate', () => {

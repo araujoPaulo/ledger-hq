@@ -3,23 +3,44 @@ import type { Periodicity } from '../enums'
 export type ChargePeriod = { start: Date; label: string }
 
 function monthsPerStep(periodicity: Periodicity): number {
-  if (periodicity === 'MONTHLY') return 1
-  if (periodicity === 'QUARTERLY') return 3
-  return 12
+  switch (periodicity) {
+    case 'MONTHLY':
+      return 1
+    case 'QUARTERLY':
+      return 3
+    case 'ANNUAL':
+      return 12
+    case 'ONE_OFF':
+      return 0
+  }
 }
 
 function alignedStartMonthIndex(periodicity: Periodicity, monthIndex: number): number {
-  if (periodicity === 'QUARTERLY') return Math.floor(monthIndex / 3) * 3
-  if (periodicity === 'ANNUAL') return 0
-  return monthIndex
+  switch (periodicity) {
+    case 'QUARTERLY':
+      return Math.floor(monthIndex / 3) * 3
+    case 'ANNUAL':
+      return 0
+    case 'MONTHLY':
+      return monthIndex
+    case 'ONE_OFF':
+      return 0
+  }
 }
 
 function labelFor(periodicity: Periodicity, cursor: Date): string {
   const year = cursor.getUTCFullYear()
   const month = cursor.getUTCMonth()
-  if (periodicity === 'MONTHLY') return `${year}-${String(month + 1).padStart(2, '0')}`
-  if (periodicity === 'QUARTERLY') return `${year}-Q${Math.floor(month / 3) + 1}`
-  return `${year}`
+  switch (periodicity) {
+    case 'MONTHLY':
+      return `${year}-${String(month + 1).padStart(2, '0')}`
+    case 'QUARTERLY':
+      return `${year}-Q${Math.floor(month / 3) + 1}`
+    case 'ANNUAL':
+      return `${year}`
+    case 'ONE_OFF':
+      return ''
+  }
 }
 
 /**
@@ -27,8 +48,11 @@ function labelFor(periodicity: Periodicity, cursor: Date): string {
  * the period containing `validFrom`. No future horizon — unlike the
  * obligation resolver's `generatePeriods`, this never looks ahead, matching
  * "a charge is born when its period begins" (master spec §8.1).
+ * ONE_OFF plans never generate periods — one-off charges are created directly.
  */
 export function chargePeriodsSince(periodicity: Periodicity, validFrom: Date, asOf: Date): ChargePeriod[] {
+  if (periodicity === 'ONE_OFF') return []
+
   const step = monthsPerStep(periodicity)
   const startMonthIndex = alignedStartMonthIndex(periodicity, validFrom.getUTCMonth())
   let cursor = new Date(Date.UTC(validFrom.getUTCFullYear(), startMonthIndex, 1))
