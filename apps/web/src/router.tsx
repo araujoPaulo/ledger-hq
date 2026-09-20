@@ -9,7 +9,7 @@ import { ClientFormPage } from './clients/ClientFormPage'
 import { ClientDetailPage } from './clients/ClientDetailPage'
 import { VaultSetupPage } from './vault/VaultSetupPage'
 import { PlatformsPage } from './vault/PlatformsPage'
-import { ObligationsDashboard } from './obligations/ObligationsDashboard'
+import { HomePage } from './HomePage'
 
 export function RequireSession({ children }: { children: ReactNode }) {
   const bootstrap = useBootstrapRequired()
@@ -27,7 +27,7 @@ const rootRoute = createRootRoute({ component: AppLayout })
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: ObligationsDashboard,
+  component: HomePage,
 })
 
 const clientsRoute = createRoute({
