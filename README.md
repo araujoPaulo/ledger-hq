@@ -89,6 +89,53 @@ Open `http://localhost:5173`. With a freshly migrated, empty database this
 shows the first-run setup screen (the one-time account bootstrap); once an
 account exists it shows the login screen instead.
 
+## Running several worktrees at once
+
+Compose derives its project name from the directory name, so each `git
+worktree` already gets its own containers, network and `postgres-data`
+volume. The one thing that does collide is the host ports, so
+`docker-compose.yml` reads them from the environment:
+
+| Variable        | Default | Published as                      |
+| --------------- | ------- | --------------------------------- |
+| `POSTGRES_PORT` | `5432`  | `127.0.0.1:${POSTGRES_PORT}:5432` |
+| `WEB_PORT`      | `8080`  | `127.0.0.1:${WEB_PORT}:8080`      |
+
+The container-internal ports never change, so the `api` service reaches
+`postgres:5432` over the Compose network regardless.
+
+To add a worktree, leave the primary checkout on the defaults and give the
+new one its own ports:
+
+```bash
+git worktree add ../ledger-hq.worktrees/my-feature -b my-feature
+cd ../ledger-hq.worktrees/my-feature
+cp ../../ledger-hq/.env .env
+# edit .env:
+#   POSTGRES_PORT=5433
+#   WEB_PORT=8081
+docker compose up -d postgres
+```
+
+`.env` is gitignored and lives inside each worktree, so the two never share
+one. Anything that talks to PostgreSQL _from the host_ rather than from
+inside the Compose network needs the same port — in particular `apps/api/.env`:
+
+```bash
+cd apps/api
+cp .env.example .env
+# edit .env: DATABASE_URL=postgresql://<user>:<password>@localhost:5433/ledger_hq
+```
+
+The dev servers (`pnpm --filter @ledger-hq/api dev` on 3000, `web` on 5173)
+bind their own fixed ports, so run at most one worktree's dev servers at a
+time, or override them per worktree (`PORT` for the API,
+`pnpm --filter @ledger-hq/web dev -- --port 5174` for the web app).
+
+If two worktrees ever end up with the same directory basename, Compose will
+give them the same project name and they _will_ share volumes. Set
+`COMPOSE_PROJECT_NAME` in one of their `.env` files to break the tie.
+
 ## Tests
 
 Each layer is verified independently, plus one root command that runs all of

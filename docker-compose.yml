@@ -17,7 +17,9 @@ services:
     ports:
       # Bound to loopback only, so the host (e.g. the e2e suite's API
       # process, or CI) can reach it without exposing it beyond the machine.
-      - "127.0.0.1:5432:5432"
+      # The host port is overridable so that several git worktrees can each
+      # run their own stack at the same time without colliding.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
@@ -49,7 +51,8 @@ services:
       - api
     ports:
       # Bound to loopback only. Tailscale terminates TLS in front of it.
-      - "127.0.0.1:8080:8080"
+      # Overridable for the same reason as the postgres port above.
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
 
 volumes:
   postgres-data:

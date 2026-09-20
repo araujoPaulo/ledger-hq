@@ -22,7 +22,11 @@ export function AdjustObligationForm({ obligation, onClose, onSaved }: Props) {
       patchObligation(obligation.id, {
         ...(dueDate !== obligation.dueDate ? { dueDate } : {}),
         ...(status !== obligation.status ? { status } : {}),
-        ...(notes !== (obligation.notes ?? '') ? { notes } : {}),
+        // The server's WAIVED-requires-notes refine checks the payload, not
+        // the stored row: omitting `notes` here because it didn't change
+        // would 422 on an instance that already has notes, even though the
+        // textarea visibly shows a reason. Always send it when waiving.
+        ...(status === 'WAIVED' || notes !== (obligation.notes ?? '') ? { notes } : {}),
       }),
     onSuccess: () => {
       onSaved()

@@ -65,6 +65,8 @@ export function ObligationsSection({ clientId }: { clientId: string }) {
       )}
 
       <ErrorMessage error={apply.error} />
+      <ErrorMessage error={preview.error} />
+      <ErrorMessage error={markDone.error} />
 
       {obligations.isPending ? null : obligations.isError ? (
         <ErrorMessage error={obligations.error} />

@@ -47,7 +47,7 @@ describe('ObligationRow', () => {
   it('shows the obligation name and due date', () => {
     renderRow()
     expect(screen.getByText(/declaração periódica de iva/i)).toBeInTheDocument()
-    expect(screen.getByText('2026-03-20')).toBeInTheDocument()
+    expect(screen.getByText('20/03/2026')).toBeInTheDocument()
   })
 
   it('shows the client name only when showClient is true', () => {
