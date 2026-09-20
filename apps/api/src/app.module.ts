@@ -13,6 +13,7 @@ import { FiscalProfilesModule } from './fiscal-profiles/fiscal-profiles.module.j
 import { EmploymentsModule } from './employments/employments.module.js'
 import { VaultModule } from './vault/vault.module.js'
 import { ObligationsModule } from './obligations/obligations.module.js'
+import { BillingModule } from './billing/billing.module.js'
 import { SystemModule } from './system/system.module.js'
 
 @Module({
@@ -27,6 +28,7 @@ import { SystemModule } from './system/system.module.js'
     EmploymentsModule,
     VaultModule,
     ObligationsModule,
+    BillingModule,
     SystemModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: CsrfGuard }],
