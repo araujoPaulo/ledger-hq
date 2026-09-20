@@ -41,5 +41,10 @@
   },
   "credentials": {
     "label_taken": "Já existe uma credencial com a designação {{label}} para esta plataforma."
+  },
+  "obligations": {
+    "waived_reason_required": "Indica o motivo da dispensa.",
+    "definition_code_taken": "Já existe uma obrigação do catálogo com o código {{code}}.",
+    "ad_hoc_already_exists": "Já existe uma obrigação com este código para esta data."
   }
 }

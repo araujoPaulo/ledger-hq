@@ -10,12 +10,13 @@ phone.
 
 This repository currently implements **Phase 0 — Foundation** (the monorepo,
 authentication, the client/fiscal-profile/employment register, the
-installable PWA shell, and the operational tooling to run it self-hosted)
-and **Phase 1 — Vault** (the zero-knowledge encrypted credential vault,
-recovery-code account recovery, and offline vault reads). The fiscal
-obligation engine and billing ledger described in the [design
-specification](docs/superpowers/specs/2026-09-04-ledger-hq-design.md) are
-later phases and are not implemented yet.
+installable PWA shell, and the operational tooling to run it self-hosted),
+**Phase 1 — Vault** (the zero-knowledge encrypted credential vault,
+recovery-code account recovery, and offline vault reads), and
+**Phase 2 — Obligations** (the statutory fiscal-obligation catalog and
+generator, and ad-hoc obligation tracking). The billing ledger described in
+the [design specification](docs/superpowers/specs/2026-09-04-ledger-hq-design.md)
+is a later phase and is not implemented yet.
 
 ## Requirements
 

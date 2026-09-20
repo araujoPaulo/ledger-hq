@@ -12,6 +12,7 @@ import { AuditModule } from './audit/audit.module.js'
 import { FiscalProfilesModule } from './fiscal-profiles/fiscal-profiles.module.js'
 import { EmploymentsModule } from './employments/employments.module.js'
 import { VaultModule } from './vault/vault.module.js'
+import { ObligationsModule } from './obligations/obligations.module.js'
 import { SystemModule } from './system/system.module.js'
 
 @Module({
@@ -25,6 +26,7 @@ import { SystemModule } from './system/system.module.js'
     FiscalProfilesModule,
     EmploymentsModule,
     VaultModule,
+    ObligationsModule,
     SystemModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: CsrfGuard }],

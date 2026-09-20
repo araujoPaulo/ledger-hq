@@ -193,3 +193,27 @@ describe('credential constraints', () => {
     await expect(prisma.credential.create({ data: { id: uuidv7(), ...shared } })).rejects.toThrow()
   })
 })
+
+describe('obligation constraints', () => {
+  it('rejects two instances with the same client, definition and period start', async () => {
+    const prisma = getTestPrisma()
+    const client = await prisma.client.create({
+      data: { id: uuidv7(), kind: 'COMPANY', name: 'X', taxId: '500000002', accounting: 'ORGANIZED', legalForm: 'LDA' },
+    })
+    const definition = await prisma.obligationDefinition.create({
+      data: { code: 'TEST_OBLIGATION', name: 'Test', authority: 'TAX', periodicity: 'MONTHLY', source: 'CATALOG' },
+    })
+    const shared = {
+      clientId: client.id,
+      definitionCode: definition.code,
+      periodStart: new Date('2026-01-01T00:00:00Z'),
+      periodEnd: new Date('2026-01-31T00:00:00Z'),
+      periodLabel: '2026-01',
+      dueDate: new Date('2026-03-20T00:00:00Z'),
+    }
+
+    await prisma.obligationInstance.create({ data: { id: uuidv7(), ...shared } })
+
+    await expect(prisma.obligationInstance.create({ data: { id: uuidv7(), ...shared } })).rejects.toThrow()
+  })
+})

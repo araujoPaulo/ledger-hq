@@ -5,14 +5,25 @@ const MASTER_PASSWORD = 'a sufficiently long master password'
 test('sets up the account, registers a company and a person, and links them', async ({ page }) => {
   await page.goto('/')
 
-  // First run: the setup form appears instead of login.
+  // First run: the setup form appears instead of login. Bootstrap only ever
+  // succeeds once per install (single-account app) — with `workers: 1` the
+  // whole e2e suite shares one backend, and whichever spec file's worker
+  // reaches this page first performs the real bootstrap; every other spec
+  // sees the login page instead. Alphabetical file order decides that
+  // winner, and it has already changed once (obligations.spec.ts now sorts
+  // before this file), so this can't rely on always winning — fall back to
+  // sign-in when the confirm field never appears, same idiom as
+  // vault-offline.spec.ts and obligations.spec.ts.
   await page.getByLabel(/email/i).fill('paulo@example.com')
   await page.getByLabel(/^palavra-passe mestra$/i).fill(MASTER_PASSWORD)
   // The brief's guess was `/confirmar/i`, but the real label is "Confirma a
   // palavra-passe mestra" (SetupPage.tsx, auth.confirmPasswordLabel in
   // common.json) — "Confirma", not "Confirmar" — so that regex never
   // matched. Narrowed to the substring that is actually present.
-  await page.getByLabel(/confirma/i).fill(MASTER_PASSWORD)
+  const confirmPasswordField = page.getByLabel(/confirma/i)
+  if (await confirmPasswordField.isVisible().catch(() => false)) {
+    await confirmPasswordField.fill(MASTER_PASSWORD)
+  }
   await page.getByRole('button', { name: /criar|entrar/i }).click()
 
   await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()

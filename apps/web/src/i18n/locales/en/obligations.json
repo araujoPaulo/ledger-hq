@@ -1,0 +1,37 @@
+{
+  "dashboard": {
+    "title": "Deadlines",
+    "overdue": "Overdue",
+    "thisWeek": "This week",
+    "thisMonth": "This month",
+    "later": "Later",
+    "empty": "No pending obligations."
+  },
+  "section": {
+    "title": "Fiscal obligations",
+    "empty": "There are no obligations for this client yet.",
+    "previewMessage": "{{toCreate}} to create, {{toRetract}} to retract",
+    "apply": "Apply"
+  },
+  "row": {
+    "markDone": "Mark as done",
+    "edit": "Edit",
+    "waive": "Waive"
+  },
+  "form": {
+    "dueDate": { "label": "Due date" },
+    "status": { "label": "Status" },
+    "reference": { "label": "Reference number" },
+    "amountCents": { "label": "Amount (€)" },
+    "notes": { "label": "Notes" },
+    "waiveReasonRequired": "Enter a reason for waiving this obligation."
+  },
+  "adHoc": {
+    "newTitle": "New ad-hoc obligation",
+    "code": { "label": "Code" },
+    "name": { "label": "Name" },
+    "periodicity": { "label": "Periodicity" },
+    "periodLabel": { "label": "Period" },
+    "dueDate": { "label": "Due date" }
+  }
+}

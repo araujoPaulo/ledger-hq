@@ -23,5 +23,23 @@
     "PASSWORD": "Palavra-passe",
     "PASSWORD_OTP": "Palavra-passe + código de verificação",
     "CERTIFICATE": "Certificado"
+  },
+  "authority": {
+    "TAX": "Autoridade Tributária",
+    "SOCIAL_SECURITY": "Segurança Social",
+    "REGISTRY": "Registo",
+    "OTHER": "Outra"
+  },
+  "periodicity": {
+    "MONTHLY": "Mensal",
+    "QUARTERLY": "Trimestral",
+    "ANNUAL": "Anual",
+    "ONE_OFF": "Pontual"
+  },
+  "obligationStatus": {
+    "PENDING": "Pendente",
+    "IN_PROGRESS": "Em curso",
+    "DONE": "Concluída",
+    "WAIVED": "Dispensada"
   }
 }

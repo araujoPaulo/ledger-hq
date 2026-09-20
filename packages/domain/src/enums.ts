@@ -34,3 +34,15 @@ export type IncomeTax = (typeof INCOME_TAX_VALUES)[number]
 
 export const AUTH_KIND_VALUES = ['PASSWORD', 'PASSWORD_OTP', 'CERTIFICATE'] as const
 export type AuthKind = (typeof AUTH_KIND_VALUES)[number]
+
+export const AUTHORITY_VALUES = ['TAX', 'SOCIAL_SECURITY', 'REGISTRY', 'OTHER'] as const
+export type Authority = (typeof AUTHORITY_VALUES)[number]
+
+export const PERIODICITY_VALUES = ['MONTHLY', 'QUARTERLY', 'ANNUAL', 'ONE_OFF'] as const
+export type Periodicity = (typeof PERIODICITY_VALUES)[number]
+
+export const OBLIGATION_STATUS_VALUES = ['PENDING', 'IN_PROGRESS', 'DONE', 'WAIVED'] as const
+export type ObligationStatus = (typeof OBLIGATION_STATUS_VALUES)[number]
+
+export const DEFINITION_SOURCE_VALUES = ['CATALOG', 'CUSTOM'] as const
+export type DefinitionSource = (typeof DEFINITION_SOURCE_VALUES)[number]

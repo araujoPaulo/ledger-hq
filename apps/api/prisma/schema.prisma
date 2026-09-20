@@ -44,6 +44,32 @@ enum AuthKind {
   CERTIFICATE
 }
 
+enum Authority {
+  TAX
+  SOCIAL_SECURITY
+  REGISTRY
+  OTHER
+}
+
+enum Periodicity {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+  ONE_OFF
+}
+
+enum ObligationStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  WAIVED
+}
+
+enum DefinitionSource {
+  CATALOG
+  CUSTOM
+}
+
 model User {
   id                      String    @id @db.Uuid
   email                   String    @unique
@@ -91,6 +117,7 @@ model Client {
   employmentsAsEmployer Employment[]   @relation("employer")
   employmentsAsEmployee Employment[]   @relation("employee")
   credentials           Credential[]
+  obligations           ObligationInstance[]
 
   @@unique([id, kind])
   @@index([kind, name])
@@ -166,6 +193,43 @@ model CredentialVersion {
   credential Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
 
   @@index([credentialId, createdAt])
+}
+
+model ObligationDefinition {
+  code        String           @id
+  name        String
+  authority   Authority
+  periodicity Periodicity
+  source      DefinitionSource
+  legalRef    String?
+  active      Boolean          @default(true)
+
+  instances ObligationInstance[]
+}
+
+model ObligationInstance {
+  id                String           @id @db.Uuid
+  clientId          String           @db.Uuid
+  definitionCode    String
+  periodStart       DateTime         @db.Date
+  periodEnd         DateTime         @db.Date
+  periodLabel       String
+  dueDate           DateTime         @db.Date
+  dueDateOverridden Boolean          @default(false)
+  status            ObligationStatus @default(PENDING)
+  completedAt       DateTime?        @db.Timestamptz(3)
+  reference         String?
+  amountCents       Int?
+  notes             String?
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @db.Timestamptz(3)
+
+  client     Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  definition ObligationDefinition @relation(fields: [definitionCode], references: [code])
+
+  @@unique([clientId, definitionCode, periodStart])
+  @@index([clientId])
+  @@index([status, dueDate])
 }
 
 model AuditEvent {
