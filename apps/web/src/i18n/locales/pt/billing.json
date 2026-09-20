@@ -1,0 +1,49 @@
+{
+  "receivables": {
+    "title": "Recebíveis",
+    "empty": "Sem valores em atraso.",
+    "bucket": {
+      "0-30": "0-30 dias",
+      "31-60": "31-60 dias",
+      "61-90": "61-90 dias",
+      "90+": "Mais de 90 dias"
+    }
+  },
+  "ledger": {
+    "title": "Faturação",
+    "balance": "Saldo",
+    "empty": "Sem movimentos de faturação.",
+    "charge": "Cobrança",
+    "payment": "Pagamento"
+  },
+  "retainerPlan": {
+    "createTitle": "Criar plano de retainer",
+    "renewTitle": "Atualizar valor",
+    "amountCents": { "label": "Valor mensal (cêntimos)" },
+    "newAmountCents": { "label": "Novo valor (cêntimos)" },
+    "periodicity": { "label": "Periodicidade" },
+    "dueDayOfMonth": { "label": "Dia de vencimento" },
+    "validFrom": { "label": "Em vigor desde" },
+    "effectiveFrom": { "label": "Novo valor a partir de" }
+  },
+  "payment": {
+    "recordTitle": "Registar pagamento",
+    "amountCents": { "label": "Valor (cêntimos)" },
+    "receivedOn": { "label": "Data de receção" },
+    "method": { "label": "Método" },
+    "reference": { "label": "Referência" },
+    "propose": "Propor alocação",
+    "confirm": "Confirmar",
+    "excess": "Sobra {{amount}} por alocar (fica como crédito)."
+  },
+  "adHocCharge": {
+    "newTitle": "Nova cobrança avulsa",
+    "description": { "label": "Descrição" },
+    "amountCents": { "label": "Valor (cêntimos)" },
+    "dueOn": { "label": "Data de vencimento" }
+  },
+  "writeOff": {
+    "action": "Perdoar dívida",
+    "reason": { "label": "Motivo" }
+  }
+}
