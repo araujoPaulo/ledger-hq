@@ -67,7 +67,7 @@ describe('ClientLedgerSection', () => {
     await userEvent.type(screen.getByLabelText(/data de receção/i), '2026-09-03')
     await userEvent.click(screen.getByRole('button', { name: /propor alocação/i }))
 
-    expect(await screen.findByText(/9000/)).toBeInTheDocument()
+    expect(await screen.findByText(/charge-1/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /confirmar/i }))
 
     expect(recordPaymentMock).toHaveBeenCalledWith(

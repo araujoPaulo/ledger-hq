@@ -95,7 +95,7 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
             {proposal.proposed.map((allocation) => (
               <li key={allocation.chargeId} className="flex items-center justify-between">
                 <span>{allocation.chargeId}</span>
-                <span>{allocation.amountCents}</span>
+                <span>{formatCurrency(allocation.amountCents, i18n.language as SupportedLocale)}</span>
               </li>
             ))}
           </ul>
