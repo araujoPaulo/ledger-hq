@@ -208,4 +208,61 @@ export class BillingService {
 
     return this.prisma.charge.update({ where: { id }, data: { writtenOffAt: new Date(), writeOffReason: reason } })
   }
+
+  async getReceivables(asOf: Date): Promise<Array<{ clientId: string; clientName: string; outstandingCents: number; oldestDueOn: string; ageingBucket: '0-30' | '31-60' | '61-90' | '90+' }>> {
+    const rows = await this.prisma.$queryRaw<Array<{ clientId: string; clientName: string; outstandingCents: number; oldestDueOn: Date }>>`
+      SELECT
+        c.id AS "clientId",
+        c.name AS "clientName",
+        SUM(b."outstandingCents")::int AS "outstandingCents",
+        MIN(b."dueOn") AS "oldestDueOn"
+      FROM charge_balances b
+      JOIN "Client" c ON c.id = b."clientId"
+      WHERE b."outstandingCents" > 0 AND b.status != 'WRITTEN_OFF'
+      GROUP BY c.id, c.name
+      ORDER BY "oldestDueOn" ASC
+    `
+
+    return rows.map((row) => {
+      const daysOverdue = Math.floor((asOf.getTime() - row.oldestDueOn.getTime()) / (24 * 60 * 60 * 1000))
+      const ageingBucket = daysOverdue > 90 ? '90+' : daysOverdue > 60 ? '61-90' : daysOverdue > 30 ? '31-60' : '0-30'
+      return { clientId: row.clientId, clientName: row.clientName, outstandingCents: row.outstandingCents, oldestDueOn: isoDate(row.oldestDueOn), ageingBucket }
+    })
+  }
+
+  async getCurrentMonth(asOf: Date): Promise<Array<{ clientId: string; clientName: string; paid: boolean; outstandingCents: number }>> {
+    const periodLabel = `${asOf.getUTCFullYear()}-${String(asOf.getUTCMonth() + 1).padStart(2, '0')}`
+
+    const rows = await this.prisma.$queryRaw<Array<{ clientId: string; clientName: string; outstandingCents: number | null }>>`
+      SELECT
+        c.id AS "clientId",
+        c.name AS "clientName",
+        COALESCE(SUM(b."outstandingCents") FILTER (WHERE b."periodLabel" = ${periodLabel}), 0)::int AS "outstandingCents"
+      FROM "RetainerPlan" p
+      JOIN "Client" c ON c.id = p."clientId"
+      LEFT JOIN charge_balances b ON b."clientId" = p."clientId" AND b."periodLabel" = ${periodLabel} AND b.kind = 'RETAINER'
+      WHERE p."validFrom" <= ${asOf} AND (p."validTo" IS NULL OR p."validTo" >= ${asOf})
+      GROUP BY c.id, c.name
+    `
+
+    return rows.map((row) => ({ clientId: row.clientId, clientName: row.clientName, paid: (row.outstandingCents ?? 0) === 0, outstandingCents: row.outstandingCents ?? 0 }))
+  }
+
+  async getClientLedger(clientId: string): Promise<{ entries: Array<{ type: 'CHARGE' | 'PAYMENT'; date: string; description: string; amountCents: number; runningBalanceCents: number }>; balanceCents: number }> {
+    const charges = await this.prisma.charge.findMany({ where: { clientId }, orderBy: { issuedOn: 'asc' } })
+    const payments = await this.prisma.payment.findMany({ where: { clientId }, orderBy: { receivedOn: 'asc' } })
+
+    const events = [
+      ...charges.map((charge) => ({ type: 'CHARGE' as const, date: charge.issuedOn, description: charge.description, amountCents: charge.amountCents })),
+      ...payments.map((payment) => ({ type: 'PAYMENT' as const, date: payment.receivedOn, description: `Pagamento — ${payment.method}`, amountCents: -payment.amountCents })),
+    ].sort((a, b) => a.date.getTime() - b.date.getTime())
+
+    let runningBalanceCents = 0
+    const entries = events.map((event) => {
+      runningBalanceCents += event.amountCents
+      return { type: event.type, date: isoDate(event.date), description: event.description, amountCents: event.amountCents, runningBalanceCents }
+    })
+
+    return { entries, balanceCents: runningBalanceCents }
+  }
 }
