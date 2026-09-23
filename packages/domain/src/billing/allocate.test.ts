@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { proposeAllocation } from './allocate'
 import type { ChargeBalance } from './types'
 
-function openCharge(overrides: Partial<ChargeBalance> & { id: string; dueOn: string; outstandingCents: number }): ChargeBalance {
+// `dueOn` is taken as an ISO string for readability and converted here, so
+// every fixture carries the `Date` the database actually returns.
+function openCharge(overrides: Omit<Partial<ChargeBalance>, 'dueOn'> & { id: string; dueOn: string; outstandingCents: number }): ChargeBalance {
   return {
     clientId: 'c1',
     kind: 'RETAINER',
@@ -11,6 +13,7 @@ function openCharge(overrides: Partial<ChargeBalance> & { id: string; dueOn: str
     allocatedCents: 0,
     status: 'OPEN',
     ...overrides,
+    dueOn: new Date(`${overrides.dueOn}T00:00:00Z`),
   }
 }
 

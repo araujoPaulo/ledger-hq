@@ -35,6 +35,7 @@ export const ERROR_CODES = [
   'billing.allocation_exceeds_payment',
   'billing.allocation_exceeds_charge_balance',
   'billing.plan_overlap',
+  'billing.charge_already_written_off',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

@@ -63,7 +63,10 @@ test('creates a retainer plan, charges a client, records a payment, and sees the
   // the identical propose/confirm allocation path.
   await adHocCharge.getByLabel(/descrição/i).fill('Consultoria extra')
   await adHocCharge.getByLabel(/valor \(cêntimos\)/i).fill('15000')
-  await adHocCharge.getByLabel(/data de vencimento/i).fill('2026-10-01')
+  // Dated in the past on purpose: receivables is an ageing list of charges
+  // that are already due, so a future-dated charge would (correctly) not
+  // appear there and the assertion below would prove nothing.
+  await adHocCharge.getByLabel(/data de vencimento/i).fill('2026-09-01')
   await adHocCharge.getByRole('button', { name: /^criar$/i }).click()
   await expect(ledger.getByText(/consultoria extra/i)).toBeVisible()
 
@@ -76,7 +79,7 @@ test('creates a retainer plan, charges a client, records a payment, and sees the
   await page.getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: 'Padaria Central Faturação, Lda.' }).click()
   await payment.getByLabel(/valor \(cêntimos\)/i).fill('15000')
-  await payment.getByLabel(/data de receção/i).fill('2026-10-05')
+  await payment.getByLabel(/data de receção/i).fill('2026-09-05')
   await payment.getByRole('button', { name: /propor alocação/i }).click()
 
   // The proposal is one row — the single open charge — for the full amount.

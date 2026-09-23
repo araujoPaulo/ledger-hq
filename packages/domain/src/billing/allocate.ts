@@ -9,7 +9,7 @@ import type { ChargeBalance, ProposedAllocation } from './types'
  * accountant redistribute it first.
  */
 export function proposeAllocation(paymentAmountCents: number, openCharges: ChargeBalance[]): ProposedAllocation[] {
-  const sorted = [...openCharges].filter((charge) => charge.outstandingCents > 0).sort((a, b) => a.dueOn.localeCompare(b.dueOn))
+  const sorted = openCharges.filter((charge) => charge.outstandingCents > 0).sort((a, b) => a.dueOn.getTime() - b.dueOn.getTime())
 
   const allocations: ProposedAllocation[] = []
   let remaining = paymentAmountCents

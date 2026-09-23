@@ -227,10 +227,15 @@ describe('BillingController', () => {
     })
 
     const proposal = await post('/api/v1/billing/payments/propose-allocation', { clientId, amountCents: 9000 })
-    expect(proposal.body.proposed).toEqual([{ chargeId: charge.id, amountCents: 9000 }])
+    // The proposal row carries the charge's description/period/due date for
+    // the operator to check; only the allocation half goes back on the wire.
+    expect(proposal.body.proposed).toEqual([
+      { chargeId: charge.id, amountCents: 9000, description: 'X', periodLabel: null, dueOn: '2026-01-08' },
+    ])
 
     const payment = await post('/api/v1/billing/payments', {
-      clientId, amountCents: 9000, receivedOn: '2026-01-10', method: 'TRANSFER', allocations: proposal.body.proposed,
+      clientId, amountCents: 9000, receivedOn: '2026-01-10', method: 'TRANSFER',
+      allocations: proposal.body.proposed.map((row: { chargeId: string; amountCents: number }) => ({ chargeId: row.chargeId, amountCents: row.amountCents })),
     })
     expect(payment.status).toBe(201)
   })
@@ -313,5 +318,129 @@ describe('GET /billing/clients/:clientId/retainer-plan', () => {
 
     expect(response.status).toBe(200)
     expect(response.body).toBeNull()
+  })
+})
+
+// Regressions from the Phase 3 whole-branch review. Each one is a money
+// defect that the phase's original tests missed because they only ever
+// exercised a single open charge, a single plan, or a MONTHLY periodicity.
+describe('billing regressions', () => {
+  it('proposes an allocation across two open charges, oldest first', async () => {
+    const clientId = await createClient('600000030')
+    const february = await prisma.charge.create({
+      data: { id: uuidv7(), clientId, kind: 'EXTRA', description: 'Fevereiro', amountCents: 9000, issuedOn: new Date('2026-02-01T00:00:00Z'), dueOn: new Date('2026-02-08T00:00:00Z') },
+    })
+    const january = await prisma.charge.create({
+      data: { id: uuidv7(), clientId, kind: 'EXTRA', description: 'Janeiro', amountCents: 9000, issuedOn: new Date('2026-01-01T00:00:00Z'), dueOn: new Date('2026-01-08T00:00:00Z') },
+    })
+
+    const response = await post('/api/v1/billing/payments/propose-allocation', { clientId, amountCents: 18000 })
+
+    expect(response.status).toBe(201)
+    expect(response.body.proposed).toMatchObject([
+      { chargeId: january.id, amountCents: 9000, description: 'Janeiro' },
+      { chargeId: february.id, amountCents: 9000, description: 'Fevereiro' },
+    ])
+  })
+
+  it('never proposes, nor accepts, an allocation against a written-off charge', async () => {
+    const clientId = await createClient('600000031')
+    const writtenOff = await prisma.charge.create({
+      data: { id: uuidv7(), clientId, kind: 'EXTRA', description: 'Incobrável', amountCents: 5000, issuedOn: new Date('2026-01-01T00:00:00Z'), dueOn: new Date('2026-01-08T00:00:00Z'), writtenOffAt: new Date('2026-02-01T00:00:00Z'), writeOffReason: 'Insolvente' },
+    })
+    const live = await prisma.charge.create({
+      data: { id: uuidv7(), clientId, kind: 'EXTRA', description: 'Março', amountCents: 9000, issuedOn: new Date('2026-03-01T00:00:00Z'), dueOn: new Date('2026-03-08T00:00:00Z') },
+    })
+
+    const proposal = await post('/api/v1/billing/payments/propose-allocation', { clientId, amountCents: 9000 })
+    expect(proposal.body.proposed).toMatchObject([{ chargeId: live.id, amountCents: 9000 }])
+
+    const payment = await post('/api/v1/billing/payments', {
+      clientId, amountCents: 5000, receivedOn: '2026-03-10', method: 'TRANSFER',
+      allocations: [{ chargeId: writtenOff.id, amountCents: 5000 }],
+    })
+    expect(payment.status).toBe(422)
+    expect(payment.body.error.code).toBe('billing.allocation_exceeds_charge_balance')
+  })
+
+  it("refuses to allocate one client's payment to another client's charge", async () => {
+    const payer = await createClient('600000032', 'Payer')
+    const stranger = await createClient('600000033', 'Stranger')
+    const strangerCharge = await prisma.charge.create({
+      data: { id: uuidv7(), clientId: stranger, kind: 'EXTRA', description: 'Alheia', amountCents: 9000, issuedOn: new Date('2026-01-01T00:00:00Z'), dueOn: new Date('2026-01-08T00:00:00Z') },
+    })
+
+    const response = await post('/api/v1/billing/payments', {
+      clientId: payer, amountCents: 9000, receivedOn: '2026-01-10', method: 'TRANSFER',
+      allocations: [{ chargeId: strangerCharge.id, amountCents: 9000 }],
+    })
+
+    expect(response.status).toBe(422)
+    const allocations = await prisma.paymentAllocation.findMany({ where: { chargeId: strangerCharge.id } })
+    expect(allocations).toHaveLength(0)
+  })
+
+  it('does not regenerate a period the previous plan already charged', async () => {
+    const clientId = await createClient('600000034')
+    const closed = await prisma.retainerPlan.create({
+      data: { id: uuidv7(), clientId, amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: new Date('2026-01-01T00:00:00Z'), validTo: new Date('2026-02-28T00:00:00Z') },
+    })
+    // March was generated by the daily cron while the old plan was still in
+    // force, before the operator raised the fee effective 1 March.
+    await prisma.charge.create({
+      data: { id: uuidv7(), clientId, planId: closed.id, kind: 'RETAINER', description: 'Retainer — 2026-03', periodLabel: '2026-03', amountCents: 9000, issuedOn: new Date('2026-03-01T00:00:00Z'), dueOn: new Date('2026-03-08T00:00:00Z') },
+    })
+    await prisma.retainerPlan.create({
+      data: { id: uuidv7(), clientId, amountCents: 12000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: new Date('2026-03-01T00:00:00Z'), validTo: null },
+    })
+
+    await billing.generateCharges({ asOf: new Date('2026-03-15T00:00:00Z'), clientId }, false)
+
+    const march = await prisma.charge.findMany({ where: { clientId, periodLabel: '2026-03' } })
+    expect(march).toHaveLength(1)
+    expect(march[0]!.amountCents).toBe(9000)
+  })
+
+  it('reports a quarterly plan whose current-period charge is unpaid as unpaid', async () => {
+    const clientId = await createClient('600000035', 'Quarterly Client')
+    const asOf = new Date()
+    const quarterLabel = `${asOf.getUTCFullYear()}-Q${Math.floor(asOf.getUTCMonth() / 3) + 1}`
+    const plan = await prisma.retainerPlan.create({
+      data: { id: uuidv7(), clientId, amountCents: 30000, periodicity: 'QUARTERLY', dueDayOfMonth: 8, validFrom: new Date('2026-01-01T00:00:00Z'), validTo: null },
+    })
+    await prisma.charge.create({
+      data: { id: uuidv7(), clientId, planId: plan.id, kind: 'RETAINER', description: `Retainer — ${quarterLabel}`, periodLabel: quarterLabel, amountCents: 30000, issuedOn: asOf, dueOn: asOf },
+    })
+
+    const response = await get('/api/v1/billing/current-month')
+
+    const row = response.body.find((item: { clientId: string }) => item.clientId === clientId)
+    expect(row).toMatchObject({ paid: false, outstandingCents: 30000 })
+  })
+
+  it('leaves a written-off charge out of the client ledger balance', async () => {
+    const clientId = await createClient('600000036')
+    await prisma.charge.create({
+      data: { id: uuidv7(), clientId, kind: 'EXTRA', description: 'Incobrável', amountCents: 50000, issuedOn: new Date('2026-01-01T00:00:00Z'), dueOn: new Date('2026-01-08T00:00:00Z'), writtenOffAt: new Date('2026-02-01T00:00:00Z'), writeOffReason: 'Insolvente' },
+    })
+
+    const response = await get(`/api/v1/billing/clients/${clientId}/ledger`)
+
+    // The charge stays in the history — a write-off "leaves receivables
+    // without leaving history" (master spec §8.2) — but it must not still
+    // be counted as owed, or this screen contradicts the receivables one.
+    expect(response.body.balanceCents).toBe(0)
+    expect(response.body.entries.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('leaves a charge that is not yet due out of receivables', async () => {
+    const clientId = await createClient('600000037', 'Not Yet Due')
+    await prisma.charge.create({
+      data: { id: uuidv7(), clientId, kind: 'EXTRA', description: 'Futura', amountCents: 9000, issuedOn: new Date(), dueOn: new Date('2099-01-01T00:00:00Z') },
+    })
+
+    const response = await get('/api/v1/billing/receivables')
+
+    expect(response.body.find((row: { clientId: string }) => row.clientId === clientId)).toBeUndefined()
   })
 })

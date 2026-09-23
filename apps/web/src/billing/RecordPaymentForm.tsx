@@ -4,10 +4,10 @@ import { useTranslation } from 'react-i18next'
 import { PAYMENT_METHOD_VALUES } from '@ledger-hq/domain'
 import type { PaymentMethod } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
-import { formatCurrency } from '../i18n/format'
+import { formatCurrency, formatDate } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
 import { proposeAllocation, recordPayment } from './api'
-import type { ProposedAllocation } from './api'
+import type { ProposedAllocationRow } from './api'
 
 type Props = { clientId: string; onRecorded: () => void }
 
@@ -17,7 +17,13 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
   const [amountCents, setAmountCents] = useState('')
   const [receivedOn, setReceivedOn] = useState('')
   const [method, setMethod] = useState<PaymentMethod>('TRANSFER')
-  const [proposal, setProposal] = useState<{ proposed: ProposedAllocation[]; excessCents: number } | null>(null)
+  const [proposal, setProposal] = useState<{ proposed: ProposedAllocationRow[]; excessCents: number } | null>(null)
+
+  // A proposal is only valid for the amount it was built from. Editing the
+  // amount (or the date) after proposing must retract it, or Confirmar would
+  // post the new amount against the old allocations — recording, say, a
+  // 150,00 € payment with 15,00 € allocated, silently.
+  const resetProposal = () => setProposal(null)
 
   const propose = useMutation({
     mutationFn: () => proposeAllocation(clientId, Number(amountCents)),
@@ -31,7 +37,10 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
         amountCents: Number(amountCents),
         receivedOn,
         method,
-        allocations: proposal?.proposed ?? [],
+        // Only the allocation half goes back on the wire; the description
+        // and period the proposal carries are for the operator, and the
+        // endpoint's schema is strict.
+        allocations: (proposal?.proposed ?? []).map((row) => ({ chargeId: row.chargeId, amountCents: row.amountCents })),
       }),
     onSuccess: () => {
       setAmountCents('')
@@ -54,7 +63,10 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
           required
           min={1}
           value={amountCents}
-          onChange={(event) => setAmountCents(event.target.value)}
+          onChange={(event) => {
+            setAmountCents(event.target.value)
+            resetProposal()
+          }}
           className="rounded border border-slate-300 px-2 py-1"
         />
       </label>
@@ -65,7 +77,10 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
           type="date"
           required
           value={receivedOn}
-          onChange={(event) => setReceivedOn(event.target.value)}
+          onChange={(event) => {
+            setReceivedOn(event.target.value)
+            resetProposal()
+          }}
           className="rounded border border-slate-300 px-2 py-1"
         />
       </label>
@@ -97,7 +112,10 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
           <ul className="flex flex-col gap-1 rounded border border-slate-200 p-2 text-sm">
             {proposal.proposed.map((allocation) => (
               <li key={allocation.chargeId} className="flex items-center justify-between">
-                <span>{allocation.chargeId}</span>
+                <span>
+                  {allocation.description}
+                  {allocation.dueOn !== null && <span className="text-slate-500"> · {formatDate(allocation.dueOn, i18n.language as SupportedLocale)}</span>}
+                </span>
                 <span>{formatCurrency(allocation.amountCents, i18n.language as SupportedLocale)}</span>
               </li>
             ))}

@@ -10,6 +10,24 @@ import type { Charge, RetainerPlan } from '../generated/prisma/client.js'
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
+/** A proposal row: the allocation plus enough of the charge to recognise it. */
+export type ProposedAllocationRow = ProposedAllocation & {
+  description: string
+  periodLabel: string | null
+  dueOn: string | null
+}
+
+export type LedgerEntry = {
+  type: 'CHARGE' | 'PAYMENT' | 'WRITE_OFF'
+  date: string
+  description: string
+  amountCents: number
+  runningBalanceCents: number
+  chargeId: string | null
+  /** True on a written-off charge and on its own write-off entry. */
+  writtenOff: boolean
+}
+
 export type GenerateChargesResult = {
   toCreate: Array<{ clientId: string; planId: string; periodLabel: string; amountCents: number; dueOn: string }>
 }
@@ -43,13 +61,20 @@ export class BillingService {
         where: { clientId: client.id, validFrom: { lte: input.asOf }, OR: [{ validTo: null }, { validTo: { gte: input.asOf } }] },
       })
 
+      // Scoped to the client, NOT to the plan: a fee change mid-period creates
+      // a successor plan whose own `validFrom` falls inside a period the
+      // closed plan already charged, and the unique index is per-`planId`, so
+      // a plan-scoped lookup would happily bill that period a second time
+      // under the new plan's id and amount.
+      const existing = await this.prisma.charge.findMany({ where: { clientId: client.id, kind: 'RETAINER' } })
+      const existingLabels = new Set(existing.map((charge) => charge.periodLabel))
+
       for (const plan of plans) {
         const periods = chargePeriodsSince(plan.periodicity, plan.validFrom, input.asOf)
-        const existing = await this.prisma.charge.findMany({ where: { clientId: client.id, planId: plan.id } })
-        const existingLabels = new Set(existing.map((charge) => charge.periodLabel))
 
         for (const period of periods) {
           if (existingLabels.has(period.label)) continue
+          existingLabels.add(period.label)
           toCreate.push({ clientId: client.id, planId: plan.id, period, amountCents: plan.amountCents, dueOn: chargeDueDate(period.start, plan.dueDayOfMonth) })
         }
       }
@@ -142,13 +167,37 @@ export class BillingService {
     return this.prisma.retainerPlan.findFirst({ where: { clientId, validTo: null } })
   }
 
-  async proposeAllocationForClient(clientId: string, amountCents: number): Promise<{ proposed: ProposedAllocation[]; excessCents: number }> {
-    const openCharges = await this.prisma.$queryRaw<ChargeBalance[]>`
-      SELECT * FROM charge_balances WHERE "clientId" = ${clientId}::uuid AND "outstandingCents" > 0 ORDER BY "dueOn" ASC
+  async proposeAllocationForClient(clientId: string, amountCents: number): Promise<{ proposed: ProposedAllocationRow[]; excessCents: number }> {
+    // `charge_balances` carries no `description` (it is derived state over
+    // amounts, not a copy of the charge), so join the charge back in for the
+    // human-readable half of each proposal row.
+    const openCharges = await this.prisma.$queryRaw<Array<ChargeBalance & { description: string }>>`
+      SELECT b.*, c.description
+      FROM charge_balances b
+      JOIN "Charge" c ON c.id = b.id
+      WHERE b."clientId" = ${clientId}::uuid AND b."outstandingCents" > 0 AND b.status != 'WRITTEN_OFF'
+      ORDER BY b."dueOn" ASC
     `
     const proposed = proposeAllocation(amountCents, openCharges)
     const allocatedCents = proposed.reduce((sum, allocation) => sum + allocation.amountCents, 0)
-    return { proposed, excessCents: amountCents - allocatedCents }
+
+    // Design doc §3.2: the proposal is the one place FIFO is reviewed rather
+    // than applied automatically ("only the accountant knows"), so each row
+    // carries what identifies the charge to a human. The bare `chargeId` the
+    // allocator returns is a UUID, which tells the operator nothing.
+    const byId = new Map(openCharges.map((charge) => [charge.id, charge]))
+    const rows = proposed.map((allocation) => {
+      const charge = byId.get(allocation.chargeId)
+      return {
+        chargeId: allocation.chargeId,
+        amountCents: allocation.amountCents,
+        description: charge?.description ?? '',
+        periodLabel: charge?.periodLabel ?? null,
+        dueOn: charge ? isoDate(charge.dueOn) : null,
+      }
+    })
+
+    return { proposed: rows, excessCents: amountCents - allocatedCents }
   }
 
   /**
@@ -177,8 +226,24 @@ export class BillingService {
       })
 
       for (const allocation of input.allocations) {
+        // Lock the charge row before reading its derived balance. The lock
+        // cannot be taken on `charge_balances` itself (Postgres rejects
+        // `FOR UPDATE` on a grouped query), so it goes on the underlying
+        // `Charge`, which is enough to serialise two concurrent payments
+        // against the same charge and stop them both passing the check
+        // below on the same stale balance.
+        await tx.$queryRaw`SELECT id FROM "Charge" WHERE id = ${allocation.chargeId}::uuid FOR UPDATE`
+
+        // Scoped to the paying client, and never a written-off charge:
+        // without the `clientId` bound, a stale proposal held across a
+        // client navigation could settle another client's debt with this
+        // client's money, and the write-off filter keeps FIFO from
+        // steering payments onto debt the operator already declared dead.
         const [balance] = await tx.$queryRaw<Array<{ outstandingCents: number }>>`
-          SELECT "outstandingCents" FROM charge_balances WHERE id = ${allocation.chargeId}::uuid
+          SELECT "outstandingCents" FROM charge_balances
+          WHERE id = ${allocation.chargeId}::uuid
+            AND "clientId" = ${input.clientId}::uuid
+            AND status != 'WRITTEN_OFF'
         `
         if (!balance || allocation.amountCents > balance.outstandingCents) {
           throw new AppError('billing.allocation_exceeds_charge_balance', { chargeId: allocation.chargeId }, 422)
@@ -209,6 +274,9 @@ export class BillingService {
   async writeOffCharge(id: string, reason: string): Promise<Charge> {
     const charge = await this.prisma.charge.findUnique({ where: { id } })
     if (!charge) throw new AppError('common.not_found', {}, 404)
+    // Re-stamping would move `writtenOffAt` and overwrite the original
+    // reason, silently rewriting why a debt was forgiven.
+    if (charge.writtenOffAt !== null) throw new AppError('billing.charge_already_written_off', {}, 409)
 
     return this.prisma.charge.update({ where: { id }, data: { writtenOffAt: new Date(), writeOffReason: reason } })
   }
@@ -222,7 +290,7 @@ export class BillingService {
         MIN(b."dueOn") AS "oldestDueOn"
       FROM charge_balances b
       JOIN "Client" c ON c.id = b."clientId"
-      WHERE b."outstandingCents" > 0 AND b.status != 'WRITTEN_OFF'
+      WHERE b."outstandingCents" > 0 AND b.status != 'WRITTEN_OFF' AND b."dueOn" <= ${asOf}
       GROUP BY c.id, c.name
       ORDER BY "oldestDueOn" ASC
     `
@@ -234,37 +302,109 @@ export class BillingService {
     })
   }
 
+  /**
+   * "Who has paid for the period they are currently being billed for."
+   *
+   * The period label cannot be derived from `asOf` alone: `labelFor` writes
+   * `2026-Q1` for a QUARTERLY plan and `2026` for an ANNUAL one, so a
+   * hardcoded `YYYY-MM` filter never matched those plans and reported every
+   * non-monthly client as paid, whatever they owed. Each plan's own current
+   * period comes from the same `chargePeriodsSince` the generator uses, so
+   * this view and the charges it reads about can never disagree on what the
+   * current period is called.
+   */
   async getCurrentMonth(asOf: Date): Promise<Array<{ clientId: string; clientName: string; paid: boolean; outstandingCents: number }>> {
-    const periodLabel = `${asOf.getUTCFullYear()}-${String(asOf.getUTCMonth() + 1).padStart(2, '0')}`
+    // `validFrom`/`validTo` are DATE columns; comparing them against a
+    // timestamp would drop a plan on its own final day, so compare dates.
+    const asOfDate = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate()))
 
-    const rows = await this.prisma.$queryRaw<Array<{ clientId: string; clientName: string; outstandingCents: number | null }>>`
-      SELECT
-        c.id AS "clientId",
-        c.name AS "clientName",
-        COALESCE(SUM(b."outstandingCents") FILTER (WHERE b."periodLabel" = ${periodLabel}), 0)::int AS "outstandingCents"
-      FROM "RetainerPlan" p
-      JOIN "Client" c ON c.id = p."clientId"
-      LEFT JOIN charge_balances b ON b."clientId" = p."clientId" AND b."periodLabel" = ${periodLabel} AND b.kind = 'RETAINER'
-      WHERE p."validFrom" <= ${asOf} AND (p."validTo" IS NULL OR p."validTo" >= ${asOf})
-      GROUP BY c.id, c.name
+    const plans = await this.prisma.retainerPlan.findMany({
+      where: {
+        validFrom: { lte: asOfDate },
+        OR: [{ validTo: null }, { validTo: { gte: asOfDate } }],
+        client: { archivedAt: null },
+      },
+      include: { client: { select: { id: true, name: true } } },
+    })
+    if (plans.length === 0) return []
+
+    const balances = await this.prisma.$queryRaw<Array<{ clientId: string; periodLabel: string | null; outstandingCents: number }>>`
+      SELECT "clientId", "periodLabel", SUM("outstandingCents")::int AS "outstandingCents"
+      FROM charge_balances
+      WHERE kind = 'RETAINER' AND status != 'WRITTEN_OFF'
+      GROUP BY "clientId", "periodLabel"
     `
+    const outstandingByClientPeriod = new Map(balances.map((row) => [`${row.clientId}|${row.periodLabel}`, row.outstandingCents]))
 
-    return rows.map((row) => ({ clientId: row.clientId, clientName: row.clientName, paid: (row.outstandingCents ?? 0) === 0, outstandingCents: row.outstandingCents ?? 0 }))
+    return plans.map((plan) => {
+      const currentPeriod = chargePeriodsSince(plan.periodicity, plan.validFrom, asOfDate).at(-1)
+      const outstandingCents = currentPeriod ? (outstandingByClientPeriod.get(`${plan.clientId}|${currentPeriod.label}`) ?? 0) : 0
+      return { clientId: plan.clientId, clientName: plan.client.name, paid: outstandingCents === 0, outstandingCents }
+    })
   }
 
-  async getClientLedger(clientId: string): Promise<{ entries: Array<{ type: 'CHARGE' | 'PAYMENT'; date: string; description: string; amountCents: number; runningBalanceCents: number; chargeId: string | null }>; balanceCents: number }> {
+  /**
+   * A write-off "leaves receivables without leaving history" (master spec
+   * §8.2), so the charge stays on this ledger and a third entry type cancels
+   * whatever was still outstanding on it. Without that entry the balance here
+   * still counted forgiven debt as owed, and the client's own page contradicted
+   * the receivables list, which has always excluded written-off charges.
+   */
+  async getClientLedger(clientId: string): Promise<{ entries: LedgerEntry[]; balanceCents: number }> {
     const charges = await this.prisma.charge.findMany({ where: { clientId }, orderBy: { issuedOn: 'asc' } })
     const payments = await this.prisma.payment.findMany({ where: { clientId }, orderBy: { receivedOn: 'asc' } })
+    const allocations = await this.prisma.paymentAllocation.groupBy({
+      by: ['chargeId'],
+      where: { charge: { clientId } },
+      _sum: { amountCents: true },
+    })
+    const allocatedByCharge = new Map(allocations.map((row) => [row.chargeId, row._sum.amountCents ?? 0]))
+
+    const writeOffs = charges
+      .filter((charge) => charge.writtenOffAt !== null)
+      .map((charge) => ({
+        type: 'WRITE_OFF' as const,
+        date: charge.writtenOffAt!,
+        description: charge.writeOffReason ?? '',
+        // Only what was still open is forgiven — a partially paid charge that
+        // is later written off must not credit back the part already paid.
+        amountCents: -(charge.amountCents - (allocatedByCharge.get(charge.id) ?? 0)),
+        chargeId: charge.id,
+        writtenOff: true,
+      }))
 
     const events = [
-      ...charges.map((charge) => ({ type: 'CHARGE' as const, date: charge.issuedOn, description: charge.description, amountCents: charge.amountCents, chargeId: charge.id })),
-      ...payments.map((payment) => ({ type: 'PAYMENT' as const, date: payment.receivedOn, description: `Pagamento — ${payment.method}`, amountCents: -payment.amountCents, chargeId: null })),
+      ...charges.map((charge) => ({
+        type: 'CHARGE' as const,
+        date: charge.issuedOn,
+        description: charge.description,
+        amountCents: charge.amountCents,
+        chargeId: charge.id,
+        writtenOff: charge.writtenOffAt !== null,
+      })),
+      ...payments.map((payment) => ({
+        type: 'PAYMENT' as const,
+        date: payment.receivedOn,
+        description: `Pagamento — ${payment.method}`,
+        amountCents: -payment.amountCents,
+        chargeId: null,
+        writtenOff: false,
+      })),
+      ...writeOffs,
     ].sort((a, b) => a.date.getTime() - b.date.getTime())
 
     let runningBalanceCents = 0
     const entries = events.map((event) => {
       runningBalanceCents += event.amountCents
-      return { type: event.type, date: isoDate(event.date), description: event.description, amountCents: event.amountCents, runningBalanceCents, chargeId: event.chargeId }
+      return {
+        type: event.type,
+        date: isoDate(event.date),
+        description: event.description,
+        amountCents: event.amountCents,
+        runningBalanceCents,
+        chargeId: event.chargeId,
+        writtenOff: event.writtenOff,
+      }
     })
 
     return { entries, balanceCents: runningBalanceCents }

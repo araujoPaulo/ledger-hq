@@ -10,7 +10,16 @@ export type ReceivablesRow = {
 
 export type CurrentMonthRow = { clientId: string; clientName: string; paid: boolean; outstandingCents: number }
 
-export type LedgerEntry = { type: 'CHARGE' | 'PAYMENT'; date: string; description: string; amountCents: number; runningBalanceCents: number; chargeId: string | null }
+export type LedgerEntry = {
+  type: 'CHARGE' | 'PAYMENT' | 'WRITE_OFF'
+  date: string
+  description: string
+  amountCents: number
+  runningBalanceCents: number
+  chargeId: string | null
+  /** True on a written-off charge and on its own write-off entry. */
+  writtenOff: boolean
+}
 
 export type ClientLedger = { entries: LedgerEntry[]; balanceCents: number }
 
@@ -29,6 +38,13 @@ export type RetainerPlan = {
 }
 
 export type ProposedAllocation = { chargeId: string; amountCents: number }
+
+/** What the propose endpoint returns: the allocation plus enough of the charge to recognise it. */
+export type ProposedAllocationRow = ProposedAllocation & {
+  description: string
+  periodLabel: string | null
+  dueOn: string | null
+}
 
 export type Charge = {
   id: string
@@ -58,7 +74,7 @@ export function generateCharges(input: { asOf?: string; clientId?: string }, dry
   return apiFetch(`/billing/generate-charges?dryRun=${dryRun}`, { method: 'POST', body: input })
 }
 
-export function proposeAllocation(clientId: string, amountCents: number): Promise<{ proposed: ProposedAllocation[]; excessCents: number }> {
+export function proposeAllocation(clientId: string, amountCents: number): Promise<{ proposed: ProposedAllocationRow[]; excessCents: number }> {
   return apiFetch('/billing/payments/propose-allocation', { method: 'POST', body: { clientId, amountCents } })
 }
 

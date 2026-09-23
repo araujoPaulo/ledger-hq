@@ -72,7 +72,7 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
                   <span className={entry.amountCents < 0 ? 'text-green-700' : ''}>
                     {formatCurrency(entry.amountCents, i18n.language as SupportedLocale)}
                   </span>
-                  {entry.type === 'CHARGE' && entry.chargeId !== null && (
+                  {entry.type === 'CHARGE' && entry.chargeId !== null && !entry.writtenOff && (
                     writingOffChargeId === entry.chargeId ? (
                       <span className="flex items-center gap-1">
                         <input

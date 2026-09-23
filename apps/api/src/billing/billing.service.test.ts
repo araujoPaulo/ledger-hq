@@ -199,26 +199,32 @@ describe('BillingService#renewRetainerPlan', () => {
 describe('BillingService#proposeAllocationForClient', () => {
   it('reads open charges from charge_balances and proposes FIFO', async () => {
     const openCharges = [
-      { id: 'a', clientId: 'c1', kind: 'RETAINER', periodLabel: '2026-01', dueOn: '2026-01-08', amountCents: 9000, allocatedCents: 0, outstandingCents: 9000, status: 'OPEN' },
+      { id: 'a', clientId: 'c1', kind: 'RETAINER', periodLabel: '2026-01', dueOn: new Date('2026-01-08T00:00:00Z'), amountCents: 9000, allocatedCents: 0, outstandingCents: 9000, status: 'OPEN', description: 'Retainer — 2026-01' },
     ]
     const prisma = fakePrisma({ $queryRaw: vi.fn().mockResolvedValue(openCharges) })
     const service = new BillingService(prisma, fakeClientsService(client))
 
     const result = await service.proposeAllocationForClient('c1', 9000)
 
-    expect(result).toEqual({ proposed: [{ chargeId: 'a', amountCents: 9000 }], excessCents: 0 })
+    expect(result).toEqual({
+      proposed: [{ chargeId: 'a', amountCents: 9000, description: 'Retainer — 2026-01', periodLabel: '2026-01', dueOn: '2026-01-08' }],
+      excessCents: 0,
+    })
   })
 
   it('reports the unallocated remainder as excess', async () => {
     const openCharges = [
-      { id: 'a', clientId: 'c1', kind: 'RETAINER', periodLabel: '2026-01', dueOn: '2026-01-08', amountCents: 9000, allocatedCents: 0, outstandingCents: 9000, status: 'OPEN' },
+      { id: 'a', clientId: 'c1', kind: 'RETAINER', periodLabel: '2026-01', dueOn: new Date('2026-01-08T00:00:00Z'), amountCents: 9000, allocatedCents: 0, outstandingCents: 9000, status: 'OPEN', description: 'Retainer — 2026-01' },
     ]
     const prisma = fakePrisma({ $queryRaw: vi.fn().mockResolvedValue(openCharges) })
     const service = new BillingService(prisma, fakeClientsService(client))
 
     const result = await service.proposeAllocationForClient('c1', 15000)
 
-    expect(result).toEqual({ proposed: [{ chargeId: 'a', amountCents: 9000 }], excessCents: 6000 })
+    expect(result).toEqual({
+      proposed: [{ chargeId: 'a', amountCents: 9000, description: 'Retainer — 2026-01', periodLabel: '2026-01', dueOn: '2026-01-08' }],
+      excessCents: 6000,
+    })
   })
 })
 
@@ -306,7 +312,7 @@ describe('BillingService#writeOffCharge', () => {
   it('sets writtenOffAt and the reason', async () => {
     const prisma = fakePrisma({
       charge: {
-        findUnique: vi.fn().mockResolvedValue({ id: 'a' }),
+        findUnique: vi.fn().mockResolvedValue({ id: 'a', writtenOffAt: null }),
         update: vi.fn().mockImplementation(({ data }: { data: unknown }) => Promise.resolve({ id: 'a', ...(data as object) })),
       },
     })
@@ -315,6 +321,15 @@ describe('BillingService#writeOffCharge', () => {
     const result = await service.writeOffCharge('a', 'Cliente insolvente')
 
     expect(result).toMatchObject({ writeOffReason: 'Cliente insolvente', writtenOffAt: expect.any(Date) })
+  })
+
+  it('refuses to write off a charge that is already written off', async () => {
+    const prisma = fakePrisma({
+      charge: { findUnique: vi.fn().mockResolvedValue({ id: 'a', writtenOffAt: new Date('2026-02-01T00:00:00Z'), writeOffReason: 'Insolvente' }) },
+    })
+    const service = new BillingService(prisma, fakeClientsService(client))
+
+    await expect(service.writeOffCharge('a', 'outro motivo')).rejects.toThrow('billing.charge_already_written_off')
   })
 
   it('404s on an unknown charge', async () => {

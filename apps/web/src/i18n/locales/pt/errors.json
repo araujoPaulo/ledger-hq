@@ -51,6 +51,7 @@
     "write_off_reason_required": "Indica o motivo do perdão da dívida.",
     "allocation_exceeds_payment": "A soma das alocações excede o valor do pagamento.",
     "allocation_exceeds_charge_balance": "O valor alocado excede o saldo em aberto desta cobrança.",
-    "plan_overlap": "Já existe um plano de retainer em vigor para este cliente."
+    "plan_overlap": "Já existe um plano de retainer em vigor para este cliente.",
+    "charge_already_written_off": "Esta cobrança já foi perdoada."
   }
 }
