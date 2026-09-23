@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { PAYMENT_METHOD_VALUES } from '@ledger-hq/domain'
@@ -13,6 +13,7 @@ type Props = { clientId: string; onRecorded: () => void }
 
 export function RecordPaymentForm({ clientId, onRecorded }: Props) {
   const { t, i18n } = useTranslation(['billing', 'domain', 'common'])
+  const titleId = useId()
   const [amountCents, setAmountCents] = useState('')
   const [receivedOn, setReceivedOn] = useState('')
   const [method, setMethod] = useState<PaymentMethod>('TRANSFER')
@@ -41,8 +42,10 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
   })
 
   return (
-    <div className="flex max-w-sm flex-col gap-3">
-      <h3 className="font-medium">{t('billing:payment.recordTitle')}</h3>
+    <section aria-labelledby={titleId} className="flex max-w-sm flex-col gap-3">
+      <h3 id={titleId} className="font-medium">
+        {t('billing:payment.recordTitle')}
+      </h3>
 
       <label className="flex flex-col gap-1 text-sm">
         {t('billing:payment.amountCents.label')}
@@ -115,6 +118,6 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
           </button>
         </>
       )}
-    </div>
+    </section>
   )
 }

@@ -5,6 +5,7 @@ import { ErrorMessage } from '../shell/ErrorMessage'
 import { formatCurrency } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
 import { getClientLedger, getCurrentRetainerPlan, writeOffCharge } from './api'
+import { AddAdHocChargeForm } from './AddAdHocChargeForm'
 import { RecordPaymentForm } from './RecordPaymentForm'
 import { RetainerPlanForm } from './RetainerPlanForm'
 
@@ -110,6 +111,8 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
       <ErrorMessage error={writeOff.error} />
 
       <RecordPaymentForm clientId={clientId} onRecorded={invalidate} />
+
+      <AddAdHocChargeForm clientId={clientId} onCreated={invalidate} />
     </section>
   )
 }
