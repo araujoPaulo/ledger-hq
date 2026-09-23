@@ -57,6 +57,17 @@ a new signal — nothing in this schema currently distinguishes "plan closed
 before this period" from "plan never existed for this period". Nothing in
 this phase's scope needs it; worth remembering if it is ever raised.
 
+**Known gap, deferred to Phase 4: client credit is not consumed.** Master
+spec §8.2 says unallocated payment excess "functions as client credit,
+consumed automatically in the next proposal". The excess is recorded — it
+stays unallocated on the `Payment` row — but nothing ever spends it: the
+proposal reads `charge_balances` only, so a client who pays a quarter in
+advance still shows the full next charge as outstanding. Closing this means
+changing the allocation contract, because `ProposedAllocation` carries only
+a `chargeId` and an amount, with no way to say which earlier payment an
+allocation is drawn from. The money is not lost, only invisible, and the
+operator can still allocate it by hand.
+
 The `::int` discipline is a convention, not a constraint the database
 enforces: a new raw-SQL aggregate that forgets the cast fails at
 serialization time, in the response, not at migration time. The
