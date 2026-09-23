@@ -65,16 +65,21 @@ test('sets up a company, generates obligations, sees them on the dashboard, and 
   // Back on the client page, adjust a different obligation's due date.
   await page.getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: 'Padaria Central Obrigações, Lda.' }).click()
-  await page.getByRole('button', { name: /^editar$/i }).first().click()
+
+  // Everything below is scoped to this section. The client page also carries
+  // ClientLedgerSection, whose own "Editar"/"Guardar" controls render
+  // immediately while this section is still waiting on its obligations
+  // query — so a page-wide `.first()`/`.last()` resolves to the billing
+  // form instead, depending on which query settles first.
+  const obligations = page.getByRole('region', { name: /obrigações fiscais/i })
+  await obligations.getByRole('button', { name: /^editar$/i }).first().click()
   // Two "Prazo" fields are on screen at once here: the just-opened
   // AdjustObligationForm and the always-rendered AddAdHocObligationForm at
   // the bottom of ObligationsSection (both use the same `form.dueDate`/
   // `adHoc.dueDate` "Prazo" label). AdjustObligationForm renders first.
-  await page.getByLabel(/prazo/i).first().fill('2026-12-31')
-  // Two "Guardar" buttons are on screen at once here too: the fiscal profile
-  // form (rendered above, per ClientDetailPage) and the obligation edit
-  // form's own submit (rendered below, inside ObligationsSection) — the
-  // latter is the one that actually saves this edit.
-  await page.getByRole('button', { name: /guardar/i }).last().click()
-  await expect(page.getByText('2026-12-31')).toBeVisible()
+  await obligations.getByLabel(/prazo/i).first().fill('2026-12-31')
+  await obligations.getByRole('button', { name: /^guardar$/i }).click()
+  // The saved row renders the date through `formatDate` (b0f5b17), so the
+  // assertion is on the pt-PT rendering, not on the ISO value typed above.
+  await expect(obligations.getByText('31/12/2026')).toBeVisible()
 })

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ErrorMessage } from '../shell/ErrorMessage'
@@ -12,6 +12,7 @@ import { RetainerPlanForm } from './RetainerPlanForm'
 export function ClientLedgerSection({ clientId }: { clientId: string }) {
   const { t, i18n } = useTranslation(['billing', 'common'])
   const queryClient = useQueryClient()
+  const titleId = useId()
   const [showPlanForm, setShowPlanForm] = useState(false)
   const [writingOffChargeId, setWritingOffChargeId] = useState<string | null>(null)
   const [writeOffReason, setWriteOffReason] = useState('')
@@ -31,9 +32,11 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
   })
 
   return (
-    <section className="flex flex-col gap-3">
+    <section aria-labelledby={titleId} className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">{t('billing:ledger.title')}</h2>
+        <h2 id={titleId} className="text-base font-semibold">
+          {t('billing:ledger.title')}
+        </h2>
         <button
           type="button"
           onClick={() => setShowPlanForm((value) => !value)}
