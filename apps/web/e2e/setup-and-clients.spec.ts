@@ -65,7 +65,11 @@ test('sets up the account, registers a company and a person, and links them', as
 test('switches language without losing the page', async ({ page }) => {
   await page.goto('/')
 
-  await page.getByRole('combobox', { name: /idioma|language/i }).selectOption('en-GB')
+  // The language control lives in the account menu now. Signed out — which is
+  // where this test starts — the menu holds only the language items and is
+  // named for them.
+  await page.getByRole('button', { name: /idioma|language/i }).click()
+  await page.getByRole('menuitemradio', { name: 'English' }).click()
 
   await expect(page.getByRole('link', { name: 'Clients' })).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('lang', 'en-GB')
