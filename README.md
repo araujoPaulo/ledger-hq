@@ -2,9 +2,9 @@
 
 Ledger HQ is a self-hosted practice-management system for a small Portuguese
 accountancy practice: a single-user, single-tenant application that keeps
-client records, fiscal profiles and (in later phases) credential vaulting,
-statutory deadlines and retainer billing in one place instead of scattered
-across notes and memory. It runs on an office machine, is reached remotely
+client records, fiscal profiles, credential vaulting, statutory deadlines
+and retainer billing in one place instead of scattered across notes and
+memory. It runs on an office machine, is reached remotely
 over a private Tailscale network, and installs as an app on desktop and
 phone.
 
@@ -12,11 +12,14 @@ This repository currently implements **Phase 0 — Foundation** (the monorepo,
 authentication, the client/fiscal-profile/employment register, the
 installable PWA shell, and the operational tooling to run it self-hosted),
 **Phase 1 — Vault** (the zero-knowledge encrypted credential vault,
-recovery-code account recovery, and offline vault reads), and
+recovery-code account recovery, and offline vault reads),
 **Phase 2 — Obligations** (the statutory fiscal-obligation catalog and
-generator, and ad-hoc obligation tracking). The billing ledger described in
-the [design specification](docs/superpowers/specs/2026-09-04-ledger-hq-design.md)
-is a later phase and is not implemented yet.
+generator, and ad-hoc obligation tracking), and **Phase 3 — Billing**
+(retainer plans, monthly charge generation, payment recording with FIFO
+allocation, ad-hoc charges and write-offs, and the receivables and
+per-client ledger views). That is every phase the
+[design specification](docs/superpowers/specs/2026-09-04-ledger-hq-design.md)
+scopes; the questions it leaves open (section 16) are Phase 4 material.
 
 ## Requirements
 
@@ -159,6 +162,21 @@ Testcontainers — it does not need `docker compose up -d postgres` to be
 running first, only a working Docker daemon. `test:e2e` does need the API
 reachable (Playwright's `webServer` config starts it and the web preview
 server itself); see `apps/web/playwright.config.ts`.
+
+`test:e2e` also needs an **empty** database. Every spec registers its own
+client, so a second run against the same database fails on
+`clients.tax_id_taken`. Point it at a throwaway database rather than your
+development one — `DATABASE_URL` set in the shell wins over `apps/api/.env`,
+and Playwright's `webServer` inherits it:
+
+```bash
+docker compose exec postgres psql -U ledger -d postgres \
+  -c 'DROP DATABASE IF EXISTS ledger_hq_e2e WITH (FORCE)' \
+  -c 'CREATE DATABASE ledger_hq_e2e OWNER ledger'
+export DATABASE_URL="postgresql://ledger:<password>@localhost:5432/ledger_hq_e2e"
+pnpm --filter @ledger-hq/api exec prisma migrate deploy
+pnpm --filter @ledger-hq/web test:e2e
+```
 
 ## Repository map
 

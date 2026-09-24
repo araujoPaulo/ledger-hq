@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ErrorMessage } from '../shell/ErrorMessage'
@@ -11,6 +11,7 @@ import { ObligationRow } from './ObligationRow'
 export function ObligationsSection({ clientId }: { clientId: string }) {
   const { t } = useTranslation('obligations')
   const queryClient = useQueryClient()
+  const titleId = useId()
   const [editing, setEditing] = useState<ObligationResponse | null>(null)
 
   const obligations = useQuery({
@@ -42,8 +43,10 @@ export function ObligationsSection({ clientId }: { clientId: string }) {
   const hasPendingChanges = (preview.data?.toCreate.length ?? 0) > 0 || (preview.data?.toRetract.length ?? 0) > 0
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold">{t('section.title')}</h2>
+    <section aria-labelledby={titleId} className="flex flex-col gap-3">
+      <h2 id={titleId} className="text-base font-semibold">
+        {t('section.title')}
+      </h2>
 
       {hasPendingChanges && preview.data && (
         <div className="flex items-center justify-between gap-3 rounded border border-amber-300 bg-amber-50 p-3 text-sm">

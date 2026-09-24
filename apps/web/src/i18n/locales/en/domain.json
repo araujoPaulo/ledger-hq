@@ -41,5 +41,17 @@
     "IN_PROGRESS": "In progress",
     "DONE": "Done",
     "WAIVED": "Waived"
+  },
+  "paymentMethod": {
+    "TRANSFER": "Transfer",
+    "CASH": "Cash",
+    "DIRECT_DEBIT": "Direct debit",
+    "OTHER": "Other"
+  },
+  "chargeStatus": {
+    "OPEN": "Open",
+    "PARTIAL": "Partially paid",
+    "SETTLED": "Settled",
+    "WRITTEN_OFF": "Written off"
   }
 }
