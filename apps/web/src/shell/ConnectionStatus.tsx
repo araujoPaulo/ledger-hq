@@ -1,5 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { WifiOff } from 'lucide-react'
+import { Badge } from '../ui'
 import { useOnlineStatus } from './useOnlineStatus'
 
 /**
@@ -28,10 +30,14 @@ export function ConnectionStatus() {
         )
       : ''
 
+  // The last-sync line stays inside the same role="status" element, visually
+  // hidden: a screen reader still hears it, and the pill stays pill-sized
+  // instead of growing into the banner this used to be.
   return (
-    <div role="status" className="bg-amber-100 px-4 py-2 text-sm text-amber-900">
-      <span>{t('connection.offline')}</span>
-      {time === '' ? null : <span className="ml-2">{t('connection.lastSync', { time })}</span>}
-    </div>
+    <Badge shape="pill" tone="danger" role="status">
+      <WifiOff aria-hidden="true" className="h-3.5 w-3.5" />
+      {t('connection.offline')}
+      {time === '' ? null : <span className="sr-only">{t('connection.lastSync', { time })}</span>}
+    </Badge>
   )
 }
