@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import i18next from 'i18next'
@@ -71,5 +71,30 @@ describe('ObligationsDashboard', () => {
     await userEvent.click(await screen.findByRole('button', { name: /marcar como feita/i }))
 
     expect(patchObligationMock).toHaveBeenCalledWith('o1', { status: 'DONE' })
+  })
+  it('shows a skeleton while loading, not a blank screen', async () => {
+    // A promise that never settles: the query stays pending.
+    listObligationsMock.mockReturnValue(new Promise(() => {}))
+    const { container } = renderDashboard()
+
+    await waitFor(() => {
+      expect(container.querySelectorAll('[aria-hidden="true"].animate-pulse').length).toBeGreaterThan(0)
+    })
+  })
+
+  it('renders the section heading below the page heading, not as an h1', async () => {
+    listObligationsMock.mockResolvedValue([])
+    renderDashboard()
+
+    expect(await screen.findByRole('heading', { level: 2, name: /prazos/i })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
+  })
+
+  it('describes the empty state, not just states it', async () => {
+    listObligationsMock.mockResolvedValue([])
+    renderDashboard()
+
+    expect(await screen.findByText(/sem obrigações pendentes/i)).toBeInTheDocument()
+    expect(screen.getByText(/gerador do catálogo/i)).toBeInTheDocument()
   })
 })
