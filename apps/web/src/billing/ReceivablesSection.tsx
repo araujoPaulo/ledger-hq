@@ -1,36 +1,58 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { Coins } from 'lucide-react'
 import { ErrorMessage } from '../shell/ErrorMessage'
+import { Badge, Card, DataList, EmptyState, Money } from '../ui'
 import { getReceivables } from './api'
-import { formatCurrency } from '../i18n/format'
-import type { SupportedLocale } from '../i18n/format'
+import { AGEING_TONE } from './ageingTone'
+import { ReceivablesSectionSkeleton } from './ReceivablesSectionSkeleton'
 
 export function ReceivablesSection() {
-  const { t, i18n } = useTranslation('billing')
+  const { t } = useTranslation('billing')
 
   const receivables = useQuery({ queryKey: ['receivables'], queryFn: getReceivables })
 
-  if (receivables.isPending) return null
+  if (receivables.isPending) return <ReceivablesSectionSkeleton />
   if (receivables.isError) return <ErrorMessage error={receivables.error} />
 
+  const total = receivables.data.reduce((sum, row) => sum + row.outstandingCents, 0)
+
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold">{t('receivables.title')}</h2>
+    <section className="flex flex-col gap-4">
+      <h2 className="text-lg font-semibold">{t('receivables.title')}</h2>
 
       {receivables.data.length === 0 ? (
-        <p className="text-sm text-slate-600">{t('receivables.empty')}</p>
+        <EmptyState icon={Coins} title={t('receivables.empty')} description={t('receivables.emptyHint')} />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {receivables.data.map((row) => (
-            <li key={row.clientId} className="flex items-center justify-between rounded border border-slate-200 bg-white p-3 text-sm">
-              <span>{row.clientName}</span>
-              <span className="flex items-center gap-3">
-                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs">{t(`receivables.bucket.${row.ageingBucket}`)}</span>
-                <span className="font-medium">{formatCurrency(row.outstandingCents, i18n.language as SupportedLocale)}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
+        <Card padding="none" className="px-5">
+          <DataList>
+            {receivables.data.map((row) => (
+              <DataList.Row
+                key={row.clientId}
+                label={
+                  // Following a receivable to its client is the only thing
+                  // anyone does from this list.
+                  <Link to="/clients/$clientId" params={{ clientId: row.clientId }} className="font-medium">
+                    {row.clientName}
+                  </Link>
+                }
+                value={
+                  <>
+                    <Badge tone={AGEING_TONE[row.ageingBucket]}>
+                      {t(`receivables.bucket.${row.ageingBucket}`)}
+                    </Badge>
+                    <Money cents={row.outstandingCents} />
+                  </>
+                }
+              />
+            ))}
+            {/* The tile above summarises the page; this is the foot of a
+                ledger. A column of amounts that does not add up on screen
+                invites someone to add it up by hand. */}
+            <DataList.Total label={t('receivables.title')} value={<Money cents={total} />} />
+          </DataList>
+        </Card>
       )}
     </section>
   )
