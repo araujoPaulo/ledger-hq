@@ -57,6 +57,15 @@ function renderLayout() {
   )
 }
 
+// The shell renders the account menu twice — once in the desktop sidebar, once
+// in the mobile top bar — and jsdom applies no CSS, so both are in the DOM at
+// once. Either trigger drives the same menu; the viewport-level "only one is
+// visible" claim is the Playwright suite's job, not jsdom's.
+async function openAccountMenu() {
+  const triggers = await screen.findAllByRole('button', { name: /paulo@example\.com/i })
+  await userEvent.click(triggers[0]!)
+}
+
 describe('AppLayout', () => {
   it('signs the user out and returns them to the login screen', async () => {
     // A minimal fake network: session is valid until `/auth/logout` is hit,
@@ -84,7 +93,10 @@ describe('AppLayout', () => {
       expect(screen.queryByRole('heading', { name: /entrar|sign in/i })).not.toBeInTheDocument()
     })
 
-    await userEvent.click(screen.getByRole('button', { name: /sair|sign out/i }))
+    // Sign-out now lives inside the account menu, whose trigger is named by
+    // the session's own email.
+    await openAccountMenu()
+    await userEvent.click(await screen.findByRole('menuitem', { name: /sair|sign out/i }))
 
     await waitFor(() => {
       expect(signOut).toHaveBeenCalledOnce()
@@ -113,11 +125,16 @@ describe('AppLayout', () => {
       expect(screen.queryByRole('heading', { name: /entrar|sign in/i })).not.toBeInTheDocument()
     })
 
-    expect(screen.queryByRole('button', { name: /bloquear cofre/i })).not.toBeInTheDocument()
+    await openAccountMenu()
+    expect(await screen.findByRole('menu')).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /bloquear cofre/i })).not.toBeInTheDocument()
 
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
     unlockVault({ type: 'secret' } as CryptoKey)
 
-    expect(await screen.findByRole('button', { name: /bloquear cofre/i })).toBeInTheDocument()
+    await openAccountMenu()
+    expect(await screen.findByRole('menuitem', { name: /bloquear cofre/i })).toBeInTheDocument()
 
     lockVault()
   })

@@ -1,7 +1,7 @@
 {
   "appName": "Ledger HQ",
   "home": { "title": "Overview", "outstanding": "Outstanding" },
-  "nav": { "clients": "Clients", "platforms": "Platforms", "vault": "Vault" },
+  "nav": { "clients": "Clients", "vault": "Vault" },
   "actions": {
     "save": "Save",
     "cancel": "Cancel",
