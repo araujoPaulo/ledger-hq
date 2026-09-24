@@ -16,6 +16,35 @@ library gains `Money` and `DataList`. Everything else — tokens,
 non-goals, the accessibility and i18n rules — is unchanged from the
 original.
 
+A second pass the same day drew the screens. Fifteen artboards, every
+screen in both a desktop and a mobile frame, are on the design canvas
+linked under **Visual reference** below. Drawing them settled three
+things this document had left open or wrong, all folded into the text
+that follows: the client detail page is tabbed, the Vault page is
+called Vault, and the credentials unlock gate belongs to Stage 3, not
+Stage 4.
+
+## Visual reference
+
+The screens: <https://claude.ai/artifact/EYxudatoGJWQ4W7kf8iV92>
+
+A private canvas; it is the editable source for further iterations —
+change it there rather than starting a new one, and update this
+section only if the link changes. Fifteen artboards, in four rows:
+
+| Row | Artboards |
+|---|---|
+| Overview | loaded, loading, empty + offline (desktop); mobile |
+| System | tokens and every Stage 1 component with its variants |
+| Clients | list, detail, new-client form — each desktop and mobile |
+| Vault | vault page, credentials (locked and unlocked) — each desktop and mobile |
+
+The boards carry real data: obligation names from
+[`docs/fiscal-catalog.md`](../../fiscal-catalog.md), `en-GB` currency
+and dates as `src/i18n/format.ts` produces them, and figures that
+reconcile across screens — the client ledger's balance is the
+receivable the Overview page reports for the same client.
+
 ## Problem
 
 The web app (`apps/web`) works but has no visual design: raw Tailwind
@@ -94,8 +123,19 @@ already uses the CSS-first v4 setup).
   (dropdown menus, dialogs, toasts) — static cards stay flat, borders
   only. This is what keeps the "minimal" read instead of drifting into
   skeuomorphic card piles.
+- **Ageing ramp**: the four `ageingBucket` literals need four steps,
+  one more than `success`/`warning`/`danger` provide. `0-30` is
+  neutral, `31-60` is warning (amber-700 on amber-50), `61-90` takes
+  an intermediate orange (`#9a3412` on `#fff4ed`), `90+` is danger.
+  The extra step is a token, not a one-off in the receivables row.
 - **Icons**: `lucide-react`. Tree-shakeable, pairs with Radix
   visually and license-wise (MIT, no attribution burden).
+- **Typeface, reconsidered**: the mockups were an opportunity to drop
+  Inter, which is the most over-used interface face there is. It
+  stays: it is self-hosted, it has the tabular figures `Money`
+  depends on, and nothing in a tool this dense is improved by a
+  more characterful face. Recorded so the question is not reopened
+  without a reason.
 
 ## Component library — `apps/web/src/ui/`
 
@@ -155,9 +195,11 @@ New dependencies in Stage 1: `@radix-ui/react-dropdown-menu`,
   and the client form are the first places the system needs real form
   controls with label and error states. Adds
   `@radix-ui/react-select`, `@radix-ui/react-checkbox`.
-- **Stage 3**: `Dialog` (the write-off reason prompt, the
-  add-credential form), `Toast` (copy-to-clipboard confirmation).
-  Adds `@radix-ui/react-dialog`, `@radix-ui/react-toast`.
+- **Stage 3**: `Tabs` (the client detail page's five sections),
+  `Dialog` (the write-off reason prompt, the add-credential form),
+  `Toast` (copy-to-clipboard confirmation). Adds
+  `@radix-ui/react-tabs`, `@radix-ui/react-dialog`,
+  `@radix-ui/react-toast`.
 - **Stages 4-5**: no new components.
 
 ## Screens — Stage 1
@@ -165,11 +207,18 @@ New dependencies in Stage 1: `@radix-ui/react-dropdown-menu`,
 ### App shell (`apps/web/src/shell/AppLayout.tsx`)
 
 - Desktop (`md:` and up): fixed-width left sidebar (240px) — app name
-  at top, nav items with `lucide-react` icons (Dashboard, Clients,
-  Vault), account area pinned to the bottom (language switcher, vault
-  lock button when unlocked, sign-out) collapsed into a `DropdownMenu`
-  behind an avatar/initial button instead of three loose buttons in
-  the header.
+  at top, three nav items with `lucide-react` icons, account area
+  pinned to the bottom (language switcher, vault lock button when
+  unlocked, sign-out) collapsed into a `DropdownMenu` behind an
+  avatar/initial button instead of three loose buttons in the header.
+- The nav items are **Deadlines**, **Clients** and **Vault**. The
+  third one is currently labelled "Platforms" and points at
+  `/vault/platforms`. The label was wrong: that page is the way into
+  the credential vault, and "Platforms" names an implementation
+  detail. The label changes in this stage (a new `common:nav.vault`
+  key in both locales); the route and the page component keep their
+  names, because renaming a route is a change with no user-visible
+  benefit and a real chance of breaking a bookmark.
 - Mobile (below `md:`): sidebar collapses to a bottom tab bar (icons
   only, active state via accent color) for the three primary
   destinations; the account menu moves into a header-right icon
@@ -234,11 +283,19 @@ in its own right:
 
 ## i18n and accessibility
 
-- Two new keys: the `HomePage` title and the summary row's
-  total-outstanding tile label. Both go in the `common` namespace with
-  `pt-PT` and `en-GB` entries. Every other label in Stage 1 already
-  has a key; new UI (the account dropdown's "Lock vault" / "Sign out"
-  items) reuses the existing `common:actions.*` keys.
+- Five new keys, each with a `pt-PT` and an `en-GB` entry:
+  `common:home.title` (the page title), `common:home.outstanding`
+  (the summary row's fourth tile), `common:nav.vault` (replacing
+  `common:nav.platforms` in the sidebar), and a description line for
+  each of the two empty states — `obligations:dashboard.emptyHint`
+  and `billing:receivables.emptyHint`. The empty-state hints are new
+  copy the mockups introduced: an `EmptyState` with a heading and no
+  description reads as a dead end, and on these two screens there is
+  something worth saying (obligations arrive from the generator;
+  receivables arrive when charges fall due). Every other label in
+  Stage 1 already has a key; new UI (the account dropdown's
+  "Lock vault" / "Sign out" items) reuses the existing
+  `common:actions.*` keys.
 - `pnpm --filter @ledger-hq/web i18n:check` must stay green — no key
   added without both locales.
 - Radix primitives provide correct ARIA roles and keyboard handling
@@ -292,8 +349,10 @@ those phases. Full detail, including why this order, in
    `Input`/`Select`/`Checkbox` against real forms.
 3. **Stage 3**: `ClientDetailPage` and its five sections (fiscal
    profile, obligations, billing ledger, employments, vault
-   credentials) — introduces `Dialog` and `Toast`.
-4. **Stage 4**: Vault standalone screens (platforms, setup/recovery).
+   credentials, the last of which brings `VaultUnlockGate` with it) —
+   introduces `Tabs`, `Dialog` and `Toast`.
+4. **Stage 4**: Vault standalone screens — the vault page (the
+   platform list and its create form) and setup/recovery.
 5. **Stage 5**: Auth (login, first-run setup) — last because it is the
    least-frequently-seen screen and blocks nothing.
 
@@ -302,20 +361,42 @@ This document commits to Stage 1's design in detail; the later stages
 are named here to show the target shape of the component library, not
 as approved designs.
 
-## Known decisions deferred to later stages
+## Decisions the mockups made for later stages
 
-- **The client detail page's layout** (Stage 3): six sections, five
-  loading independently, is past what a single scroll carries well.
-  Tabs, accordion, or a two-column split is the central question of
-  that stage, not a footnote to it.
+These are settled in the drawings and are not reopened when each stage
+is brainstormed; they are recorded here so that pass starts from them.
+
+- **The client detail page is tabbed** (Stage 3). Five tabs — Overview,
+  Obligations, Billing, People, Credentials — replacing today's single
+  scroll through six stacked sections. The page's own header (name,
+  kind, tax number, archive/edit) stays above the tab strip. Tabs won
+  over an accordion because five of the six sections load
+  independently and an accordion would leave the reader guessing which
+  ones have content; they won over a two-column split because the
+  billing ledger and the obligations list both want the full width.
+  On mobile the tab strip scrolls horizontally rather than collapsing
+  into a menu. Each tab keeps its own query, so opening the page
+  fetches only the active tab's data.
+- **The write-off flow is a `Dialog`** (Stage 3): the reason is
+  required, and an inline text input inside a list row cannot
+  communicate that. The row's action opens the dialog; the reason and
+  the confirm live there.
+- **A revealed credential never renders its password** (Stage 3): a
+  mask plus a Copy button, with the 30-second clipboard clear stated
+  on screen rather than left as undocumented behaviour. The TOTP code
+  does render, with its remaining validity beside it, as it does
+  today.
+- **The credentials section shows one of two states** (Stage 3): the
+  unlock gate, or the list. The canvas draws both on one frame for
+  review; they are never both on screen in the app.
+
+Still genuinely open:
+
 - **Client credit** (Phase 4, ADR 0007): when unallocated payment
   excess becomes consumable, the ledger gains a credit balance
   distinct from a negative balance. `Money`'s `tone` prop takes that
   third state without a signature change; nothing is implemented for
   it now.
-- **The write-off flow** (Stage 3): the reason is required, and an
-  inline text input inside a list row cannot communicate that. It
-  becomes a `Dialog` when that stage lands.
 
 ## Guidelines document
 

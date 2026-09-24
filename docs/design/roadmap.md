@@ -35,6 +35,32 @@ Net effect: four stages become five, and the component library gains
 `Money` and `DataList`. `Dialog` and `Toast` move from "installed
 unused in Stage 1" to "added in Stage 3, where they have consumers".
 
+A second pass drew every screen, desktop and mobile. That settled the
+client detail page's layout (tabs), renamed the Platforms page to
+Vault, and moved the credential unlock gate from Stage 4 to Stage 3.
+The stages below already reflect it.
+
+## Mockups
+
+<https://claude.ai/artifact/EYxudatoGJWQ4W7kf8iV92>
+
+Fifteen artboards — every screen in a desktop and a mobile frame, plus
+a board of the tokens and every Stage 1 component with its variants.
+This is the editable source: iterate on that canvas rather than
+starting a new one, and each stage's brainstorming pass starts by
+opening its row.
+
+| Row | Artboards | Stage |
+|---|---|---|
+| Overview | loaded, loading, empty + offline, mobile | 1 |
+| System | tokens and components | 1 |
+| Clients | list, detail, new-client form — desktop and mobile each | 2 and 3 |
+| Vault | vault page, credentials locked and unlocked — desktop and mobile each | 3 and 4 |
+
+The boards carry real data: obligation names from the fiscal catalog,
+`en-GB` currency and dates as `src/i18n/format.ts` produces them, and
+figures that reconcile across screens.
+
 ## Stage 1 — App shell & HomePage
 
 **Status:** design complete, implementation plan next.
@@ -52,13 +78,20 @@ screen seen immediately after login.
   `apps/web/src/HomePage.tsx`,
   `apps/web/src/obligations/ObligationsDashboard.tsx`,
   `apps/web/src/billing/ReceivablesSection.tsx`.
+- **Nav rename**: the third sidebar item becomes **Vault**, not
+  "Platforms" — a new `common:nav.vault` key. The route
+  `/vault/platforms` and the `PlatformsPage` component keep their
+  names.
+- **New i18n keys** (five, both locales): `common:home.title`,
+  `common:home.outstanding`, `common:nav.vault`,
+  `obligations:dashboard.emptyHint`, `billing:receivables.emptyHint`.
 - **Out of scope**: every other screen; dark mode; form controls
   (`HomePage` has no inputs).
 - Full detail: [design spec](../superpowers/specs/2026-09-19-ui-refresh-design.md).
 
 ## Stage 2 — Clients list & form
 
-**Status:** not designed yet.
+**Status:** drawn, not specced.
 
 Applies the design system to client management's standalone screens:
 the list with its filter bar, and the create/edit form.
@@ -76,7 +109,7 @@ the list with its filter bar, and the create/edit form.
 
 ## Stage 3 — Client detail page
 
-**Status:** not designed yet.
+**Status:** drawn, not specced.
 
 Applies the design system to `ClientDetailPage` and every section
 composed into it. This is the densest screen in the app and the one
@@ -90,33 +123,44 @@ where the refresh has the most to prove.
   `CredentialsSection` (with `AddCredentialForm`, `CredentialRow`, and
   `VaultUnlockGate` — the gate renders inside this section, not as a
   standalone screen, so it is styled here rather than in Stage 4).
-- **New components** (first real usage): `Dialog` — the write-off
-  reason prompt and the add-credential form, both of which are inline
-  today and shouldn't be; `Toast` — copy-to-clipboard confirmation
-  without a layout-shifting banner.
-- **New dependencies**: `@radix-ui/react-dialog`,
-  `@radix-ui/react-toast`.
-- **The stage's central design question**: the page currently stacks
-  six sections, five of which load independently, in a single scroll.
-  Tabs, an accordion, or a two-column split are all plausible; that
-  decision is what this stage's brainstorming pass is for, and it must
-  be settled before any section is restyled.
-- **Other questions to resolve when brainstormed**: whether credential
-  values ever render inline (security-sensitive — probably not) or
-  only copy-to-clipboard from a masked row; how the ledger presents a
-  written-off charge next to a live one; whether the five inline forms
-  become dialogs uniformly or only where the interaction demands it.
+- **New components** (first real usage): `Tabs` — the page's five
+  sections; `Dialog` — the write-off reason prompt and the
+  add-credential form, both of which are inline today and shouldn't
+  be; `Toast` — copy-to-clipboard confirmation without a
+  layout-shifting banner.
+- **New dependencies**: `@radix-ui/react-tabs`,
+  `@radix-ui/react-dialog`, `@radix-ui/react-toast`.
+- **Layout, decided**: five tabs — Overview, Obligations, Billing,
+  People, Credentials — with the page header (name, kind, tax number,
+  archive/edit) above the tab strip. On mobile the strip scrolls
+  horizontally. Each tab keeps its own query, so the page fetches only
+  the active tab. See the design spec's decisions section for why tabs
+  rather than an accordion or a split.
+- **Also decided by the mockups**: a revealed credential shows a
+  masked password plus Copy, never the plaintext, with the 30-second
+  clipboard clear stated on screen; a written-off charge keeps its row
+  but renders struck through and muted, with a `Written off` badge.
+- **Still to resolve when brainstormed**: whether the five inline
+  forms become dialogs uniformly or only where the interaction demands
+  it; what the Obligations tab's per-client controls (adjust, waive,
+  ad-hoc) look like once they are not competing with five other
+  sections for the page.
 - **Depends on**: Stage 1's `Money`/`DataList`/`Card`/`Badge`, and
   Stage 2's `Input`/`Select`/`Checkbox` for the five forms.
 
-## Stage 4 — Vault standalone screens
+## Stage 4 — Vault page & setup
 
-**Status:** not designed yet.
+**Status:** drawn, not specced.
 
 Applies the design system to the vault screens that live outside the
-client detail page.
+client detail page: the platform list (shown as **Vault** in the nav)
+and first-run vault setup.
 
 - **Screens**: `PlatformsPage`, `VaultSetupPage`.
+- **Drawn already**: the vault page in both frames — platform rows
+  carrying their authentication kind and credential count, the create
+  form beside the list on desktop and below it on mobile, and a vault
+  status pill ("Unlocked · locks after 15 min") in the header.
 - **New components**: none — `Dialog`, `Toast`, and the form controls
   all exist by this point.
 - **Likely design questions**: how vault setup's recovery-code display
