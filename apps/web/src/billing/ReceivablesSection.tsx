@@ -14,7 +14,16 @@ export function ReceivablesSection() {
   const receivables = useQuery({ queryKey: ['receivables'], queryFn: getReceivables })
 
   if (receivables.isPending) return <ReceivablesSectionSkeleton />
-  if (receivables.isError) return <ErrorMessage error={receivables.error} />
+  // See ObligationsDashboard: the heading stays, so two identical error
+  // sentences on one page are still attributable.
+  if (receivables.isError) {
+    return (
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold">{t('receivables.title')}</h2>
+        <ErrorMessage error={receivables.error} />
+      </section>
+    )
+  }
 
   const total = receivables.data.reduce((sum, row) => sum + row.outstandingCents, 0)
 

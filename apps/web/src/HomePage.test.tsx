@@ -101,4 +101,19 @@ describe('HomePage', () => {
     })
     expect(screen.queryByText('0')).not.toBeInTheDocument()
   })
+
+  // Two identical error sentences with nothing to attribute them to is not an
+  // error state, it is a shrug. Each section keeps its own heading so the
+  // reader can tell which half of the page failed.
+  it('keeps both section headings beside their error messages', async () => {
+    listObligationsMock.mockRejectedValue(new Error('offline'))
+    getReceivablesMock.mockRejectedValue(new Error('offline'))
+    renderHome()
+
+    expect(await screen.findByRole('heading', { level: 2, name: /prazos/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: /recebíveis/i })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getAllByRole('alert')).toHaveLength(2)
+    })
+  })
 })

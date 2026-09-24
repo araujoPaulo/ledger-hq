@@ -42,7 +42,7 @@ export function MobileTabBar() {
   return (
     <nav
       aria-label={t('common:appName')}
-      className="fixed inset-x-0 bottom-0 flex items-center border-t border-line bg-surface px-4 pb-2 md:hidden"
+      className="fixed inset-x-0 bottom-0 flex items-center border-t border-line bg-surface px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden"
     >
       {/* Icons only, so each tab carries the label its desktop twin shows. */}
       {DESTINATIONS.map(({ to, labelKey, icon: Icon }) => (

@@ -17,7 +17,7 @@ export function Sidebar() {
   return (
     <nav
       aria-label={t('common:appName')}
-      className="hidden w-60 shrink-0 flex-col gap-8 border-r border-line bg-surface p-4 md:flex"
+      className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col gap-8 overflow-y-auto border-r border-line bg-surface p-4 md:flex"
     >
       <span className="flex items-center gap-2.5 px-2 text-base font-semibold tracking-tight">
         <span className="flex h-6 w-6 items-center justify-center rounded-control bg-accent-600 text-xs font-semibold text-white">

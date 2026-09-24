@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { initI18n } from '../i18n'
 import type * as CredentialsModule from '../auth/credentials'
 import type * as ApiClientModule from '../api/client'
+import { ApiError } from '../api/client'
 
 const signOut = vi.hoisted(() => vi.fn())
 vi.mock('../auth/credentials', async (importOriginal) => {
@@ -94,6 +95,33 @@ describe('AccountMenu', () => {
     await userEvent.click(await screen.findByRole('menuitem', { name: /sair/i }))
 
     await waitFor(() => expect(signOut).toHaveBeenCalledOnce())
+  })
+
+  // The login and setup screens render inside this shell with no session. The
+  // language control is the one thing someone needs before they can sign in,
+  // so the menu keeps it — and offers nothing it cannot do.
+  it('offers language only, named for it, when there is no session', async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === '/auth/session') throw new ApiError('auth.session_expired', {}, 401)
+      throw new Error(`unexpected path in test: ${path}`)
+    })
+    renderMenu()
+
+    const button = await screen.findByRole('button', { name: /idioma/i })
+    await userEvent.click(button)
+
+    expect(await screen.findByRole('menuitemradio', { name: 'Português' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /sair/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /bloquear cofre/i })).not.toBeInTheDocument()
+  })
+
+  // Rendering the signed-out trigger while the session is merely in flight
+  // flashes a Languages icon on every authenticated page load.
+  it('renders no trigger at all while the session is still loading', () => {
+    apiFetch.mockImplementation(() => new Promise(() => {}))
+    renderMenu()
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('switches locale from the language radio items', async () => {

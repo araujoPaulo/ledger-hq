@@ -20,7 +20,7 @@ export function AppLayout() {
         </div>
 
         {/* pb-24 keeps the fixed tab bar off the last row of content. */}
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-24 pt-6 md:px-6 md:pb-8">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-8">
           <RequireSession>
             <Outlet />
           </RequireSession>

@@ -25,12 +25,18 @@ const button = cva(
   },
 )
 
-type ButtonVariants = VariantProps<typeof button>
+type ButtonBaseProps = ComponentPropsWithoutRef<'button'> & {
+  variant?: NonNullable<VariantProps<typeof button>['variant']>
+  isLoading?: boolean
+}
 
-type ButtonProps = ComponentPropsWithoutRef<'button'> &
-  ButtonVariants & {
-    isLoading?: boolean
-  }
+/**
+ * `size="icon"` narrows the props to require an accessible name. An icon-only
+ * button has no text for a screen reader to fall back on, and the type is the
+ * only thing that catches the omission before it ships.
+ */
+type ButtonProps = ButtonBaseProps &
+  ({ size?: 'sm' | 'md' } | { size: 'icon'; 'aria-label': string })
 
 export function Button({
   variant,

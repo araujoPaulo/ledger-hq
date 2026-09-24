@@ -30,6 +30,28 @@ test.describe('app shell', () => {
     await expect(page).toHaveURL(/\/clients$/)
   })
 
+  // Spec §7.1 asks for a fixed sidebar with the account button pinned to its
+  // bottom. On a practice's real Overview — dozens of obligations plus the
+  // receivables list — a sidebar that scrolls with the page takes every
+  // destination and the sign-out control off screen.
+  test('keeps the sidebar and the account button in view when the page scrolls', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 400 })
+    await signIn(page)
+    await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
+    // Wait for the page's own content: scrolling before the queries settle
+    // scrolls a page that is still one screenful tall.
+    await expect(page.getByRole('heading', { level: 2, name: /recebíveis/i })).toBeVisible()
+
+    const scrolled = await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight)
+      return window.scrollY
+    })
+    expect(scrolled).toBeGreaterThan(0)
+
+    await expect(page.getByRole('link', { name: /clientes/i })).toBeInViewport()
+    await expect(page.getByRole('button', { name: /paulo@example\.com/i })).toBeInViewport()
+  })
+
   test('navigates from the bottom tab bar on a phone viewport', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await signIn(page)

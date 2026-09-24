@@ -24,7 +24,17 @@ export function ObligationsDashboard() {
   })
 
   if (obligations.isPending) return <ObligationsDashboardSkeleton />
-  if (obligations.isError) return <ErrorMessage error={obligations.error} />
+  // The heading stays on the error branch too: offline, both sections render
+  // the same sentence, and without headings the page cannot say which half of
+  // it failed.
+  if (obligations.isError) {
+    return (
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold">{t('dashboard.title')}</h2>
+        <ErrorMessage error={obligations.error} />
+      </section>
+    )
+  }
 
   if (obligations.data.length === 0) {
     return (

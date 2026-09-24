@@ -32,6 +32,10 @@ export function AccountMenu() {
   // language items and is named for them.
   const signedIn = email !== ''
 
+  // Until the session resolves we do not know which of the two menus this is,
+  // and guessing flashes a Languages icon on every authenticated page load.
+  if (session.isPending) return null
+
   return (
     <DropdownMenu>
       {/*
