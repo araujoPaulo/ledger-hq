@@ -44,6 +44,44 @@ enum AuthKind {
   CERTIFICATE
 }
 
+enum Authority {
+  TAX
+  SOCIAL_SECURITY
+  REGISTRY
+  OTHER
+}
+
+enum Periodicity {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+  ONE_OFF
+}
+
+enum ObligationStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  WAIVED
+}
+
+enum DefinitionSource {
+  CATALOG
+  CUSTOM
+}
+
+enum ChargeKind {
+  RETAINER
+  EXTRA
+}
+
+enum PaymentMethod {
+  TRANSFER
+  CASH
+  DIRECT_DEBIT
+  OTHER
+}
+
 model User {
   id                      String    @id @db.Uuid
   email                   String    @unique
@@ -88,9 +126,13 @@ model Client {
   updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
 
   fiscalProfile         FiscalProfile?
-  employmentsAsEmployer Employment[]   @relation("employer")
-  employmentsAsEmployee Employment[]   @relation("employee")
+  employmentsAsEmployer Employment[]         @relation("employer")
+  employmentsAsEmployee Employment[]         @relation("employee")
   credentials           Credential[]
+  obligations           ObligationInstance[]
+  retainerPlans         RetainerPlan[]
+  charges               Charge[]
+  payments              Payment[]
 
   @@unique([id, kind])
   @@index([kind, name])
@@ -166,6 +208,111 @@ model CredentialVersion {
   credential Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
 
   @@index([credentialId, createdAt])
+}
+
+model ObligationDefinition {
+  code        String           @id
+  name        String
+  authority   Authority
+  periodicity Periodicity
+  source      DefinitionSource
+  legalRef    String?
+  active      Boolean          @default(true)
+
+  instances ObligationInstance[]
+}
+
+model ObligationInstance {
+  id                String           @id @db.Uuid
+  clientId          String           @db.Uuid
+  definitionCode    String
+  periodStart       DateTime         @db.Date
+  periodEnd         DateTime         @db.Date
+  periodLabel       String
+  dueDate           DateTime         @db.Date
+  dueDateOverridden Boolean          @default(false)
+  status            ObligationStatus @default(PENDING)
+  completedAt       DateTime?        @db.Timestamptz(3)
+  reference         String?
+  amountCents       Int?
+  notes             String?
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @db.Timestamptz(3)
+
+  client     Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  definition ObligationDefinition @relation(fields: [definitionCode], references: [code])
+
+  @@unique([clientId, definitionCode, periodStart])
+  @@index([clientId])
+  @@index([status, dueDate])
+}
+
+model RetainerPlan {
+  id            String      @id @db.Uuid
+  clientId      String      @db.Uuid
+  amountCents   Int
+  periodicity   Periodicity
+  dueDayOfMonth Int
+  validFrom     DateTime    @db.Date
+  validTo       DateTime?   @db.Date
+
+  client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  charges Charge[]
+
+  @@index([clientId])
+}
+
+model Charge {
+  id             String     @id @db.Uuid
+  clientId       String     @db.Uuid
+  kind           ChargeKind
+  description    String
+  periodLabel    String?
+  amountCents    Int
+  issuedOn       DateTime   @db.Date
+  dueOn          DateTime   @db.Date
+  planId         String?    @db.Uuid
+  writtenOffAt   DateTime?  @db.Timestamptz(3)
+  writeOffReason String?
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+
+  client      Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  plan        RetainerPlan?       @relation(fields: [planId], references: [id], onDelete: SetNull)
+  allocations PaymentAllocation[]
+
+  // planId is null for every EXTRA charge, and Postgres treats each NULL as
+  // distinct for uniqueness purposes — this constraint only ever fires for
+  // RETAINER charges, exactly as intended (master spec §8.1).
+  @@unique([clientId, planId, periodLabel])
+  @@index([clientId])
+  @@index([dueOn])
+}
+
+model Payment {
+  id          String        @id @db.Uuid
+  clientId    String        @db.Uuid
+  amountCents Int
+  receivedOn  DateTime      @db.Date
+  method      PaymentMethod
+  reference   String?
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+
+  client      Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  allocations PaymentAllocation[]
+
+  @@index([clientId])
+}
+
+model PaymentAllocation {
+  paymentId   String @db.Uuid
+  chargeId    String @db.Uuid
+  amountCents Int
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  charge  Charge  @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+
+  @@id([paymentId, chargeId])
 }
 
 model AuditEvent {

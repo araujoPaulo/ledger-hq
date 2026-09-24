@@ -1,0 +1,49 @@
+{
+  "receivables": {
+    "title": "Receivables",
+    "empty": "No outstanding balances.",
+    "bucket": {
+      "0-30": "0-30 days",
+      "31-60": "31-60 days",
+      "61-90": "61-90 days",
+      "90+": "90+ days"
+    }
+  },
+  "ledger": {
+    "title": "Billing",
+    "balance": "Balance",
+    "empty": "No billing activity.",
+    "charge": "Charge",
+    "payment": "Payment"
+  },
+  "retainerPlan": {
+    "createTitle": "Create retainer plan",
+    "renewTitle": "Update fee",
+    "amountCents": { "label": "Monthly amount (cents)" },
+    "newAmountCents": { "label": "New amount (cents)" },
+    "periodicity": { "label": "Periodicity" },
+    "dueDayOfMonth": { "label": "Due day of month" },
+    "validFrom": { "label": "In force from" },
+    "effectiveFrom": { "label": "New amount from" }
+  },
+  "payment": {
+    "recordTitle": "Record payment",
+    "amountCents": { "label": "Amount (cents)" },
+    "receivedOn": { "label": "Received on" },
+    "method": { "label": "Method" },
+    "reference": { "label": "Reference" },
+    "propose": "Propose allocation",
+    "confirm": "Confirm",
+    "excess": "{{amount}} left unallocated (becomes credit)."
+  },
+  "adHocCharge": {
+    "newTitle": "New ad-hoc charge",
+    "description": { "label": "Description" },
+    "amountCents": { "label": "Amount (cents)" },
+    "dueOn": { "label": "Due date" }
+  },
+  "writeOff": {
+    "action": "Write off",
+    "reason": { "label": "Reason" }
+  }
+}

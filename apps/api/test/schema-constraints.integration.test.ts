@@ -193,3 +193,121 @@ describe('credential constraints', () => {
     await expect(prisma.credential.create({ data: { id: uuidv7(), ...shared } })).rejects.toThrow()
   })
 })
+
+describe('obligation constraints', () => {
+  it('rejects two instances with the same client, definition and period start', async () => {
+    const prisma = getTestPrisma()
+    const client = await prisma.client.create({
+      data: { id: uuidv7(), kind: 'COMPANY', name: 'X', taxId: '500000002', accounting: 'ORGANIZED', legalForm: 'LDA' },
+    })
+    const definition = await prisma.obligationDefinition.create({
+      data: { code: 'TEST_OBLIGATION', name: 'Test', authority: 'TAX', periodicity: 'MONTHLY', source: 'CATALOG' },
+    })
+    const shared = {
+      clientId: client.id,
+      definitionCode: definition.code,
+      periodStart: new Date('2026-01-01T00:00:00Z'),
+      periodEnd: new Date('2026-01-31T00:00:00Z'),
+      periodLabel: '2026-01',
+      dueDate: new Date('2026-03-20T00:00:00Z'),
+    }
+
+    await prisma.obligationInstance.create({ data: { id: uuidv7(), ...shared } })
+
+    await expect(prisma.obligationInstance.create({ data: { id: uuidv7(), ...shared } })).rejects.toThrow()
+  })
+})
+
+describe('billing constraints', () => {
+  it('rejects two charges with the same client, plan and period label', async () => {
+    const prisma = getTestPrisma()
+    const client = await prisma.client.create({
+      data: { id: uuidv7(), kind: 'COMPANY', name: 'Y', taxId: '500000003', accounting: 'ORGANIZED', legalForm: 'LDA' },
+    })
+    const plan = await prisma.retainerPlan.create({
+      data: { id: uuidv7(), clientId: client.id, amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: new Date('2026-01-01T00:00:00Z') },
+    })
+    const shared = {
+      clientId: client.id,
+      kind: 'RETAINER' as const,
+      description: 'Retainer',
+      periodLabel: '2026-01',
+      amountCents: 9000,
+      issuedOn: new Date('2026-01-01T00:00:00Z'),
+      dueOn: new Date('2026-01-08T00:00:00Z'),
+      planId: plan.id,
+    }
+
+    await prisma.charge.create({ data: { id: uuidv7(), ...shared } })
+
+    await expect(prisma.charge.create({ data: { id: uuidv7(), ...shared } })).rejects.toThrow()
+  })
+
+  it('allows two EXTRA charges with the same client and no period label (planId is null for both)', async () => {
+    const prisma = getTestPrisma()
+    const client = await prisma.client.create({
+      data: { id: uuidv7(), kind: 'COMPANY', name: 'Z', taxId: '500000004', accounting: 'ORGANIZED', legalForm: 'LDA' },
+    })
+    const shared = {
+      clientId: client.id,
+      kind: 'EXTRA' as const,
+      description: 'Extra work',
+      periodLabel: null,
+      amountCents: 15000,
+      issuedOn: new Date('2026-01-01T00:00:00Z'),
+      dueOn: new Date('2026-02-01T00:00:00Z'),
+      planId: null,
+    }
+
+    await prisma.charge.create({ data: { id: uuidv7(), ...shared } })
+    // Must not throw — two EXTRA charges never collide on the unique
+    // constraint, since Postgres treats each NULL planId as distinct.
+    await expect(prisma.charge.create({ data: { id: uuidv7(), ...shared } })).resolves.toBeDefined()
+  })
+
+  it('rejects two overlapping in-force retainer plans for the same client', async () => {
+    const prisma = getTestPrisma()
+    const client = await prisma.client.create({
+      data: { id: uuidv7(), kind: 'COMPANY', name: 'W', taxId: '500000005', accounting: 'ORGANIZED', legalForm: 'LDA' },
+    })
+    await prisma.retainerPlan.create({
+      data: { id: uuidv7(), clientId: client.id, amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: new Date('2026-01-01T00:00:00Z') },
+    })
+
+    await expect(
+      prisma.retainerPlan.create({
+        data: { id: uuidv7(), clientId: client.id, amountCents: 12000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: new Date('2026-06-01T00:00:00Z') },
+      }),
+    ).rejects.toThrow()
+  })
+
+  it('the charge_balances view derives status and outstanding balance without a stored column', async () => {
+    const prisma = getTestPrisma()
+    const client = await prisma.client.create({
+      data: { id: uuidv7(), kind: 'COMPANY', name: 'V', taxId: '500000006', accounting: 'ORGANIZED', legalForm: 'LDA' },
+    })
+    const charge = await prisma.charge.create({
+      data: {
+        id: uuidv7(),
+        clientId: client.id,
+        kind: 'EXTRA',
+        description: 'Test',
+        amountCents: 10000,
+        issuedOn: new Date('2026-01-01T00:00:00Z'),
+        dueOn: new Date('2026-01-08T00:00:00Z'),
+      },
+    })
+    const payment = await prisma.payment.create({
+      data: { id: uuidv7(), clientId: client.id, amountCents: 4000, receivedOn: new Date('2026-01-05T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.paymentAllocation.create({ data: { paymentId: payment.id, chargeId: charge.id, amountCents: 4000 } })
+
+    const rows = await prisma.$queryRaw<Array<{ outstandingCents: number; status: string }>>`
+      SELECT "outstandingCents", status FROM charge_balances WHERE id = ${charge.id}::uuid
+    `
+    expect(rows).toHaveLength(1)
+    expect(typeof rows[0]!.outstandingCents).toBe('number')
+    expect(rows[0]!.outstandingCents).toBe(6000)
+    expect(rows[0]!.status).toBe('PARTIAL')
+  })
+})

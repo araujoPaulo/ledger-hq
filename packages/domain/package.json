@@ -8,7 +8,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint src",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generate:fiscal-catalog": "pnpm build && node scripts/generate-fiscal-catalog.mjs"
   },
   "dependencies": { "zod": "^4.5.4" },
   "devDependencies": { "@ledger-hq/config": "workspace:*", "vitest": "^5.0.0" }

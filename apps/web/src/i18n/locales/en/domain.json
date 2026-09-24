@@ -23,5 +23,35 @@
     "PASSWORD": "Password",
     "PASSWORD_OTP": "Password + verification code",
     "CERTIFICATE": "Certificate"
+  },
+  "authority": {
+    "TAX": "Tax Authority",
+    "SOCIAL_SECURITY": "Social Security",
+    "REGISTRY": "Registry",
+    "OTHER": "Other"
+  },
+  "periodicity": {
+    "MONTHLY": "Monthly",
+    "QUARTERLY": "Quarterly",
+    "ANNUAL": "Annual",
+    "ONE_OFF": "One-off"
+  },
+  "obligationStatus": {
+    "PENDING": "Pending",
+    "IN_PROGRESS": "In progress",
+    "DONE": "Done",
+    "WAIVED": "Waived"
+  },
+  "paymentMethod": {
+    "TRANSFER": "Transfer",
+    "CASH": "Cash",
+    "DIRECT_DEBIT": "Direct debit",
+    "OTHER": "Other"
+  },
+  "chargeStatus": {
+    "OPEN": "Open",
+    "PARTIAL": "Partially paid",
+    "SETTLED": "Settled",
+    "WRITTEN_OFF": "Written off"
   }
 }

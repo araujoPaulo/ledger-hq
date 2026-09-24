@@ -28,6 +28,14 @@ export const ERROR_CODES = [
   'vault.invalid_recovery_code',
   'platforms.name_taken',
   'credentials.label_taken',
+  'obligations.waived_reason_required',
+  'obligations.definition_code_taken',
+  'obligations.ad_hoc_already_exists',
+  'billing.write_off_reason_required',
+  'billing.allocation_exceeds_payment',
+  'billing.allocation_exceeds_charge_balance',
+  'billing.plan_overlap',
+  'billing.charge_already_written_off',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

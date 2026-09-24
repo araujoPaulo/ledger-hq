@@ -71,10 +71,15 @@ test('sets up the vault, adds a credential, and reads it back with the network d
   // from the setup flow above, in the same browser session.
   await page.getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: 'Padaria Central Vault, Lda.' }).click()
-  await page.getByLabel(/designação/i).fill('Acesso principal')
-  await page.getByLabel(/utilizador/i).fill('509123456')
-  await page.getByLabel(/^palavra-passe$/i).fill('correct horse battery staple')
-  await page.getByRole('button', { name: /criar/i }).click()
+  // The client page also renders ObligationsSection's always-present
+  // AddAdHocObligationForm (Phase 2), whose own "name" field is labelled
+  // "Designação" too — same ambiguity class as "Prazo"/"Guardar" elsewhere
+  // in the obligations specs. Scope to the credential form specifically.
+  const credentialForm = page.locator('form', { hasText: /nova credencial/i })
+  await credentialForm.getByLabel(/designação/i).fill('Acesso principal')
+  await credentialForm.getByLabel(/utilizador/i).fill('509123456')
+  await credentialForm.getByLabel(/^palavra-passe$/i).fill('correct horse battery staple')
+  await credentialForm.getByRole('button', { name: /criar/i }).click()
   // `getByText(/portal das finanças/i)` alone is ambiguous here: the
   // AddCredentialForm's platform <select> still has a matching (collapsed)
   // <option> with that same text, and Playwright's strict mode rejects the

@@ -41,5 +41,17 @@
   },
   "credentials": {
     "label_taken": "Já existe uma credencial com a designação {{label}} para esta plataforma."
+  },
+  "obligations": {
+    "waived_reason_required": "Indica o motivo da dispensa.",
+    "definition_code_taken": "Já existe uma obrigação do catálogo com o código {{code}}.",
+    "ad_hoc_already_exists": "Já existe uma obrigação com este código para esta data."
+  },
+  "billing": {
+    "write_off_reason_required": "Indica o motivo do perdão da dívida.",
+    "allocation_exceeds_payment": "A soma das alocações excede o valor do pagamento.",
+    "allocation_exceeds_charge_balance": "O valor alocado excede o saldo em aberto desta cobrança.",
+    "plan_overlap": "Já existe um plano de retainer em vigor para este cliente.",
+    "charge_already_written_off": "Esta cobrança já foi perdoada."
   }
 }

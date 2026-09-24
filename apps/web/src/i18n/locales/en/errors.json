@@ -41,5 +41,17 @@
   },
   "credentials": {
     "label_taken": "A credential named {{label}} already exists for this platform."
+  },
+  "obligations": {
+    "waived_reason_required": "Enter a reason for waiving this obligation.",
+    "definition_code_taken": "A catalog obligation with the code {{code}} already exists.",
+    "ad_hoc_already_exists": "An obligation with this code already exists for this date."
+  },
+  "billing": {
+    "write_off_reason_required": "Enter a reason for writing off this debt.",
+    "allocation_exceeds_payment": "The sum of allocations exceeds the payment amount.",
+    "allocation_exceeds_charge_balance": "The allocated amount exceeds this charge's open balance.",
+    "plan_overlap": "A retainer plan is already in force for this client.",
+    "charge_already_written_off": "This charge has already been written off."
   }
 }
