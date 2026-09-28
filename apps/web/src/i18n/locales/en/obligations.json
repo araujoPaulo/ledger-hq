@@ -5,7 +5,8 @@
     "thisWeek": "This week",
     "thisMonth": "This month",
     "later": "Later",
-    "empty": "No pending obligations."
+    "empty": "No pending obligations.",
+    "emptyHint": "Obligations appear here as the catalog generator creates them for each client."
   },
   "section": {
     "title": "Fiscal obligations",

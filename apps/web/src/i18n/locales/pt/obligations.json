@@ -5,7 +5,8 @@
     "thisWeek": "Esta semana",
     "thisMonth": "Este mês",
     "later": "Mais tarde",
-    "empty": "Sem obrigações pendentes."
+    "empty": "Sem obrigações pendentes.",
+    "emptyHint": "As obrigações aparecem aqui à medida que o gerador do catálogo as cria para cada cliente."
   },
   "section": {
     "title": "Obrigações fiscais",

@@ -20,5 +20,9 @@ export default tseslint.config(
     plugins: { i18next: (await import('eslint-plugin-i18next')).default },
     rules: { 'i18next/no-literal-string': ['error', { markupOnly: true }] },
   },
+  // The rule exists to stop user-visible copy being hardcoded. A component
+  // test has to render literal children to have anything to assert on, and
+  // none of it ships.
+  { files: ['src/**/*.test.tsx'], rules: { 'i18next/no-literal-string': 'off' } },
   { ignores: ['dist/**', 'node_modules/**', '**/*.config.js'] },
 )

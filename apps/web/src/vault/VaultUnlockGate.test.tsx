@@ -25,7 +25,6 @@ function renderGate() {
   const rootRoute = createRootRoute({
     component: () => (
       <VaultUnlockGate>
-        {/* eslint-disable-next-line i18next/no-literal-string -- test fixture content, not user-facing copy */}
         <p>secret content</p>
       </VaultUnlockGate>
     ),

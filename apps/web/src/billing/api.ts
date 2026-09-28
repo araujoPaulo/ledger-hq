@@ -1,11 +1,13 @@
 import { apiFetch } from '../api/client'
 
+export type AgeingBucket = '0-30' | '31-60' | '61-90' | '90+'
+
 export type ReceivablesRow = {
   clientId: string
   clientName: string
   outstandingCents: number
   oldestDueOn: string
-  ageingBucket: '0-30' | '31-60' | '61-90' | '90+'
+  ageingBucket: AgeingBucket
 }
 
 export type CurrentMonthRow = { clientId: string; clientName: string; paid: boolean; outstandingCents: number }

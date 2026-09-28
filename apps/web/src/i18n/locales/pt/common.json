@@ -1,6 +1,7 @@
 {
   "appName": "Ledger HQ",
-  "nav": { "clients": "Clientes", "platforms": "Plataformas" },
+  "home": { "title": "Resumo", "outstanding": "Em dívida" },
+  "nav": { "clients": "Clientes", "vault": "Cofre" },
   "actions": {
     "save": "Guardar",
     "cancel": "Cancelar",
