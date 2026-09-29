@@ -851,6 +851,13 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ### Task 5: Sniff the bytes; do not believe the label
 
+> **Correction applied during execution.** Two of this task's tests as originally
+> written put their assertions only inside a bare `catch`, with no
+> `expect(...).toThrow()` before the try and no `expect.assertions(n)`. Written
+> that way they pass with zero assertions executed if the code ever stops
+> throwing — in exactly the malicious-payload and type-confusion cases the task
+> exists to guard. Every throwing case here asserts the throw explicitly.
+
 **Files:**
 - Create: `apps/api/src/attachments/attachments.service.ts` (pure functions only in this task)
 - Create: `apps/api/src/attachments/attachments.service.test.ts`
@@ -1017,6 +1024,18 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ---
 
 ### Task 6: `Content-Disposition` for a filename that fights back
+
+> **Correction applied during execution.** This task's Step 3 code folded the
+> filename as one string and fell back to `attachment` only when the whole
+> thing folded away. Its own test 5 requires `日本語.pdf` to fall back to
+> exactly `attachment`, but a fully non-ASCII stem with an ASCII extension
+> folds to `.pdf` — verified directly — which is a hidden file on Unix and not
+> a name anyone asked for. Fold the stem and the extension separately, and
+> when the stem alone folds away, fall back to `attachment` and drop the
+> extension with it. A second gap, found in review and present in the original
+> design too: a fallback that folds down to only dots (`.日本語` yields `.`,
+> `..日本語` yields `..`) is not empty, so the guard never fires and the download
+> is named `.`. Treat a folded fallback matching `/^\.*$/` as empty.
 
 **Files:**
 - Create: `apps/api/src/attachments/content-disposition.ts`

@@ -207,7 +207,7 @@ describe('BillingService#proposeAllocationForClient', () => {
     const result = await service.proposeAllocationForClient('c1', 9000)
 
     expect(result).toEqual({
-      proposed: [{ chargeId: 'a', amountCents: 9000, description: 'Retainer — 2026-01', periodLabel: '2026-01', dueOn: '2026-01-08' }],
+      proposed: [{ paymentId: null, chargeId: 'a', amountCents: 9000, description: 'Retainer — 2026-01', periodLabel: '2026-01', dueOn: '2026-01-08' }],
       excessCents: 0,
     })
   })
@@ -222,7 +222,7 @@ describe('BillingService#proposeAllocationForClient', () => {
     const result = await service.proposeAllocationForClient('c1', 15000)
 
     expect(result).toEqual({
-      proposed: [{ chargeId: 'a', amountCents: 9000, description: 'Retainer — 2026-01', periodLabel: '2026-01', dueOn: '2026-01-08' }],
+      proposed: [{ paymentId: null, chargeId: 'a', amountCents: 9000, description: 'Retainer — 2026-01', periodLabel: '2026-01', dueOn: '2026-01-08' }],
       excessCents: 6000,
     })
   })

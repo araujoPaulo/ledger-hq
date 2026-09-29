@@ -5,6 +5,11 @@ export type AgeingBucket = '0-30' | '31-60' | '61-90' | '90+'
 export type ReceivablesRow = {
   clientId: string
   clientName: string
+  /** What the client owes before its own unspent money is counted. */
+  grossOutstandingCents: number
+  /** Unspent payment money, netted off `outstandingCents` notionally. */
+  creditCents: number
+  /** Net, floored at zero — what this client actually still owes. */
   outstandingCents: number
   oldestDueOn: string
   ageingBucket: AgeingBucket
@@ -23,10 +28,13 @@ export type LedgerEntry = {
   writtenOff: boolean
 }
 
-export type ClientLedger = { entries: LedgerEntry[]; balanceCents: number }
+export type ClientLedger = { entries: LedgerEntry[]; balanceCents: number; availableCreditCents: number }
 
 export type GenerateChargesResult = {
   toCreate: Array<{ clientId: string; planId: string; periodLabel: string; amountCents: number; dueOn: string }>
+  creditToAllocate: ProposedAllocationRow[]
+  created: number
+  allocated: number
 }
 
 export type RetainerPlan = {
@@ -39,7 +47,12 @@ export type RetainerPlan = {
   validTo: string | null
 }
 
-export type ProposedAllocation = { chargeId: string; amountCents: number }
+/**
+ * `paymentId` is `null` on a record-payment proposal (the payment doesn't
+ * exist yet) and always set on a credit-application proposal (credit is
+ * money already tied to a specific past payment).
+ */
+export type ProposedAllocation = { paymentId: string | null; chargeId: string; amountCents: number }
 
 /** What the propose endpoint returns: the allocation plus enough of the charge to recognise it. */
 export type ProposedAllocationRow = ProposedAllocation & {
@@ -47,6 +60,8 @@ export type ProposedAllocationRow = ProposedAllocation & {
   periodLabel: string | null
   dueOn: string | null
 }
+
+export type ApplyCreditResult = { proposed: ProposedAllocationRow[]; remainingCreditCents: number; allocated: number }
 
 export type Charge = {
   id: string
@@ -86,9 +101,18 @@ export function recordPayment(input: {
   receivedOn: string
   method: string
   reference?: string
-  allocations: ProposedAllocation[]
+  // Only chargeId and amountCents go on the wire here: the payment this
+  // creates doesn't have an id yet, unlike an apply-credit allocation.
+  allocations: Array<{ chargeId: string; amountCents: number }>
 }): Promise<{ paymentId: string }> {
   return apiFetch('/billing/payments', { method: 'POST', body: input })
+}
+
+export function applyCredit(clientId: string, dryRun: boolean, allocations?: ProposedAllocation[]): Promise<ApplyCreditResult> {
+  return apiFetch(`/billing/clients/${clientId}/apply-credit?dryRun=${dryRun}`, {
+    method: 'POST',
+    body: { allocations: allocations ?? [] },
+  })
 }
 
 export function createRetainerPlan(

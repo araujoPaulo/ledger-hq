@@ -2,11 +2,15 @@ import { z } from 'zod'
 import { PAYMENT_METHOD_VALUES, PERIODICITY_VALUES } from '../enums'
 import { isoDateSchema, uuidSchema } from './common'
 
-export const generateChargesQuerySchema = z
+/** `?dryRun=true|false` — shared by every write endpoint that previews first. */
+export const dryRunQuerySchema = z
   .object({ dryRun: z.enum(['true', 'false']).optional() })
   .strict()
 
-export type GenerateChargesQuery = z.infer<typeof generateChargesQuerySchema>
+export type DryRunQuery = z.infer<typeof dryRunQuerySchema>
+
+export const generateChargesQuerySchema = dryRunQuerySchema
+export type GenerateChargesQuery = DryRunQuery
 
 export const generateChargesBodySchema = z
   .object({
@@ -65,6 +69,26 @@ export const recordPaymentSchema = z
   .strict()
 
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>
+
+/**
+ * A confirm body. Omitted entirely on a dry run, which proposes rather than
+ * applies — hence every field optional at the top level.
+ */
+export const applyCreditSchema = z
+  .object({
+    allocations: z
+      .array(
+        z.object({
+          paymentId: uuidSchema,
+          chargeId: uuidSchema,
+          amountCents: z.number().int().positive(),
+        }),
+      )
+      .default([]),
+  })
+  .strict()
+
+export type ApplyCreditInput = z.infer<typeof applyCreditSchema>
 
 export const createAdHocChargeSchema = z
   .object({

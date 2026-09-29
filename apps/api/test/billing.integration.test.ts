@@ -155,7 +155,7 @@ describe('BillingService#getClientLedger', () => {
 
     const ledger = await billing.getClientLedger(clientId)
 
-    expect(ledger).toEqual({ entries: [], balanceCents: 0 })
+    expect(ledger).toEqual({ entries: [], balanceCents: 0, availableCreditCents: 0 })
   })
 })
 
@@ -229,8 +229,11 @@ describe('BillingController', () => {
     const proposal = await post('/api/v1/billing/payments/propose-allocation', { clientId, amountCents: 9000 })
     // The proposal row carries the charge's description/period/due date for
     // the operator to check; only the allocation half goes back on the wire.
+    // `paymentId` is null here because the proposal is allocated against the
+    // payment being recorded now, which has no id yet (billing.service.ts's
+    // `proposeAllocationForClient` sources the allocator with `paymentId: null`).
     expect(proposal.body.proposed).toEqual([
-      { chargeId: charge.id, amountCents: 9000, description: 'X', periodLabel: null, dueOn: '2026-01-08' },
+      { paymentId: null, chargeId: charge.id, amountCents: 9000, description: 'X', periodLabel: null, dueOn: '2026-01-08' },
     ])
 
     const payment = await post('/api/v1/billing/payments', {
@@ -296,7 +299,7 @@ describe('BillingController', () => {
     const response = await get(`/api/v1/billing/clients/${clientId}/ledger`)
 
     expect(response.status).toBe(200)
-    expect(response.body).toEqual({ entries: [], balanceCents: 0 })
+    expect(response.body).toEqual({ entries: [], balanceCents: 0, availableCreditCents: 0 })
   })
 })
 
@@ -442,5 +445,408 @@ describe('billing regressions', () => {
     const response = await get('/api/v1/billing/receivables')
 
     expect(response.body.find((row: { clientId: string }) => row.clientId === clientId)).toBeUndefined()
+  })
+})
+
+describe('getAvailableCredit', () => {
+  it('returns each payment with money left, oldest first, and their total', async () => {
+    const clientId = await createClient('502111111')
+    const older = uuidv7()
+    const newer = uuidv7()
+    await prisma.payment.create({
+      data: { id: older, clientId, amountCents: 10000, receivedOn: new Date('2026-01-10T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.payment.create({
+      data: { id: newer, clientId, amountCents: 5000, receivedOn: new Date('2026-03-10T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    const credit = await billing.getAvailableCredit(clientId)
+
+    expect(credit.totalCents).toBe(15000)
+    expect(credit.sources.map((source) => source.paymentId)).toEqual([older, newer])
+    expect(credit.sources[0]?.availableCents).toBe(10000)
+    expect(credit.sources[0]?.receivedOn).toBeInstanceOf(Date)
+  })
+
+  it('omits a payment that is fully allocated', async () => {
+    const clientId = await createClient('502222222')
+    const chargeId = uuidv7()
+    await prisma.charge.create({
+      data: {
+        id: chargeId,
+        clientId,
+        kind: 'EXTRA',
+        description: 'Ad-hoc',
+        amountCents: 9000,
+        issuedOn: new Date('2026-01-01T00:00:00Z'),
+        dueOn: new Date('2026-01-31T00:00:00Z'),
+      },
+    })
+    const paymentId = uuidv7()
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 9000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 9000 } })
+
+    const credit = await billing.getAvailableCredit(clientId)
+
+    expect(credit.sources).toEqual([])
+    expect(credit.totalCents).toBe(0)
+  })
+
+  it("never sees another client's credit", async () => {
+    const mine = await createClient('502333333')
+    const theirs = await createClient('502444444')
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId: theirs, amountCents: 20000, receivedOn: new Date('2026-01-10T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    expect((await billing.getAvailableCredit(mine)).totalCents).toBe(0)
+  })
+})
+
+describe('POST /billing/clients/:clientId/apply-credit', () => {
+  async function clientWithCreditAndCharge(taxId: string, chargeCents: number, paymentCents: number, dueOn = '2026-01-31') {
+    const clientId = await createClient(taxId)
+    const chargeId = uuidv7()
+    await prisma.charge.create({
+      data: {
+        id: chargeId,
+        clientId,
+        kind: 'EXTRA',
+        description: 'Ad-hoc',
+        amountCents: chargeCents,
+        issuedOn: new Date('2026-01-01T00:00:00Z'),
+        dueOn: new Date(`${dueOn}T00:00:00Z`),
+      },
+    })
+    const paymentId = uuidv7()
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: paymentCents, receivedOn: new Date('2026-01-05T00:00:00Z'), method: 'TRANSFER' },
+    })
+    return { clientId, chargeId, paymentId }
+  }
+
+  it('proposes credit against the open charge without writing anything', async () => {
+    const { clientId, chargeId, paymentId } = await clientWithCreditAndCharge('503111111', 9000, 12000)
+
+    const response = await post(`/api/v1/billing/clients/${clientId}/apply-credit?dryRun=true`)
+
+    expect(response.status).toBe(201)
+    expect(response.body.proposed).toEqual([
+      expect.objectContaining({ paymentId, chargeId, amountCents: 9000, description: 'Ad-hoc' }),
+    ])
+    expect(response.body.remainingCreditCents).toBe(3000)
+    expect(response.body.allocated).toBe(0)
+    expect(await prisma.paymentAllocation.count()).toBe(0)
+  })
+
+  it('defaults to a dry run when dryRun is omitted', async () => {
+    const { clientId } = await clientWithCreditAndCharge('503222222', 9000, 12000)
+
+    const response = await post(`/api/v1/billing/clients/${clientId}/apply-credit`)
+
+    expect(response.status).toBe(201)
+    expect(await prisma.paymentAllocation.count()).toBe(0)
+  })
+
+  it('writes the allocations it is given on a confirm', async () => {
+    const { clientId, chargeId, paymentId } = await clientWithCreditAndCharge('503333333', 9000, 12000)
+
+    const response = await post(`/api/v1/billing/clients/${clientId}/apply-credit?dryRun=false`, {
+      allocations: [{ paymentId, chargeId, amountCents: 9000 }],
+    })
+
+    expect(response.status).toBe(201)
+    expect(response.body.allocated).toBe(1)
+    const written = await prisma.paymentAllocation.findMany()
+    expect(written).toEqual([{ paymentId, chargeId, amountCents: 9000 }])
+    // The credit is spent: a second run has nothing to propose.
+    const second = await post(`/api/v1/billing/clients/${clientId}/apply-credit?dryRun=true`)
+    expect(second.body.proposed).toEqual([])
+    expect(second.body.remainingCreditCents).toBe(3000)
+  })
+
+  it('proposes nothing, and does not error, when no charge has fallen due yet', async () => {
+    const clientId = await createClient('503444444')
+    await prisma.charge.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        kind: 'EXTRA',
+        description: 'Next month',
+        amountCents: 9000,
+        issuedOn: new Date('2026-01-01T00:00:00Z'),
+        // Due far enough out that `asOf` (now) cannot have reached it.
+        dueOn: new Date('2099-01-31T00:00:00Z'),
+      },
+    })
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId, amountCents: 12000, receivedOn: new Date('2026-01-05T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    const response = await post(`/api/v1/billing/clients/${clientId}/apply-credit?dryRun=true`)
+
+    expect(response.status).toBe(201)
+    expect(response.body.proposed).toEqual([])
+    expect(response.body.remainingCreditCents).toBe(12000)
+  })
+
+  it('never proposes credit against a written-off charge', async () => {
+    const { clientId, chargeId } = await clientWithCreditAndCharge('503555555', 9000, 12000)
+    await prisma.charge.update({ where: { id: chargeId }, data: { writtenOffAt: new Date(), writeOffReason: 'Goodwill' } })
+
+    const response = await post(`/api/v1/billing/clients/${clientId}/apply-credit?dryRun=true`)
+
+    expect(response.body.proposed).toEqual([])
+    expect(response.body.remainingCreditCents).toBe(12000)
+  })
+
+  it('rejects an allocation drawing more than the payment has left', async () => {
+    const { clientId, chargeId, paymentId } = await clientWithCreditAndCharge('503666666', 20000, 5000)
+
+    const response = await post(`/api/v1/billing/clients/${clientId}/apply-credit?dryRun=false`, {
+      allocations: [{ paymentId, chargeId, amountCents: 9000 }],
+    })
+
+    expect(response.status).toBe(422)
+    expect(response.body.error.code).toBe('billing.allocation_exceeds_available_credit')
+    expect(await prisma.paymentAllocation.count()).toBe(0)
+  })
+
+  it("rejects an allocation drawing on another client's payment", async () => {
+    const mine = await clientWithCreditAndCharge('503777777', 9000, 100)
+    const theirs = await clientWithCreditAndCharge('503888888', 9000, 12000)
+
+    const response = await post(`/api/v1/billing/clients/${mine.clientId}/apply-credit?dryRun=false`, {
+      allocations: [{ paymentId: theirs.paymentId, chargeId: mine.chargeId, amountCents: 1 }],
+    })
+
+    expect(response.status).toBe(422)
+    expect(response.body.error.code).toBe('billing.allocation_exceeds_available_credit')
+    expect(await prisma.paymentAllocation.count()).toBe(0)
+  })
+
+  it('serialises two confirms racing for the same credit', async () => {
+    const { clientId, chargeId, paymentId } = await clientWithCreditAndCharge('503999999', 20000, 9000)
+
+    const body = { allocations: [{ paymentId, chargeId, amountCents: 9000 }] }
+    const [first, second] = await Promise.all([
+      post(`/api/v1/billing/clients/${clientId}/apply-credit?dryRun=false`, body),
+      post(`/api/v1/billing/clients/${clientId}/apply-credit?dryRun=false`, body),
+    ])
+
+    const statuses = [first.status, second.status].sort()
+    expect(statuses).toEqual([201, 422])
+    // 90,00 EUR of credit can only be spent once, whichever request won.
+    const total = await prisma.paymentAllocation.aggregate({ _sum: { amountCents: true } })
+    expect(total._sum.amountCents).toBe(9000)
+  })
+})
+
+describe('generateCharges and client credit', () => {
+  async function clientWithPlanAndCredit(taxId: string, creditCents: number) {
+    const clientId = await createClient(taxId)
+    await prisma.retainerPlan.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        amountCents: 9000,
+        periodicity: 'MONTHLY',
+        dueDayOfMonth: 8,
+        validFrom: new Date('2026-01-01T00:00:00Z'),
+        validTo: null,
+      },
+    })
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId, amountCents: creditCents, receivedOn: new Date('2026-01-02T00:00:00Z'), method: 'TRANSFER' },
+    })
+    return clientId
+  }
+
+  it('previews the credit it would spend on the charges it would create', async () => {
+    const clientId = await clientWithPlanAndCredit('504111111', 27000)
+
+    const result = await billing.generateCharges({ asOf: new Date('2026-03-15T00:00:00Z'), clientId }, true)
+
+    expect(result.toCreate).toHaveLength(3)
+    expect(result.created).toBe(0)
+    expect(result.allocated).toBe(0)
+    // Three 90,00 EUR charges, 270,00 EUR of credit: all three settled.
+    expect(result.creditToAllocate.reduce((sum, row) => sum + row.amountCents, 0)).toBe(27000)
+    expect(await prisma.charge.count()).toBe(0)
+    expect(await prisma.paymentAllocation.count()).toBe(0)
+  })
+
+  it('creates the charges and spends the credit in one run', async () => {
+    const clientId = await clientWithPlanAndCredit('504222222', 27000)
+
+    const result = await billing.generateCharges({ asOf: new Date('2026-03-15T00:00:00Z'), clientId }, false)
+
+    expect(result.created).toBe(3)
+    expect(result.allocated).toBe(3)
+    const balances = await prisma.$queryRaw<Array<{ outstandingCents: number }>>`
+      SELECT "outstandingCents" FROM charge_balances WHERE "clientId" = ${clientId}::uuid
+    `
+    expect(balances.every((row) => row.outstandingCents === 0)).toBe(true)
+    expect((await billing.getAvailableCredit(clientId)).totalCents).toBe(0)
+  })
+
+  it('spends partial credit across as many charges as it reaches', async () => {
+    const clientId = await clientWithPlanAndCredit('504333333', 10000)
+
+    await billing.generateCharges({ asOf: new Date('2026-03-15T00:00:00Z'), clientId }, false)
+
+    const balances = await prisma.$queryRaw<Array<{ outstandingCents: number; dueOn: Date }>>`
+      SELECT "outstandingCents", "dueOn" FROM charge_balances WHERE "clientId" = ${clientId}::uuid ORDER BY "dueOn" ASC
+    `
+    // 100,00 EUR against three 90,00 EUR charges: the first settled, the
+    // second 10,00 EUR in, the third untouched.
+    expect(balances.map((row) => row.outstandingCents)).toEqual([0, 8000, 9000])
+  })
+
+  it('generates charges unchanged for a client with no credit', async () => {
+    const clientId = await createClient('504444444')
+    await prisma.retainerPlan.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        amountCents: 9000,
+        periodicity: 'MONTHLY',
+        dueDayOfMonth: 8,
+        validFrom: new Date('2026-01-01T00:00:00Z'),
+        validTo: null,
+      },
+    })
+
+    const result = await billing.generateCharges({ asOf: new Date('2026-02-15T00:00:00Z'), clientId }, false)
+
+    expect(result.created).toBe(2)
+    expect(result.allocated).toBe(0)
+    expect(result.creditToAllocate).toEqual([])
+  })
+})
+
+describe('getReceivables and client credit', () => {
+  async function overdueClient(taxId: string, name: string, charges: Array<{ cents: number; dueOn: string }>, creditCents = 0) {
+    const clientId = await createClient(taxId, name)
+    for (const charge of charges) {
+      await prisma.charge.create({
+        data: {
+          id: uuidv7(),
+          clientId,
+          kind: 'EXTRA',
+          description: `Ad-hoc ${charge.dueOn}`,
+          amountCents: charge.cents,
+          issuedOn: new Date('2026-01-01T00:00:00Z'),
+          dueOn: new Date(`${charge.dueOn}T00:00:00Z`),
+        },
+      })
+    }
+    if (creditCents > 0) {
+      await prisma.payment.create({
+        data: { id: uuidv7(), clientId, amountCents: creditCents, receivedOn: new Date('2026-01-02T00:00:00Z'), method: 'TRANSFER' },
+      })
+    }
+    return clientId
+  }
+
+  const asOf = new Date('2026-06-30T00:00:00Z')
+
+  it('nets credit off the debt and reports both parts', async () => {
+    const clientId = await overdueClient('505111111', 'Partly Covered', [{ cents: 20000, dueOn: '2026-05-31' }], 15000)
+
+    const [row] = await billing.getReceivables(asOf)
+
+    expect(row?.clientId).toBe(clientId)
+    expect(row?.grossOutstandingCents).toBe(20000)
+    expect(row?.creditCents).toBe(15000)
+    expect(row?.outstandingCents).toBe(5000)
+  })
+
+  it('drops a client whose credit covers everything, and never reports a negative', async () => {
+    await overdueClient('505222222', 'Fully Covered', [{ cents: 9000, dueOn: '2026-05-31' }], 30000)
+
+    expect(await billing.getReceivables(asOf)).toEqual([])
+  })
+
+  it('ages by the oldest charge the credit does not reach', async () => {
+    await overdueClient(
+      '505333333',
+      'Aged',
+      [
+        // 210+ days overdue, settled on paper by the credit.
+        { cents: 9000, dueOn: '2026-01-05' },
+        // ~30 days overdue, the one that still stands.
+        { cents: 9000, dueOn: '2026-06-01' },
+      ],
+      9000,
+    )
+
+    const [row] = await billing.getReceivables(asOf)
+
+    expect(row?.oldestDueOn).toBe('2026-06-01')
+    expect(row?.ageingBucket).toBe('0-30')
+  })
+
+  it('leaves a client with no credit exactly as before', async () => {
+    await overdueClient('505444444', 'Plain Debtor', [{ cents: 9000, dueOn: '2026-01-05' }])
+
+    const [row] = await billing.getReceivables(asOf)
+
+    expect(row?.grossOutstandingCents).toBe(9000)
+    expect(row?.creditCents).toBe(0)
+    expect(row?.outstandingCents).toBe(9000)
+    expect(row?.ageingBucket).toBe('90+')
+  })
+
+  it('does not let credit settle a written-off charge', async () => {
+    const clientId = await overdueClient('505555555', 'Forgiven', [{ cents: 9000, dueOn: '2026-05-31' }], 9000)
+    const charge = await prisma.charge.findFirstOrThrow({ where: { clientId } })
+    await prisma.charge.update({ where: { id: charge.id }, data: { writtenOffAt: new Date(), writeOffReason: 'Goodwill' } })
+
+    // Nothing is owed, so nothing is listed — but the credit must still be
+    // intact, not quietly consumed by a debt that was forgiven.
+    expect(await billing.getReceivables(asOf)).toEqual([])
+    expect((await billing.getAvailableCredit(clientId)).totalCents).toBe(9000)
+  })
+})
+
+describe('getClientLedger and client credit', () => {
+  it('reports unspent payment money as available credit', async () => {
+    const clientId = await createClient('506111111')
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId, amountCents: 27000, receivedOn: new Date('2026-01-05T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    const ledger = await billing.getClientLedger(clientId)
+
+    expect(ledger.availableCreditCents).toBe(27000)
+    // The running balance already netted the payment in full before this
+    // phase; that behaviour is unchanged.
+    expect(ledger.balanceCents).toBe(-27000)
+  })
+
+  it('reports zero once every cent is allocated', async () => {
+    const clientId = await createClient('506222222')
+    const chargeId = uuidv7()
+    await prisma.charge.create({
+      data: {
+        id: chargeId,
+        clientId,
+        kind: 'EXTRA',
+        description: 'Ad-hoc',
+        amountCents: 9000,
+        issuedOn: new Date('2026-01-01T00:00:00Z'),
+        dueOn: new Date('2026-01-31T00:00:00Z'),
+      },
+    })
+    const paymentId = uuidv7()
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 9000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 9000 } })
+
+    expect((await billing.getClientLedger(clientId)).availableCreditCents).toBe(0)
   })
 })

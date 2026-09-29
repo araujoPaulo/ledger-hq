@@ -3,6 +3,8 @@
     "title": "Receivables",
     "empty": "No outstanding balances.",
     "emptyHint": "Every client is settled. Charges appear here once they fall due.",
+    "gross": "Gross",
+    "credit": "Credit",
     "bucket": {
       "0-30": "0-30 days",
       "31-60": "31-60 days",
@@ -16,6 +18,14 @@
     "empty": "No billing activity.",
     "charge": "Charge",
     "payment": "Payment"
+  },
+  "credit": {
+    "title": "Available credit",
+    "hint": "Money already received that no charge has claimed yet.",
+    "propose": "Apply credit",
+    "confirm": "Confirm",
+    "nothingToApply": "There are no charges due for this credit to settle.",
+    "remaining": "{{amount}} of credit left over."
   },
   "retainerPlan": {
     "createTitle": "Create retainer plan",
