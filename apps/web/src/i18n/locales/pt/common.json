@@ -2,6 +2,20 @@
   "appName": "Ledger HQ",
   "home": { "title": "Resumo", "outstanding": "Em dívida" },
   "nav": { "clients": "Clientes", "vault": "Cofre" },
+  "search": {
+    "label": "Pesquisar",
+    "placeholder": "Pesquisar clientes, plataformas, obrigações…",
+    "resultsTitle": "Resultados",
+    "empty": "Nada encontrado.",
+    "emptyHint": "Tenta menos letras, ou o número de contribuinte.",
+    "prompt": "Escreve para pesquisar.",
+    "group": {
+      "client": "Clientes",
+      "platform": "Plataformas",
+      "obligation": "Obrigações",
+      "charge": "Cobranças"
+    }
+  },
   "actions": {
     "save": "Guardar",
     "cancel": "Cancelar",

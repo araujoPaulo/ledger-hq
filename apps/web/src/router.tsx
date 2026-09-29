@@ -10,6 +10,7 @@ import { ClientDetailPage } from './clients/ClientDetailPage'
 import { VaultSetupPage } from './vault/VaultSetupPage'
 import { PlatformsPage } from './vault/PlatformsPage'
 import { HomePage } from './HomePage'
+import { SearchResultsPage } from './search/SearchResultsPage'
 
 export function RequireSession({ children }: { children: ReactNode }) {
   const bootstrap = useBootstrapRequired()
@@ -60,8 +61,25 @@ const platformsRoute = createRoute({
   component: PlatformsPage,
 })
 
+const searchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/search',
+  // The query lives in the URL so a result list is linkable and survives a
+  // reload. A missing or non-string `q` reads as empty rather than throwing.
+  validateSearch: (search: Record<string, unknown>) => ({ q: typeof search.q === 'string' ? search.q : '' }),
+  component: SearchResultsPage,
+})
+
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, clientsRoute, clientNewRoute, clientDetailRoute, vaultSetupRoute, platformsRoute]),
+  routeTree: rootRoute.addChildren([
+    indexRoute,
+    clientsRoute,
+    clientNewRoute,
+    clientDetailRoute,
+    vaultSetupRoute,
+    platformsRoute,
+    searchRoute,
+  ]),
 })
 
 declare module '@tanstack/react-router' {

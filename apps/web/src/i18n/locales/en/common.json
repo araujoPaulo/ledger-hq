@@ -2,6 +2,20 @@
   "appName": "Ledger HQ",
   "home": { "title": "Overview", "outstanding": "Outstanding" },
   "nav": { "clients": "Clients", "vault": "Vault" },
+  "search": {
+    "label": "Search",
+    "placeholder": "Search clients, platforms, obligations…",
+    "resultsTitle": "Results",
+    "empty": "Nothing found.",
+    "emptyHint": "Try fewer letters, or the tax number.",
+    "prompt": "Type to search.",
+    "group": {
+      "client": "Clients",
+      "platform": "Platforms",
+      "obligation": "Obligations",
+      "charge": "Charges"
+    }
+  },
   "actions": {
     "save": "Save",
     "cancel": "Cancel",
