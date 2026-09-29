@@ -591,7 +591,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
     allocated: number
   }
   ```
-  `POST /billing/clients/:clientId/apply-credit?dryRun=true|false`. On a dry run `allocated` is `0`; on a confirm, `proposed` echoes what was written.
+  `POST /billing/clients/:clientId/apply-credit?dryRun=true|false`. On a dry run `allocated` is `0` and `proposed` carries the proposal; on a confirm `proposed` is empty and `allocated` counts what was written, matching the spec's §4.3 response shapes.
 
 - [ ] **Step 1: Write the failing tests**
 

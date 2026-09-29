@@ -851,6 +851,13 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ### Task 5: Sniff the bytes; do not believe the label
 
+> **Correction applied during execution.** Two of this task's tests as originally
+> written put their assertions only inside a bare `catch`, with no
+> `expect(...).toThrow()` before the try and no `expect.assertions(n)`. Written
+> that way they pass with zero assertions executed if the code ever stops
+> throwing — in exactly the malicious-payload and type-confusion cases the task
+> exists to guard. Every throwing case here asserts the throw explicitly.
+
 **Files:**
 - Create: `apps/api/src/attachments/attachments.service.ts` (pure functions only in this task)
 - Create: `apps/api/src/attachments/attachments.service.test.ts`
