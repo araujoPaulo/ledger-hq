@@ -703,7 +703,7 @@ describe('POST /billing/clients/:clientId/apply-credit', () => {
     })
 
     expect(response.status).toBe(422)
-    expect(response.body.code).toBe('billing.allocation_exceeds_available_credit')
+    expect(response.body.error.code).toBe('billing.allocation_exceeds_available_credit')
     expect(await prisma.paymentAllocation.count()).toBe(0)
   })
 
@@ -716,7 +716,7 @@ describe('POST /billing/clients/:clientId/apply-credit', () => {
     })
 
     expect(response.status).toBe(422)
-    expect(response.body.code).toBe('billing.allocation_exceeds_available_credit')
+    expect(response.body.error.code).toBe('billing.allocation_exceeds_available_credit')
     expect(await prisma.paymentAllocation.count()).toBe(0)
   })
 
@@ -746,12 +746,24 @@ pnpm --filter @ledger-hq/api test:integration -- billing
 
 Expected: FAIL with 404 on every request — the route does not exist.
 
-- [ ] **Step 3: Add the error code**
+- [ ] **Step 3: Add the error code, and the two strings that must accompany it**
 
 In `packages/domain/src/errors.ts`, add one entry to the billing block (after `'billing.allocation_exceeds_charge_balance'`):
 
 ```ts
   'billing.allocation_exceeds_available_credit',
+```
+
+`apps/web/src/i18n/locales/locales.test.ts` iterates `ERROR_CODES` and fails the web suite for any code with no string in either locale, so the translations land in this same step, not in the UI task. In `apps/web/src/i18n/locales/pt/errors.json`, inside the existing `billing` block:
+
+```json
+    "allocation_exceeds_available_credit": "O valor excede o crédito disponível neste pagamento.",
+```
+
+and in `apps/web/src/i18n/locales/en/errors.json`:
+
+```json
+    "allocation_exceeds_available_credit": "The amount exceeds the credit available on this payment.",
 ```
 
 - [ ] **Step 4: Add the schemas**
@@ -957,7 +969,7 @@ Expected: PASS everywhere. The racing test relies on the `FOR UPDATE` on `Paymen
 - [ ] **Step 8: Commit**
 
 ```bash
-git add packages/domain/src apps/api/src/billing apps/api/test/billing.integration.test.ts
+git add packages/domain/src apps/api/src/billing apps/api/test/billing.integration.test.ts apps/web/src/i18n/locales
 git commit -m "feat(api): spend client credit through propose-then-confirm
 
 POST /billing/clients/:id/apply-credit proposes a FIFO allocation of a
