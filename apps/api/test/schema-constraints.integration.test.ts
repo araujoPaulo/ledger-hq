@@ -20,6 +20,13 @@ async function createIndividual(taxId: string): Promise<string> {
   return id
 }
 
+async function createClient(taxId: string, name = 'Test Client'): Promise<string> {
+  const client = await prisma.client.create({
+    data: { id: uuidv7(), kind: 'COMPANY', name, taxId, accounting: 'ORGANIZED', legalForm: 'LDA' },
+  })
+  return client.id
+}
+
 function employment(employerId: string, employeeId: string, startedOn: string, endedOn?: string) {
   return {
     id: uuidv7(),
@@ -309,5 +316,77 @@ describe('billing constraints', () => {
     expect(typeof rows[0]!.outstandingCents).toBe('number')
     expect(rows[0]!.outstandingCents).toBe(6000)
     expect(rows[0]!.status).toBe('PARTIAL')
+  })
+})
+
+describe('payment_credits view', () => {
+  it('reports the unallocated remainder as credit, as a JSON-safe number', async () => {
+    const clientId = await createClient('501111111')
+    const chargeId = uuidv7()
+    await prisma.charge.create({
+      data: {
+        id: chargeId,
+        clientId,
+        kind: 'EXTRA',
+        description: 'Ad-hoc',
+        amountCents: 5000,
+        issuedOn: new Date('2026-01-01T00:00:00Z'),
+        dueOn: new Date('2026-01-31T00:00:00Z'),
+      },
+    })
+    const paymentId = uuidv7()
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 12000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 5000 } })
+
+    const [row] = await prisma.$queryRaw<Array<{ creditCents: number; allocatedCents: number }>>`
+      SELECT "creditCents", "allocatedCents" FROM payment_credits WHERE "paymentId" = ${paymentId}::uuid
+    `
+    expect(row?.creditCents).toBe(7000)
+    expect(row?.allocatedCents).toBe(5000)
+    // ADR 0007: a missed ::int hands back a bigint and fails at
+    // serialization, in the response, not here — so assert the type.
+    expect(typeof row?.creditCents).toBe('number')
+    expect(typeof row?.allocatedCents).toBe('number')
+  })
+
+  it('reports zero credit for a payment allocated to the last cent', async () => {
+    const clientId = await createClient('501222222')
+    const chargeId = uuidv7()
+    await prisma.charge.create({
+      data: {
+        id: chargeId,
+        clientId,
+        kind: 'EXTRA',
+        description: 'Ad-hoc',
+        amountCents: 9000,
+        issuedOn: new Date('2026-01-01T00:00:00Z'),
+        dueOn: new Date('2026-01-31T00:00:00Z'),
+      },
+    })
+    const paymentId = uuidv7()
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 9000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 9000 } })
+
+    const [row] = await prisma.$queryRaw<Array<{ creditCents: number }>>`
+      SELECT "creditCents" FROM payment_credits WHERE "paymentId" = ${paymentId}::uuid
+    `
+    expect(row?.creditCents).toBe(0)
+  })
+
+  it('reports the full amount as credit for a payment with no allocations', async () => {
+    const clientId = await createClient('501333333')
+    const paymentId = uuidv7()
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 27000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    const [row] = await prisma.$queryRaw<Array<{ creditCents: number }>>`
+      SELECT "creditCents" FROM payment_credits WHERE "paymentId" = ${paymentId}::uuid
+    `
+    expect(row?.creditCents).toBe(27000)
   })
 })
