@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { CalendarCheck, Users, Vault } from 'lucide-react'
 import { AccountMenu } from './AccountMenu'
+import { SearchBox } from '../search/SearchBox'
 
 // "Deadlines" reuses the obligations dashboard's own title rather than adding
 // a nav key that would say the same word twice.
@@ -25,6 +26,8 @@ export function Sidebar() {
         </span>
         {t('common:appName')}
       </span>
+
+      <SearchBox />
 
       <div className="flex flex-1 flex-col gap-1">
         {DESTINATIONS.map(({ to, labelKey, icon: Icon }) => (
