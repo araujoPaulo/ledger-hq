@@ -41,6 +41,24 @@ describe('contentDisposition', () => {
     expect(fallback).toBe('attachment')
   })
 
+  it('falls back to attachment for a leading-dot name that folds to a bare dot', () => {
+    const fallback = /filename="([^"]*)"/.exec(contentDisposition('.日本語'))?.[1] ?? ''
+
+    expect(fallback).toBe('attachment')
+  })
+
+  it('falls back to attachment for a name that folds to nothing but dots', () => {
+    const fallback = /filename="([^"]*)"/.exec(contentDisposition('..日本語'))?.[1] ?? ''
+
+    expect(fallback).toBe('attachment')
+  })
+
+  it('drops a dangling trailing dot left by an extension that folds away', () => {
+    const fallback = /filename="([^"]*)"/.exec(contentDisposition('receipt.日本語'))?.[1] ?? ''
+
+    expect(fallback).toBe('receipt')
+  })
+
   it('percent-encodes a quote and a space in filename* too', () => {
     expect(contentDisposition('a b".pdf')).toContain(`filename*=UTF-8''a%20b%22.pdf`)
   })

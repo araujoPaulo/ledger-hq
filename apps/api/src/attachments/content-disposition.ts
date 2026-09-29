@@ -25,7 +25,16 @@ function asciiFallback(filename: string): string {
 
   const foldedStem = fold(stem)
 
-  return foldedStem === '' ? 'attachment' : `${foldedStem}${fold(extension)}`
+  // A stem that folds away to nothing, or to nothing but dots (a leading-dot
+  // name like ".日本語" or "..日本語" folds its non-ASCII remainder away and
+  // leaves only the dot(s) that were already there), carries no information.
+  // Treat it the same as empty: fall back to "attachment" and drop the
+  // extension too, rather than surfacing a bare "." or "..".
+  if (/^\.*$/.test(foldedStem)) return 'attachment'
+
+  // An extension that itself folds away to nothing but a dot (e.g.
+  // "receipt.日本語") would otherwise leave a dangling trailing dot.
+  return `${foldedStem}${fold(extension)}`.replace(/\.$/, '')
 }
 
 function fold(value: string): string {
