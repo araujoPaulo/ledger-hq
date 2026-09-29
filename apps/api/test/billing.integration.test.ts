@@ -155,7 +155,7 @@ describe('BillingService#getClientLedger', () => {
 
     const ledger = await billing.getClientLedger(clientId)
 
-    expect(ledger).toEqual({ entries: [], balanceCents: 0 })
+    expect(ledger).toEqual({ entries: [], balanceCents: 0, availableCreditCents: 0 })
   })
 })
 
@@ -299,7 +299,7 @@ describe('BillingController', () => {
     const response = await get(`/api/v1/billing/clients/${clientId}/ledger`)
 
     expect(response.status).toBe(200)
-    expect(response.body).toEqual({ entries: [], balanceCents: 0 })
+    expect(response.body).toEqual({ entries: [], balanceCents: 0, availableCreditCents: 0 })
   })
 })
 
@@ -809,5 +809,44 @@ describe('getReceivables and client credit', () => {
     // intact, not quietly consumed by a debt that was forgiven.
     expect(await billing.getReceivables(asOf)).toEqual([])
     expect((await billing.getAvailableCredit(clientId)).totalCents).toBe(9000)
+  })
+})
+
+describe('getClientLedger and client credit', () => {
+  it('reports unspent payment money as available credit', async () => {
+    const clientId = await createClient('506111111')
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId, amountCents: 27000, receivedOn: new Date('2026-01-05T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    const ledger = await billing.getClientLedger(clientId)
+
+    expect(ledger.availableCreditCents).toBe(27000)
+    // The running balance already netted the payment in full before this
+    // phase; that behaviour is unchanged.
+    expect(ledger.balanceCents).toBe(-27000)
+  })
+
+  it('reports zero once every cent is allocated', async () => {
+    const clientId = await createClient('506222222')
+    const chargeId = uuidv7()
+    await prisma.charge.create({
+      data: {
+        id: chargeId,
+        clientId,
+        kind: 'EXTRA',
+        description: 'Ad-hoc',
+        amountCents: 9000,
+        issuedOn: new Date('2026-01-01T00:00:00Z'),
+        dueOn: new Date('2026-01-31T00:00:00Z'),
+      },
+    })
+    const paymentId = uuidv7()
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 9000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 9000 } })
+
+    expect((await billing.getClientLedger(clientId)).availableCreditCents).toBe(0)
   })
 })

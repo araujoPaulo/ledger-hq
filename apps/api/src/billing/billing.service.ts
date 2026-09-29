@@ -580,7 +580,8 @@ export class BillingService {
    * still counted forgiven debt as owed, and the client's own page contradicted
    * the receivables list, which has always excluded written-off charges.
    */
-  async getClientLedger(clientId: string): Promise<{ entries: LedgerEntry[]; balanceCents: number }> {
+  async getClientLedger(clientId: string): Promise<{ entries: LedgerEntry[]; balanceCents: number; availableCreditCents: number }> {
+    const credit = await this.getAvailableCredit(clientId)
     const charges = await this.prisma.charge.findMany({ where: { clientId }, orderBy: { issuedOn: 'asc' } })
     const payments = await this.prisma.payment.findMany({ where: { clientId }, orderBy: { receivedOn: 'asc' } })
     const allocations = await this.prisma.paymentAllocation.groupBy({
@@ -637,6 +638,6 @@ export class BillingService {
       }
     })
 
-    return { entries, balanceCents: runningBalanceCents }
+    return { entries, balanceCents: runningBalanceCents, availableCreditCents: credit.totalCents }
   }
 }
