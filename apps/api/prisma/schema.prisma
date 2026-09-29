@@ -322,9 +322,15 @@ model Payment {
 }
 
 model PaymentAllocation {
-  paymentId   String @db.Uuid
-  chargeId    String @db.Uuid
+  paymentId   String   @db.Uuid
+  chargeId    String   @db.Uuid
   amountCents Int
+  /// When this allocation itself was written — not when the payment behind
+  /// it was received. `BillingService#applyCredit` can write a row here
+  /// long after the payment's `receivedOn`, so anything reconstructing a
+  /// past point in time (periodSummary's `outstandingAtCloseCents`) must
+  /// key off this, not the payment.
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
   payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   charge  Charge  @relation(fields: [chargeId], references: [id], onDelete: Cascade)

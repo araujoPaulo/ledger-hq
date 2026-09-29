@@ -58,6 +58,10 @@ function get(path: string) {
   return request(app.getHttpServer()).get(path).set('Cookie', cookie).set('X-Requested-With', 'ledger-hq')
 }
 
+function post(path: string, body: Record<string, unknown> = {}) {
+  return request(app.getHttpServer()).post(path).set('Cookie', cookie).set('X-Requested-With', 'ledger-hq').send(body)
+}
+
 beforeEach(async () => {
   await resetDatabase()
   app = await createTestApp()
@@ -342,5 +346,97 @@ describe('GET /api/v1/reporting/period-summary', () => {
 
     expect(response.status).toBe(422)
     expect(response.body.error.code).toBe('common.validation_failed')
+  })
+
+  it('includes an obligation, charge and payment dated exactly on the closing day', async () => {
+    const clientId = await createClient('503777777', 'Padaria Central, Lda.')
+    await overdueObligation(clientId, '2026-Q1', '2026-03-31')
+    await prisma.charge.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        kind: 'EXTRA',
+        description: 'No fecho',
+        amountCents: 3000,
+        issuedOn: new Date('2026-03-31T00:00:00Z'),
+        dueOn: new Date('2026-03-31T00:00:00Z'),
+      },
+    })
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId, amountCents: 2000, receivedOn: new Date('2026-03-31T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    const response = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+
+    expect(response.body.obligationsDue).toBe(1)
+    expect(response.body.chargesIssuedCents).toBe(3000)
+    expect(response.body.paymentsReceivedCents).toBe(2000)
+  })
+
+  // Reproduces the fix-round-1 defect: BillingService#applyCredit can write
+  // a PaymentAllocation row against an existing payment long after that
+  // payment's receivedOn. A closed period's summary must not change once
+  // that later allocation exists — it must still answer as it did before
+  // the credit was applied.
+  it('does not change once a closed period is re-summarised after credit is applied to it later', async () => {
+    const clientId = await createClient('503888888', 'Padaria Central, Lda.')
+    const charge = await prisma.charge.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        kind: 'EXTRA',
+        description: 'Fevereiro',
+        amountCents: 5000,
+        issuedOn: new Date('2026-02-01T00:00:00Z'),
+        dueOn: new Date('2026-02-28T00:00:00Z'),
+      },
+    })
+    const paymentId = uuidv7()
+    // Received inside the window, but not yet allocated to anything: the
+    // whole amount sits as unspent credit as of the close.
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 5000, receivedOn: new Date('2026-01-15T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    const before = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+    expect(before.body.outstandingAtCloseCents).toBe(5000)
+
+    // The credit is applied well after the window closed.
+    const applied = await post(`/api/v1/billing/clients/${clientId}/apply-credit?dryRun=false`, {
+      allocations: [{ paymentId, chargeId: charge.id, amountCents: 5000 }],
+    })
+    expect(applied.status).toBe(201)
+
+    const after = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+    expect(after.body).toEqual(before.body)
+  })
+
+  // `createdAt` is a timestamp, unlike the `@db.Date` columns the other
+  // boundary test covers — an allocation made at 15:00 on the closing day
+  // must still count as "by close", not just one made at its midnight start.
+  it('treats an allocation created any time during the closing day as settled by close', async () => {
+    const clientId = await createClient('503999999', 'Padaria Central, Lda.')
+    const charge = await prisma.charge.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        kind: 'EXTRA',
+        description: 'No fecho',
+        amountCents: 4000,
+        issuedOn: new Date('2026-02-01T00:00:00Z'),
+        dueOn: new Date('2026-02-28T00:00:00Z'),
+      },
+    })
+    const paymentId = uuidv7()
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 4000, receivedOn: new Date('2026-01-15T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.paymentAllocation.create({
+      data: { paymentId, chargeId: charge.id, amountCents: 4000, createdAt: new Date('2026-03-31T15:00:00Z') },
+    })
+
+    const response = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+
+    expect(response.body.outstandingAtCloseCents).toBe(0)
   })
 })

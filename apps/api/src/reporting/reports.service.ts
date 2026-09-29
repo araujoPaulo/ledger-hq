@@ -141,11 +141,20 @@ export class ReportsService {
    * state.
    *
    * `outstandingAtCloseCents` reconstructs the position **at `to`**, not
-   * today: it counts only allocations from payments received by then, so a
-   * charge settled the month after the quarter closed still shows as
-   * outstanding in that quarter's summary. Reporting today's balance under a
-   * past period's heading would make every historical summary change as new
+   * today: it counts only allocations that existed by then, so a charge
+   * settled the month after the quarter closed still shows as outstanding
+   * in that quarter's summary. Reporting today's balance under a past
+   * period's heading would make every historical summary change as new
    * money arrives.
+   *
+   * That "existed by then" test is the allocation's own `createdAt`, not
+   * the payment's `receivedOn`. `BillingService#applyCredit` can write an
+   * allocation against a payment long after that payment was received —
+   * that is the whole point of unspent credit — so keying off `receivedOn`
+   * would let a credit application made after a period closed silently
+   * settle a charge inside it, changing that period's answer depending on
+   * when it's asked. `createdAt` is the only timestamp that actually says
+   * when the allocation — the event that spends the money — happened.
    */
   async periodSummary(from: Date, to: Date): Promise<PeriodSummary> {
     const [row] = await this.prisma.$queryRaw<
@@ -181,13 +190,18 @@ export class ReportsService {
         WHERE "issuedOn" <= ${to}
           AND ("writtenOffAt" IS NULL OR "writtenOffAt"::date > ${to})
       ),
-      -- Only money that had actually arrived by close counts against them.
+      -- Only allocations actually written by close count against a charge —
+      -- keyed on the allocation's own createdAt, not the payment's
+      -- receivedOn: credit applied to a charge after the window closed
+      -- must not retroactively settle it (see the method doc). Cast to
+      -- date, the same as writtenOffAt above: createdAt is a timestamp, and
+      -- "to" is midnight at the start of the closing day, so a bare <=
+      -- would wrongly exclude an allocation made later that same day.
       settled AS (
-        SELECT a."chargeId", SUM(a."amountCents")::int AS "allocatedCents"
-        FROM "PaymentAllocation" a
-        JOIN "Payment" p ON p.id = a."paymentId"
-        WHERE p."receivedOn" <= ${to}
-        GROUP BY a."chargeId"
+        SELECT "chargeId", SUM("amountCents")::int AS "allocatedCents"
+        FROM "PaymentAllocation"
+        WHERE "createdAt"::date <= ${to}
+        GROUP BY "chargeId"
       ),
       closing AS (
         SELECT COALESCE(SUM(GREATEST(i."amountCents" - COALESCE(s."allocatedCents", 0), 0)), 0)::int AS "outstandingAtCloseCents"
