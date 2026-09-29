@@ -15,6 +15,7 @@ import { VaultModule } from './vault/vault.module.js'
 import { ObligationsModule } from './obligations/obligations.module.js'
 import { BillingModule } from './billing/billing.module.js'
 import { SystemModule } from './system/system.module.js'
+import { ReportingModule } from './reporting/reporting.module.js'
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { SystemModule } from './system/system.module.js'
     ObligationsModule,
     BillingModule,
     SystemModule,
+    ReportingModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: CsrfGuard }],
 })
