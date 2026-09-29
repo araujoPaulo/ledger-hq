@@ -186,4 +186,20 @@ describe('attachment upload, list, download and delete', () => {
 
     expect(response.body).toEqual({ error: { code: 'auth.session_expired', params: {} } })
   })
+
+  // `FileInterceptor` never lets a raw MulterError reach a filter: Nest's
+  // own `transformException` rewrites LIMIT_FILE_SIZE into a
+  // PayloadTooLargeException first. Without MulterErrorFilter also catching
+  // that HttpException, this would 413 with common.validation_failed
+  // instead of the code the operator needs to act on.
+  it('answers 413 attachments.too_large for a file over the cap, not a generic validation error', async () => {
+    const obligationId = await anObligation('509000111')
+    const oversized = Buffer.concat([PDF, Buffer.alloc(10 * 1024 * 1024, 0x41)])
+
+    const response = await upload(obligationId, oversized, 'huge.pdf', 'application/pdf')
+
+    expect(response.status).toBe(413)
+    expect(response.body).toEqual({ error: { code: 'attachments.too_large', params: { maxBytes: 10 * 1024 * 1024 } } })
+    expect(await prisma.obligationAttachment.count()).toBe(0)
+  })
 })
