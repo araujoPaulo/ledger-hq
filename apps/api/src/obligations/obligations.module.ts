@@ -11,5 +11,6 @@ import { ObligationsCron } from './obligations.cron.js'
   imports: [AuthModule, ClientsModule, ScheduleModule.forRoot()],
   controllers: [ObligationsController],
   providers: [ObligationsService, ObligationsCron, PrismaService],
+  exports: [ObligationsService],
 })
 export class ObligationsModule {}
