@@ -229,8 +229,11 @@ describe('BillingController', () => {
     const proposal = await post('/api/v1/billing/payments/propose-allocation', { clientId, amountCents: 9000 })
     // The proposal row carries the charge's description/period/due date for
     // the operator to check; only the allocation half goes back on the wire.
+    // `paymentId` is null here because the proposal is allocated against the
+    // payment being recorded now, which has no id yet (billing.service.ts's
+    // `proposeAllocationForClient` sources the allocator with `paymentId: null`).
     expect(proposal.body.proposed).toEqual([
-      { chargeId: charge.id, amountCents: 9000, description: 'X', periodLabel: null, dueOn: '2026-01-08' },
+      { paymentId: null, chargeId: charge.id, amountCents: 9000, description: 'X', periodLabel: null, dueOn: '2026-01-08' },
     ])
 
     const payment = await post('/api/v1/billing/payments', {
