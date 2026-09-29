@@ -14,12 +14,16 @@ installable PWA shell, and the operational tooling to run it self-hosted),
 **Phase 1 — Vault** (the zero-knowledge encrypted credential vault,
 recovery-code account recovery, and offline vault reads),
 **Phase 2 — Obligations** (the statutory fiscal-obligation catalog and
-generator, and ad-hoc obligation tracking), and **Phase 3 — Billing**
+generator, and ad-hoc obligation tracking), **Phase 3 — Billing**
 (retainer plans, monthly charge generation, payment recording with FIFO
 allocation, ad-hoc charges and write-offs, and the receivables and
-per-client ledger views). That is every phase the
+per-client ledger views), and **Phase 4c — Obligation Attachments**
+(submission receipts stored against an obligation, on a volume beside the
+database and in the nightly backup). The
 [design specification](docs/superpowers/specs/2026-09-04-ledger-hq-design.md)
-scopes; the questions it leaves open (section 16) are Phase 4 material.
+scopes Phases 0 through 3 directly; the rest of what it leaves open
+(section 16) is Phase 4, which decomposes into independent sub-phases —
+see [the Phase 4a design spec's decomposition](docs/superpowers/specs/2026-09-28-phase-4a-client-credit-design.md#2-phase-4-decomposition).
 
 ## Requirements
 

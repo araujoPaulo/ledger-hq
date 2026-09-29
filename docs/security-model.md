@@ -17,9 +17,10 @@ AES-256-GCM ciphertext for every vault credential, and an Argon2id hash of
 a hash for login — never a password, never a key.
 
 This does **not** extend to the plaintext client register cached for
-offline reads — see the next section. An office machine and a lost phone
-are exposed identically there; that cache is not part of what this section
-covers.
+offline reads, nor to obligation attachments stored on the server — see
+the next section for both. An office machine and a lost phone are exposed
+identically for the first; the second is exposed by disk access to the
+server itself. Neither is part of what this section covers.
 
 ## What is not mitigated
 
@@ -40,6 +41,16 @@ covers.
   a coat pocket or the practice's own office computer. This remains an
   open gap after Phase 1; closing it would mean encrypting the client
   register cache too, which is out of scope for this phase.
+- **Submission receipts stored on the server, in plaintext.** Obligation
+  attachments (Phase 4c) are written to the `attachments-data` volume as the
+  bytes that were uploaded — no vault envelope, no encryption at rest beyond
+  whatever the host's own disk encryption provides. Disk-level access to the
+  server, or an unencrypted copy of that volume, yields every receipt in
+  full. This is deliberate: a receipt records a submission the tax authority
+  also holds, so encrypting it would protect data the counterparty already
+  has while making it unreadable in exactly the recovery scenario backups
+  exist for. The nightly backup copy *is* encrypted (`age`,
+  `docker/backup.sh`); the live volume is not.
 - **A compromised server serving malicious JavaScript to an unlocked
   session.** The server delivers the application's own code; if that code
   is malicious, it runs with whatever key material the session holds

@@ -83,3 +83,68 @@ test('sets up a company, generates obligations, sees them on the dashboard, and 
   // assertion is on the pt-PT rendering, not on the ISO value typed above.
   await expect(obligations.getByText('31/12/2026')).toBeVisible()
 })
+
+test('attaches a receipt to an obligation, downloads it, and keeps it out of the service-worker cache', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByLabel(/email/i).fill('paulo@example.com')
+  await page.getByLabel(/^palavra-passe mestra$/i).fill(MASTER_PASSWORD)
+  const confirmPasswordField = page.getByLabel(/confirma/i)
+  if (await confirmPasswordField.isVisible().catch(() => false)) {
+    await confirmPasswordField.fill(MASTER_PASSWORD)
+  }
+  await page.getByRole('button', { name: /criar|entrar/i }).click()
+  await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
+
+  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByLabel(/tipo/i).selectOption('COMPANY')
+  await page.getByLabel(/^nome$/i).fill('Padaria Central Anexos, Lda.')
+  await page.getByLabel(/^nif$/i).fill('507555554')
+  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByRole('button', { name: /guardar/i }).click() // fiscal profile defaults
+
+  const obligations = page.getByRole('region', { name: /obrigações fiscais/i })
+  await expect(page.getByRole('button', { name: /aplicar/i })).toBeVisible({ timeout: 10_000 })
+  await page.getByRole('button', { name: /aplicar/i }).click()
+  await expect(obligations.getByText(/declaração periódica de iva/i).first()).toBeVisible()
+
+  await obligations.getByRole('button', { name: /^comprovativos$/i }).first().click()
+  const panel = page.getByRole('region', { name: /comprovativos/i })
+
+  // A real, minimal PDF: the API sniffs the leading bytes and rejects
+  // anything whose contents disagree with its declared type.
+  await panel.getByLabel(/anexar ficheiro/i).setInputFiles({
+    name: 'Declaração periódica.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n'),
+  })
+
+  const link = panel.getByRole('link', { name: /transferir declaração periódica\.pdf/i })
+  await expect(link).toBeVisible({ timeout: 15_000 })
+
+  // It survives a reload, which is what proves it reached the server rather
+  // than only the component's state.
+  await page.reload()
+  await obligations.getByRole('button', { name: /^comprovativos$/i }).first().click()
+  await expect(panel.getByRole('link', { name: /transferir declaração periódica\.pdf/i })).toBeVisible()
+
+  const href = await panel.getByRole('link', { name: /transferir/i }).first().getAttribute('href')
+  const downloaded = await page.request.get(href!)
+  expect(downloaded.status()).toBe(200)
+  expect(downloaded.headers()['content-type']).toContain('application/pdf')
+  expect(downloaded.headers()['content-disposition']).toContain(`filename*=UTF-8''Declara%C3%A7%C3%A3o`)
+
+  // The receipt must not be sitting in the PWA read cache in plaintext.
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 20_000 })
+  const cachedUrls = await page.evaluate(async () => {
+    const names = await caches.keys()
+    const urls: string[] = []
+    for (const name of names) {
+      const cache = await caches.open(name)
+      for (const request of await cache.keys()) urls.push(request.url)
+    }
+    return urls
+  })
+  expect(cachedUrls.filter((url) => /\/attachments\/[^/]+$/.test(url))).toEqual([])
+})

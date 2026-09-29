@@ -8,6 +8,7 @@ set -a && . ./.env && set +a
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 ARCHIVE="${BACKUP_LOCAL_DIR}/ledger-hq-${STAMP}.dump.age"
+FILES_ARCHIVE="${BACKUP_LOCAL_DIR}/ledger-hq-${STAMP}.files.tar.age"
 STATUS="OK"
 DETAIL=""
 
@@ -23,6 +24,20 @@ else
   STATUS="FAILED"
   DETAIL="pg_dump or encryption failed"
   rm -f "${ARCHIVE}"
+fi
+
+# The two artifacts share ${STAMP} on purpose: different stamps describe
+# different moments, and restoring across them produces exactly the orphan
+# files and orphan rows the runbook's reconciliation looks for.
+if docker compose exec -T api tar -cf - -C /var/lib/ledger-hq attachments \
+    | age --recipient "${BACKUP_AGE_RECIPIENT}" --output "${FILES_ARCHIVE}"
+then
+  find "${BACKUP_LOCAL_DIR}" -name 'ledger-hq-*.files.tar.age' -mtime +30 -delete
+  rclone copy "${FILES_ARCHIVE}" "${BACKUP_REMOTE}" || { STATUS="FAILED"; DETAIL="offsite copy failed"; }
+else
+  STATUS="FAILED"
+  DETAIL="attachment archive failed"
+  rm -f "${FILES_ARCHIVE}"
 fi
 
 # Passed as psql variables (`:'name'`), not interpolated into the SQL text,

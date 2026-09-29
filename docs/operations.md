@@ -134,6 +134,22 @@ docker cp /tmp/rollback-restore.dump "$(docker compose ps -q postgres)":/tmp/rol
 docker compose exec -T postgres pg_restore -U "${POSTGRES_USER}" \
   -d "${POSTGRES_DB}" --no-owner /tmp/rollback-restore.dump
 
+# 3b. Restore the matching attachment archive. The timestamp MUST be the
+#     same one as the dump above: a dump and a file archive from different
+#     nights leave rows whose files are missing, and files no row knows
+#     about.
+age --decrypt -i /path/to/age-private-key.txt \
+  -o /tmp/rollback-files.tar \
+  "${BACKUP_LOCAL_DIR}/ledger-hq-<timestamp>.files.tar.age"
+docker compose up -d api
+docker cp /tmp/rollback-files.tar "$(docker compose ps -q api)":/tmp/rollback-files.tar
+docker compose exec -T api sh -c 'rm -rf /var/lib/ledger-hq/attachments && tar -xf /tmp/rollback-files.tar -C /var/lib/ledger-hq'
+
+# Clean up the decrypted archive on both the host and inside the container —
+# it is plaintext and must not linger in either place.
+rm -f /tmp/rollback-files.tar
+docker compose exec -T api rm -f /tmp/rollback-files.tar
+
 # 4. Clean up the decrypted dump on both the host and inside the container —
 #    it is plaintext and must not linger in either place.
 rm -f /tmp/rollback-restore.dump
@@ -174,6 +190,25 @@ docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d restore_drill \
 docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
   -c 'SELECT count(*) FROM "Client";'
 
+# 3b. Reconcile the attachment rows against the files on disk, in both
+#     directions. Neither list should surprise you.
+docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d restore_drill -At \
+  -c 'SELECT "obligationId" || $$/$$ || id FROM "ObligationAttachment"' | sort > /tmp/rows.txt
+docker compose exec -T api sh -c 'cd /var/lib/ledger-hq/attachments && find . -type f -printf "%P\n"' \
+  | sort > /tmp/files.txt
+
+# On disk, not in the database: a failed upload or a stale restore. Harmless
+# — every read starts from a row — and safe to delete.
+comm -13 /tmp/rows.txt /tmp/files.txt
+
+# In the database, not on disk: the download answers
+# `attachments.file_missing` (410) and the UI says so. These rows are NOT
+# deleted: the row is the only remaining record of what the receipt was
+# called, which is what you need to fetch it again from the portal.
+comm -23 /tmp/rows.txt /tmp/files.txt
+
+rm -f /tmp/rows.txt /tmp/files.txt
+
 # 4. Drop the throwaway database.
 docker compose exec -T postgres dropdb -U "${POSTGRES_USER}" restore_drill
 
@@ -192,7 +227,25 @@ scheduled backup runs, not after a real incident forces the issue.
 | What | Where | Notes |
 |---|---|---|
 | Live database | `postgres-data` Docker volume, on this host | Mounted at `/var/lib/postgresql` (not `/var/lib/postgresql/data` — see `docker-compose.yml`'s comment on why). |
+| Obligation attachments | `attachments-data` Docker volume, on this host | Plaintext — see [`docs/security-model.md`](security-model.md). Backed up nightly as a second `age`-encrypted artifact sharing the dump's timestamp; restore the two together. |
 | Nightly encrypted dumps | `${BACKUP_LOCAL_DIR}` on this host | Pruned after 30 days by `docker/backup.sh`. Encrypted with `age`; useless without the private key. |
 | Offsite copy of dumps | `${BACKUP_REMOTE}` (an `rclone` remote) | Same encrypted files, copied off this host in case it is lost entirely. |
 | `age` private key | **Paper only, stored off-site** | Never written to disk on this host or any backup target. Without it, no dump — local or offsite — can be decrypted. |
 | Vault recovery code | **Paper only, stored off-site**, separate from the `age` key | Generated at account bootstrap. Without it and without the master password, the vault's contents are permanently unrecoverable. |
+
+The API creates `attachments-data`'s directories itself, owner-only
+(`mkdir`/`mkdirSync` with mode `0700`) — but `mkdir` with a mode is a no-op
+on a directory that already exists. Docker itself creates the volume's
+mount point before the container's first write ever runs, so the very
+first deploy (and any later one where the directory was touched by
+something else in between) can leave it at whatever permissions Docker or
+that other process gave it, never tightened to `0700` afterwards. After
+bringing `api` up for the first time — and again after any operation that
+recreates or touches the volume from outside the container — check it and
+fix it by hand if it's wrong:
+
+```bash
+docker compose exec -T api sh -c 'stat -c "%a %U" /var/lib/ledger-hq/attachments'
+# expect: 700 <the api process's user>
+docker compose exec -T api chmod 700 /var/lib/ledger-hq/attachments
+```
