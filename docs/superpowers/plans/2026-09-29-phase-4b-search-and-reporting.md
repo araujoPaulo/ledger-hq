@@ -450,7 +450,8 @@ Expected: PASS, all four. If the first run fails with `text search configuration
 cd apps/api
 set -a && . ./.env && set +a
 pnpm exec prisma generate
-pnpm exec prisma migrate diff --from-schema-datamodel prisma/schema.prisma --to-schema-datasource prisma/schema.prisma --exit-code
+# Prisma 7 removed --from-schema-datamodel and --to-schema-datasource.
+pnpm exec prisma migrate diff --from-schema prisma/schema.prisma --to-config-datasource prisma.config.ts --exit-code
 cd ../..
 ```
 
@@ -924,6 +925,15 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ---
 
 ### Task 4: The search results page
+
+> **Correction applied during execution.** This task originally specified four
+> tests — grouping, context, empty, and the empty-query prompt — and none for
+> the pending or error branch. Those two are exactly what this plan's Global
+> Constraints care about: the skeleton-never-null rule, and the distinction
+> between "nothing found" and "the request failed". Add a test with an
+> unresolved promise asserting the skeleton renders, and one with a rejected
+> promise asserting the error surface appears **and** the empty-result text
+> does not.
 
 **Files:**
 - Create: `apps/web/src/search/api.ts`
