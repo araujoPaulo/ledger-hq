@@ -53,5 +53,10 @@
     "allocation_exceeds_charge_balance": "The allocated amount exceeds this charge's open balance.",
     "plan_overlap": "A retainer plan is already in force for this client.",
     "charge_already_written_off": "This charge has already been written off."
+  },
+  "attachments": {
+    "type_not_allowed": "Only PDF, PNG and JPEG files are accepted.",
+    "too_large": "The file is over the 10 MB limit.",
+    "file_missing": "This attachment's file is not on the server. The record was kept so you know what needs fetching again."
   }
 }
