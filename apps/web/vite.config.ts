@@ -44,6 +44,21 @@ export default defineConfig({
             handler: 'NetworkOnly' as const,
           },
           {
+            // A downloaded receipt must never land in `api-reads`. That
+            // cache holds plaintext in Cache Storage for 24 hours on every
+            // device that opens one — the gap docs/security-model.md
+            // already names for the client register; there is no reason to
+            // widen it to document images. Same ordering rule as above:
+            // Workbox matches in array order, first match wins, so this
+            // must stay ahead of the generic NetworkFirst rule.
+            //
+            // The *list* route deliberately stays on NetworkFirst:
+            // filenames and sizes are metadata of the kind already cached.
+            urlPattern: ({ url, request }) =>
+              /^\/api\/v1\/obligations\/[^/]+\/attachments\/[^/]+$/.test(url.pathname) && request.method === 'GET',
+            handler: 'NetworkOnly' as const,
+          },
+          {
             // Reads degrade to the last known state, clearly marked as stale.
             urlPattern: ({ url, request }) =>
               url.pathname.startsWith('/api/v1') && request.method === 'GET',
