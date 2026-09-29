@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { uuidv7 } from 'uuidv7'
 import { AppError, chargeDueDate, chargePeriodsSince, proposeAllocation } from '@ledger-hq/domain'
-import type { AllocationSource, ChargeBalance, CreateAdHocChargeInput, CreateRetainerPlanInput, ProposedAllocation, RecordPaymentInput, RenewRetainerPlanInput } from '@ledger-hq/domain'
+import type { AllocationSource, ApplyCreditInput, ChargeBalance, CreateAdHocChargeInput, CreateRetainerPlanInput, ProposedAllocation, RecordPaymentInput, RenewRetainerPlanInput } from '@ledger-hq/domain'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { PrismaService } from '../common/prisma.service.js'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
@@ -30,6 +30,12 @@ export type LedgerEntry = {
 
 export type GenerateChargesResult = {
   toCreate: Array<{ clientId: string; planId: string; periodLabel: string; amountCents: number; dueOn: string }>
+}
+
+export type ApplyCreditResult = {
+  proposed: ProposedAllocationRow[]
+  remainingCreditCents: number
+  allocated: number
 }
 
 function isoDate(date: Date): string {
@@ -167,27 +173,29 @@ export class BillingService {
     return this.prisma.retainerPlan.findFirst({ where: { clientId, validTo: null } })
   }
 
-  async proposeAllocationForClient(clientId: string, amountCents: number): Promise<{ proposed: ProposedAllocationRow[]; excessCents: number }> {
-    // `charge_balances` carries no `description` (it is derived state over
-    // amounts, not a copy of the charge), so join the charge back in for the
-    // human-readable half of each proposal row.
-    const openCharges = await this.prisma.$queryRaw<Array<ChargeBalance & { description: string }>>`
+  /**
+   * A client's charges that are open, due, and not forgiven — the only
+   * charges any proposal may touch. `charge_balances` carries no
+   * `description` (it is derived state over amounts, not a copy of the
+   * charge), so the charge is joined back in for the human-readable half.
+   */
+  private async openChargesFor(clientId: string, asOf: Date): Promise<Array<ChargeBalance & { description: string }>> {
+    return this.prisma.$queryRaw<Array<ChargeBalance & { description: string }>>`
       SELECT b.*, c.description
       FROM charge_balances b
       JOIN "Charge" c ON c.id = b.id
-      WHERE b."clientId" = ${clientId}::uuid AND b."outstandingCents" > 0 AND b.status != 'WRITTEN_OFF'
+      WHERE b."clientId" = ${clientId}::uuid
+        AND b."outstandingCents" > 0
+        AND b.status != 'WRITTEN_OFF'
+        AND b."dueOn" <= ${asOf}
       ORDER BY b."dueOn" ASC
     `
-    // One source: the payment being recorded now, which has no id yet.
-    const proposed = proposeAllocation([{ paymentId: null, availableCents: amountCents, receivedOn: new Date() }], openCharges)
-    const allocatedCents = proposed.reduce((sum, allocation) => sum + allocation.amountCents, 0)
+  }
 
-    // Design doc §3.2: the proposal is the one place FIFO is reviewed rather
-    // than applied automatically ("only the accountant knows"), so each row
-    // carries what identifies the charge to a human. The bare `chargeId` the
-    // allocator returns is a UUID, which tells the operator nothing.
-    const byId = new Map(openCharges.map((charge) => [charge.id, charge]))
-    const rows = proposed.map((allocation) => {
+  /** Decorates a bare proposal with what identifies each charge to a human. */
+  private toProposalRows(proposed: ProposedAllocation[], charges: Array<ChargeBalance & { description: string }>): ProposedAllocationRow[] {
+    const byId = new Map(charges.map((charge) => [charge.id, charge]))
+    return proposed.map((allocation) => {
       const charge = byId.get(allocation.chargeId)
       return {
         paymentId: allocation.paymentId,
@@ -198,8 +206,14 @@ export class BillingService {
         dueOn: charge ? isoDate(charge.dueOn) : null,
       }
     })
+  }
 
-    return { proposed: rows, excessCents: amountCents - allocatedCents }
+  async proposeAllocationForClient(clientId: string, amountCents: number): Promise<{ proposed: ProposedAllocationRow[]; excessCents: number }> {
+    const charges = await this.openChargesFor(clientId, new Date())
+    // One source: the payment being recorded now, which has no id yet.
+    const proposed = proposeAllocation([{ paymentId: null, availableCents: amountCents, receivedOn: new Date() }], charges)
+    const allocatedCents = proposed.reduce((sum, allocation) => sum + allocation.amountCents, 0)
+    return { proposed: this.toProposalRows(proposed, charges), excessCents: amountCents - allocatedCents }
   }
 
   /**
@@ -219,6 +233,75 @@ export class BillingService {
       sources: rows.map((row) => ({ paymentId: row.paymentId, availableCents: row.creditCents, receivedOn: row.receivedOn })),
       totalCents: rows.reduce((sum, row) => sum + row.creditCents, 0),
     }
+  }
+
+  /**
+   * Spends credit the client already paid against charges already due
+   * (Phase 4a design §4.3). Same propose-then-confirm discipline as
+   * `recordPayment`, without a new payment: a dry run proposes, a confirm
+   * writes exactly the allocations it was handed, re-validated against the
+   * database's own view of both halves.
+   */
+  async applyCredit(clientId: string, input: ApplyCreditInput | null, dryRun: boolean): Promise<ApplyCreditResult> {
+    const asOf = new Date()
+    const credit = await this.getAvailableCredit(clientId)
+
+    if (dryRun) {
+      const charges = await this.openChargesFor(clientId, asOf)
+      const proposed = proposeAllocation(credit.sources, charges)
+      const allocatedCents = proposed.reduce((sum, allocation) => sum + allocation.amountCents, 0)
+      return { proposed: this.toProposalRows(proposed, charges), remainingCreditCents: credit.totalCents - allocatedCents, allocated: 0 }
+    }
+
+    const allocations = input?.allocations ?? []
+    if (allocations.length === 0) return { proposed: [], remainingCreditCents: credit.totalCents, allocated: 0 }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const allocation of allocations) {
+        // Two locks, payment first then charge. `recordPayment` locks only
+        // the charge, and cannot deadlock against this: the payment it
+        // allocates from is created inside its own transaction, so no other
+        // writer can be holding that row. `FOR UPDATE` cannot be taken on
+        // either view (Postgres rejects it on a grouped query), so both
+        // locks go on the base tables.
+        await tx.$queryRaw`SELECT id FROM "Payment" WHERE id = ${allocation.paymentId}::uuid FOR UPDATE`
+        await tx.$queryRaw`SELECT id FROM "Charge" WHERE id = ${allocation.chargeId}::uuid FOR UPDATE`
+
+        // Bound to this client on both sides: without it, a stale proposal
+        // held across a client navigation could spend one client's credit on
+        // another client's debt.
+        const [credited] = await tx.$queryRaw<Array<{ creditCents: number }>>`
+          SELECT "creditCents" FROM payment_credits
+          WHERE "paymentId" = ${allocation.paymentId}::uuid AND "clientId" = ${clientId}::uuid
+        `
+        if (!credited || allocation.amountCents > credited.creditCents) {
+          throw new AppError('billing.allocation_exceeds_available_credit', { paymentId: allocation.paymentId }, 422)
+        }
+
+        const [balance] = await tx.$queryRaw<Array<{ outstandingCents: number }>>`
+          SELECT "outstandingCents" FROM charge_balances
+          WHERE id = ${allocation.chargeId}::uuid
+            AND "clientId" = ${clientId}::uuid
+            AND status != 'WRITTEN_OFF'
+        `
+        if (!balance || allocation.amountCents > balance.outstandingCents) {
+          throw new AppError('billing.allocation_exceeds_charge_balance', { chargeId: allocation.chargeId }, 422)
+        }
+
+        // An upsert, not a create: the composite primary key is
+        // (paymentId, chargeId), so a second allocation from the same
+        // payment to the same charge adds to the first rather than failing
+        // on a key collision.
+        await tx.paymentAllocation.upsert({
+          where: { paymentId_chargeId: { paymentId: allocation.paymentId, chargeId: allocation.chargeId } },
+          create: { paymentId: allocation.paymentId, chargeId: allocation.chargeId, amountCents: allocation.amountCents },
+          update: { amountCents: { increment: allocation.amountCents } },
+        })
+      }
+    })
+
+    const after = await this.getAvailableCredit(clientId)
+    return { proposed: [], remainingCreditCents: after.totalCents, allocated: allocations.length }
   }
 
   /**
