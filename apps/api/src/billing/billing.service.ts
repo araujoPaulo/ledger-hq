@@ -178,7 +178,8 @@ export class BillingService {
       WHERE b."clientId" = ${clientId}::uuid AND b."outstandingCents" > 0 AND b.status != 'WRITTEN_OFF'
       ORDER BY b."dueOn" ASC
     `
-    const proposed = proposeAllocation(amountCents, openCharges)
+    // One source: the payment being recorded now, which has no id yet.
+    const proposed = proposeAllocation([{ paymentId: null, availableCents: amountCents, receivedOn: new Date() }], openCharges)
     const allocatedCents = proposed.reduce((sum, allocation) => sum + allocation.amountCents, 0)
 
     // Design doc §3.2: the proposal is the one place FIFO is reviewed rather
@@ -189,6 +190,7 @@ export class BillingService {
     const rows = proposed.map((allocation) => {
       const charge = byId.get(allocation.chargeId)
       return {
+        paymentId: allocation.paymentId,
         chargeId: allocation.chargeId,
         amountCents: allocation.amountCents,
         description: charge?.description ?? '',
