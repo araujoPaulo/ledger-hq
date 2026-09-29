@@ -449,25 +449,87 @@ export class BillingService {
     return this.prisma.charge.update({ where: { id }, data: { writtenOffAt: new Date(), writeOffReason: reason } })
   }
 
-  async getReceivables(asOf: Date): Promise<Array<{ clientId: string; clientName: string; outstandingCents: number; oldestDueOn: string; ageingBucket: '0-30' | '31-60' | '61-90' | '90+' }>> {
-    const rows = await this.prisma.$queryRaw<Array<{ clientId: string; clientName: string; outstandingCents: number; oldestDueOn: Date }>>`
-      SELECT
-        c.id AS "clientId",
-        c.name AS "clientName",
-        SUM(b."outstandingCents")::int AS "outstandingCents",
-        MIN(b."dueOn") AS "oldestDueOn"
+  /**
+   * Who owes what, netted against what they have already paid but not yet
+   * spent (Phase 4a design §4.4). The netting is **notional**: no allocation
+   * is written here. Both parts travel so the operator can see where the net
+   * figure came from without opening the client.
+   */
+  async getReceivables(asOf: Date): Promise<
+    Array<{
+      clientId: string
+      clientName: string
+      grossOutstandingCents: number
+      creditCents: number
+      outstandingCents: number
+      oldestDueOn: string
+      ageingBucket: '0-30' | '31-60' | '61-90' | '90+'
+    }>
+  > {
+    // Per charge, not per client: the ageing bucket has to know which
+    // individual charges the credit reaches before it can say how old the
+    // rest are.
+    const charges = await this.prisma.$queryRaw<Array<{ clientId: string; clientName: string; dueOn: Date; outstandingCents: number }>>`
+      SELECT c.id AS "clientId", c.name AS "clientName", b."dueOn", b."outstandingCents"
       FROM charge_balances b
       JOIN "Client" c ON c.id = b."clientId"
       WHERE b."outstandingCents" > 0 AND b.status != 'WRITTEN_OFF' AND b."dueOn" <= ${asOf}
-      GROUP BY c.id, c.name
-      ORDER BY "oldestDueOn" ASC
+      ORDER BY c.id, b."dueOn" ASC
     `
 
-    return rows.map((row) => {
-      const daysOverdue = Math.floor((asOf.getTime() - row.oldestDueOn.getTime()) / (24 * 60 * 60 * 1000))
+    const credits = await this.prisma.$queryRaw<Array<{ clientId: string; creditCents: number }>>`
+      SELECT "clientId", SUM("creditCents")::int AS "creditCents"
+      FROM payment_credits
+      WHERE "creditCents" > 0
+      GROUP BY "clientId"
+    `
+    const creditByClient = new Map(credits.map((row) => [row.clientId, row.creditCents]))
+
+    const byClient = new Map<string, { clientName: string; charges: Array<{ dueOn: Date; outstandingCents: number }> }>()
+    for (const charge of charges) {
+      const entry = byClient.get(charge.clientId) ?? { clientName: charge.clientName, charges: [] }
+      entry.charges.push({ dueOn: charge.dueOn, outstandingCents: charge.outstandingCents })
+      byClient.set(charge.clientId, entry)
+    }
+
+    const rows = []
+    for (const [clientId, entry] of byClient) {
+      const grossOutstandingCents = entry.charges.reduce((sum, charge) => sum + charge.outstandingCents, 0)
+      const creditCents = creditByClient.get(clientId) ?? 0
+
+      // Spend the credit on paper, oldest charge first — the same order a
+      // real allocation would use — and keep the first charge it fails to
+      // cover. That charge, not the oldest debt on the books, is what this
+      // client is actually overdue on.
+      let remainingCredit = creditCents
+      let oldestUncovered: Date | null = null
+      for (const charge of entry.charges) {
+        if (remainingCredit >= charge.outstandingCents) {
+          remainingCredit -= charge.outstandingCents
+          continue
+        }
+        oldestUncovered = charge.dueOn
+        break
+      }
+
+      const outstandingCents = Math.max(grossOutstandingCents - creditCents, 0)
+      if (outstandingCents === 0 || oldestUncovered === null) continue
+
+      const daysOverdue = Math.floor((asOf.getTime() - oldestUncovered.getTime()) / ONE_DAY_MS)
       const ageingBucket = daysOverdue > 90 ? '90+' : daysOverdue > 60 ? '61-90' : daysOverdue > 30 ? '31-60' : '0-30'
-      return { clientId: row.clientId, clientName: row.clientName, outstandingCents: row.outstandingCents, oldestDueOn: isoDate(row.oldestDueOn), ageingBucket }
-    })
+
+      rows.push({
+        clientId,
+        clientName: entry.clientName,
+        grossOutstandingCents,
+        creditCents,
+        outstandingCents,
+        oldestDueOn: isoDate(oldestUncovered),
+        ageingBucket: ageingBucket as '0-30' | '31-60' | '61-90' | '90+',
+      })
+    }
+
+    return rows.sort((a, b) => a.oldestDueOn.localeCompare(b.oldestDueOn))
   }
 
   /**

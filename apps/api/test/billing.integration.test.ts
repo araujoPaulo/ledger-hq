@@ -726,3 +726,88 @@ describe('generateCharges and client credit', () => {
     expect(result.creditToAllocate).toEqual([])
   })
 })
+
+describe('getReceivables and client credit', () => {
+  async function overdueClient(taxId: string, name: string, charges: Array<{ cents: number; dueOn: string }>, creditCents = 0) {
+    const clientId = await createClient(taxId, name)
+    for (const charge of charges) {
+      await prisma.charge.create({
+        data: {
+          id: uuidv7(),
+          clientId,
+          kind: 'EXTRA',
+          description: `Ad-hoc ${charge.dueOn}`,
+          amountCents: charge.cents,
+          issuedOn: new Date('2026-01-01T00:00:00Z'),
+          dueOn: new Date(`${charge.dueOn}T00:00:00Z`),
+        },
+      })
+    }
+    if (creditCents > 0) {
+      await prisma.payment.create({
+        data: { id: uuidv7(), clientId, amountCents: creditCents, receivedOn: new Date('2026-01-02T00:00:00Z'), method: 'TRANSFER' },
+      })
+    }
+    return clientId
+  }
+
+  const asOf = new Date('2026-06-30T00:00:00Z')
+
+  it('nets credit off the debt and reports both parts', async () => {
+    const clientId = await overdueClient('505111111', 'Partly Covered', [{ cents: 20000, dueOn: '2026-05-31' }], 15000)
+
+    const [row] = await billing.getReceivables(asOf)
+
+    expect(row?.clientId).toBe(clientId)
+    expect(row?.grossOutstandingCents).toBe(20000)
+    expect(row?.creditCents).toBe(15000)
+    expect(row?.outstandingCents).toBe(5000)
+  })
+
+  it('drops a client whose credit covers everything, and never reports a negative', async () => {
+    await overdueClient('505222222', 'Fully Covered', [{ cents: 9000, dueOn: '2026-05-31' }], 30000)
+
+    expect(await billing.getReceivables(asOf)).toEqual([])
+  })
+
+  it('ages by the oldest charge the credit does not reach', async () => {
+    await overdueClient(
+      '505333333',
+      'Aged',
+      [
+        // 210+ days overdue, settled on paper by the credit.
+        { cents: 9000, dueOn: '2026-01-05' },
+        // ~30 days overdue, the one that still stands.
+        { cents: 9000, dueOn: '2026-06-01' },
+      ],
+      9000,
+    )
+
+    const [row] = await billing.getReceivables(asOf)
+
+    expect(row?.oldestDueOn).toBe('2026-06-01')
+    expect(row?.ageingBucket).toBe('0-30')
+  })
+
+  it('leaves a client with no credit exactly as before', async () => {
+    await overdueClient('505444444', 'Plain Debtor', [{ cents: 9000, dueOn: '2026-01-05' }])
+
+    const [row] = await billing.getReceivables(asOf)
+
+    expect(row?.grossOutstandingCents).toBe(9000)
+    expect(row?.creditCents).toBe(0)
+    expect(row?.outstandingCents).toBe(9000)
+    expect(row?.ageingBucket).toBe('90+')
+  })
+
+  it('does not let credit settle a written-off charge', async () => {
+    const clientId = await overdueClient('505555555', 'Forgiven', [{ cents: 9000, dueOn: '2026-05-31' }], 9000)
+    const charge = await prisma.charge.findFirstOrThrow({ where: { clientId } })
+    await prisma.charge.update({ where: { id: charge.id }, data: { writtenOffAt: new Date(), writeOffReason: 'Goodwill' } })
+
+    // Nothing is owed, so nothing is listed — but the credit must still be
+    // intact, not quietly consumed by a debt that was forgiven.
+    expect(await billing.getReceivables(asOf)).toEqual([])
+    expect((await billing.getAvailableCredit(clientId)).totalCents).toBe(9000)
+  })
+})
