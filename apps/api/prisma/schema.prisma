@@ -239,12 +239,29 @@ model ObligationInstance {
   createdAt         DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime         @updatedAt @db.Timestamptz(3)
 
-  client     Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  definition ObligationDefinition @relation(fields: [definitionCode], references: [code])
+  client      Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  definition  ObligationDefinition   @relation(fields: [definitionCode], references: [code])
+  attachments ObligationAttachment[]
 
   @@unique([clientId, definitionCode, periodStart])
   @@index([clientId])
   @@index([status, dueDate])
+}
+
+model ObligationAttachment {
+  id           String   @id @db.Uuid
+  obligationId String   @db.Uuid
+  // The name the operator's browser sent. Data only: it is emitted in
+  // Content-Disposition and never joined into a path (design §3.2).
+  filename     String
+  contentType  String
+  sizeBytes    Int
+  sha256       String
+  uploadedAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  obligation ObligationInstance @relation(fields: [obligationId], references: [id], onDelete: Cascade)
+
+  @@index([obligationId])
 }
 
 model RetainerPlan {

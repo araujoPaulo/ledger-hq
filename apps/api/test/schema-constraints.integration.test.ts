@@ -311,3 +311,76 @@ describe('billing constraints', () => {
     expect(rows[0]!.status).toBe('PARTIAL')
   })
 })
+
+describe('ObligationAttachment', () => {
+  async function anObligation(taxId: string): Promise<string> {
+    const clientId = await createCompany(taxId)
+    // `source` is required and has no default (schema.prisma's
+    // DefinitionSource enum): CUSTOM, because this definition is a fixture,
+    // not a row the catalog sync owns.
+    await prisma.obligationDefinition.upsert({
+      where: { code: 'TEST_ATTACHMENTS' },
+      update: {},
+      create: {
+        code: 'TEST_ATTACHMENTS',
+        name: 'Test obligation',
+        authority: 'TAX',
+        periodicity: 'MONTHLY',
+        source: 'CUSTOM',
+      },
+    })
+    const obligation = await prisma.obligationInstance.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        definitionCode: 'TEST_ATTACHMENTS',
+        periodStart: new Date('2026-01-01T00:00:00Z'),
+        periodEnd: new Date('2026-01-31T00:00:00Z'),
+        periodLabel: '2026-01',
+        dueDate: new Date('2026-02-20T00:00:00Z'),
+      },
+    })
+    return obligation.id
+  }
+
+  it('stores the uploaded filename as data, not as a path', async () => {
+    const obligationId = await anObligation('508111111')
+    const id = uuidv7()
+
+    await prisma.obligationAttachment.create({
+      data: {
+        id,
+        obligationId,
+        // Deliberately hostile: this is allowed in the column precisely
+        // because it never reaches the filesystem (design §3.2).
+        filename: '../../etc/passwd',
+        contentType: 'application/pdf',
+        sizeBytes: 1234,
+        sha256: 'a'.repeat(64),
+      },
+    })
+
+    const stored = await prisma.obligationAttachment.findUniqueOrThrow({ where: { id } })
+    expect(stored.filename).toBe('../../etc/passwd')
+    expect(stored.uploadedAt).toBeInstanceOf(Date)
+  })
+
+  it('cascades when the obligation is deleted', async () => {
+    const obligationId = await anObligation('508222222')
+    await prisma.obligationAttachment.create({
+      data: { id: uuidv7(), obligationId, filename: 'receipt.pdf', contentType: 'application/pdf', sizeBytes: 10, sha256: 'b'.repeat(64) },
+    })
+
+    await prisma.obligationInstance.delete({ where: { id: obligationId } })
+
+    expect(await prisma.obligationAttachment.count({ where: { obligationId } })).toBe(0)
+  })
+
+  it('refuses an attachment on an obligation that does not exist', async () => {
+    await expect(
+      prisma.obligationAttachment.create({
+        data: { id: uuidv7(), obligationId: uuidv7(), filename: 'x.pdf', contentType: 'application/pdf', sizeBytes: 1, sha256: 'c'.repeat(64) },
+      }),
+    ).rejects.toThrow()
+  })
+})
