@@ -26,7 +26,7 @@ export function SearchResultsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={t('search.resultsTitle')} description={q} />
+      <PageHeader title={t('search.resultsTitle')} {...(q.trim().length > 0 ? { description: q } : {})} />
 
       {q.trim().length === 0 ? (
         <p className="text-sm text-muted">{t('search.prompt')}</p>

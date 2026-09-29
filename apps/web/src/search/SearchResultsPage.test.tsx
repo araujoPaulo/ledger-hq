@@ -87,4 +87,21 @@ describe('SearchResultsPage', () => {
     expect(await screen.findByText(/escreve para pesquisar/i)).toBeVisible()
     await waitFor(() => expect(getSearchResultsMock).not.toHaveBeenCalled())
   })
+
+  it('shows a skeleton while the search is pending', async () => {
+    getSearchResultsMock.mockReturnValue(new Promise(() => {}))
+
+    const { container } = renderPage('/search?q=mari')
+
+    await waitFor(() => expect(container.querySelector('[aria-busy="true"]')).not.toBeNull())
+  })
+
+  it('shows an error, not the empty state, when the search fails', async () => {
+    getSearchResultsMock.mockRejectedValue(new Error('boom'))
+
+    renderPage('/search?q=mari')
+
+    expect(await screen.findByRole('alert')).toBeVisible()
+    expect(screen.queryByText(/nada encontrado/i)).not.toBeInTheDocument()
+  })
 })
