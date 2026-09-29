@@ -11,7 +11,8 @@
     "restore": "Restore",
     "signIn": "Sign in",
     "signOut": "Sign out",
-    "lockVault": "Lock vault"
+    "lockVault": "Lock vault",
+    "delete": "Delete"
   },
   "connection": {
     "online": "Online",

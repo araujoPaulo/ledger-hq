@@ -11,7 +11,8 @@
     "restore": "Restaurar",
     "signIn": "Entrar",
     "signOut": "Sair",
-    "lockVault": "Bloquear cofre"
+    "lockVault": "Bloquear cofre",
+    "delete": "Eliminar"
   },
   "connection": {
     "online": "Ligado",

@@ -16,6 +16,12 @@ vi.mock('./api', () => ({
   patchObligation: patchObligationMock,
   createAdHocObligation: createAdHocObligationMock,
 }))
+vi.mock('./attachmentsApi', () => ({
+  listAttachments: vi.fn().mockResolvedValue([]),
+  uploadAttachment: vi.fn(),
+  deleteAttachment: vi.fn(),
+  attachmentDownloadUrl: () => '#',
+}))
 
 const { ObligationsSection } = await import('./ObligationsSection')
 
@@ -140,5 +146,38 @@ describe('ObligationsSection', () => {
         expect.objectContaining({ clientId: 'c1', code: 'BACKUP_RESTORE_DRILL', name: 'Backup restore drill' }),
       ),
     )
+  })
+
+  describe('attachments', () => {
+    it('opens the panel for the row whose receipts button was pressed', async () => {
+      listObligationsMock.mockResolvedValue([{ ...obligation, status: 'DONE' }])
+
+      renderSection()
+
+      await userEvent.click(await screen.findByRole('button', { name: /^comprovativos$/i }))
+
+      expect(await screen.findByRole('region', { name: /comprovativos/i })).toBeVisible()
+    })
+
+    it('shows no receipts count badge when the obligation has none', async () => {
+      listObligationsMock.mockResolvedValue([{ ...obligation, status: 'DONE' }])
+
+      renderSection()
+
+      await screen.findByRole('button', { name: /^comprovativos$/i })
+      expect(screen.queryByTestId('attachment-count')).toBeNull()
+    })
+
+    // Design §3.7: requiring DONE would force the operator to mark an
+    // obligation done before filing the proof that it is done. The UI leads
+    // with the affordance on a DONE row because that is when a receipt
+    // exists; nothing rejects an earlier upload.
+    it('offers the panel on a PENDING obligation too', async () => {
+      listObligationsMock.mockResolvedValue([obligation])
+
+      renderSection()
+
+      expect(await screen.findByRole('button', { name: /^comprovativos$/i })).toBeVisible()
+    })
   })
 })

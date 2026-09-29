@@ -6,6 +6,7 @@ import { generateObligations, listObligations, patchObligation } from './api'
 import type { ObligationResponse } from './api'
 import { AdjustObligationForm } from './AdjustObligationForm'
 import { AddAdHocObligationForm } from './AddAdHocObligationForm'
+import { ObligationAttachments } from './ObligationAttachments'
 import { ObligationRow } from './ObligationRow'
 
 export function ObligationsSection({ clientId }: { clientId: string }) {
@@ -13,6 +14,7 @@ export function ObligationsSection({ clientId }: { clientId: string }) {
   const queryClient = useQueryClient()
   const titleId = useId()
   const [editing, setEditing] = useState<ObligationResponse | null>(null)
+  const [attachmentsFor, setAttachmentsFor] = useState<ObligationResponse | null>(null)
 
   const obligations = useQuery({
     queryKey: ['obligations', clientId],
@@ -84,6 +86,7 @@ export function ObligationsSection({ clientId }: { clientId: string }) {
               showClient={false}
               onMarkDone={() => markDone.mutate(obligation.id)}
               onEdit={() => setEditing(obligation)}
+              onManageAttachments={() => setAttachmentsFor(obligation)}
             />
           ))}
         </ul>
@@ -95,6 +98,10 @@ export function ObligationsSection({ clientId }: { clientId: string }) {
           onClose={() => setEditing(null)}
           onSaved={() => queryClient.invalidateQueries({ queryKey: ['obligations', clientId] })}
         />
+      )}
+
+      {attachmentsFor && (
+        <ObligationAttachments obligation={attachmentsFor} onClose={() => setAttachmentsFor(null)} />
       )}
 
       <AddAdHocObligationForm

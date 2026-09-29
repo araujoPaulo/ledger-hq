@@ -19,6 +19,18 @@
     "edit": "Edit",
     "waive": "Waive"
   },
+  "attachments": {
+    "title": "Receipts",
+    "manage": "Receipts",
+    "add": "Attach a file",
+    "download": "Download {{filename}}",
+    "delete": "Delete {{filename}}",
+    "confirmDelete": "Delete {{filename}}? There is no way to get it back.",
+    "empty": "No receipts attached yet.",
+    "uploading": "Uploading…",
+    "close": "Close",
+    "hint": "PDF, PNG or JPEG, up to 10 MB."
+  },
   "form": {
     "dueDate": { "label": "Due date" },
     "status": { "label": "Status" },
