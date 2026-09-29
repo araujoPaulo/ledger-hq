@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module.js'
 import { PrismaService } from '../common/prisma.service.js'
 import { ReportingController } from './reporting.controller.js'
 import { SearchService } from './search.service.js'
+import { ReportsService } from './reports.service.js'
 
 /**
  * The cross-module read layer `docs/architecture.md` reserved: `clients` is
@@ -14,6 +15,6 @@ import { SearchService } from './search.service.js'
 @Module({
   imports: [AuthModule],
   controllers: [ReportingController],
-  providers: [SearchService, PrismaService],
+  providers: [SearchService, ReportsService, PrismaService],
 })
 export class ReportingModule {}
