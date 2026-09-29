@@ -643,3 +643,86 @@ describe('POST /billing/clients/:clientId/apply-credit', () => {
     expect(total._sum.amountCents).toBe(9000)
   })
 })
+
+describe('generateCharges and client credit', () => {
+  async function clientWithPlanAndCredit(taxId: string, creditCents: number) {
+    const clientId = await createClient(taxId)
+    await prisma.retainerPlan.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        amountCents: 9000,
+        periodicity: 'MONTHLY',
+        dueDayOfMonth: 8,
+        validFrom: new Date('2026-01-01T00:00:00Z'),
+        validTo: null,
+      },
+    })
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId, amountCents: creditCents, receivedOn: new Date('2026-01-02T00:00:00Z'), method: 'TRANSFER' },
+    })
+    return clientId
+  }
+
+  it('previews the credit it would spend on the charges it would create', async () => {
+    const clientId = await clientWithPlanAndCredit('504111111', 27000)
+
+    const result = await billing.generateCharges({ asOf: new Date('2026-03-15T00:00:00Z'), clientId }, true)
+
+    expect(result.toCreate).toHaveLength(3)
+    expect(result.created).toBe(0)
+    expect(result.allocated).toBe(0)
+    // Three 90,00 EUR charges, 270,00 EUR of credit: all three settled.
+    expect(result.creditToAllocate.reduce((sum, row) => sum + row.amountCents, 0)).toBe(27000)
+    expect(await prisma.charge.count()).toBe(0)
+    expect(await prisma.paymentAllocation.count()).toBe(0)
+  })
+
+  it('creates the charges and spends the credit in one run', async () => {
+    const clientId = await clientWithPlanAndCredit('504222222', 27000)
+
+    const result = await billing.generateCharges({ asOf: new Date('2026-03-15T00:00:00Z'), clientId }, false)
+
+    expect(result.created).toBe(3)
+    expect(result.allocated).toBe(3)
+    const balances = await prisma.$queryRaw<Array<{ outstandingCents: number }>>`
+      SELECT "outstandingCents" FROM charge_balances WHERE "clientId" = ${clientId}::uuid
+    `
+    expect(balances.every((row) => row.outstandingCents === 0)).toBe(true)
+    expect((await billing.getAvailableCredit(clientId)).totalCents).toBe(0)
+  })
+
+  it('spends partial credit across as many charges as it reaches', async () => {
+    const clientId = await clientWithPlanAndCredit('504333333', 10000)
+
+    await billing.generateCharges({ asOf: new Date('2026-03-15T00:00:00Z'), clientId }, false)
+
+    const balances = await prisma.$queryRaw<Array<{ outstandingCents: number; dueOn: Date }>>`
+      SELECT "outstandingCents", "dueOn" FROM charge_balances WHERE "clientId" = ${clientId}::uuid ORDER BY "dueOn" ASC
+    `
+    // 100,00 EUR against three 90,00 EUR charges: the first settled, the
+    // second 10,00 EUR in, the third untouched.
+    expect(balances.map((row) => row.outstandingCents)).toEqual([0, 8000, 9000])
+  })
+
+  it('generates charges unchanged for a client with no credit', async () => {
+    const clientId = await createClient('504444444')
+    await prisma.retainerPlan.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        amountCents: 9000,
+        periodicity: 'MONTHLY',
+        dueDayOfMonth: 8,
+        validFrom: new Date('2026-01-01T00:00:00Z'),
+        validTo: null,
+      },
+    })
+
+    const result = await billing.generateCharges({ asOf: new Date('2026-02-15T00:00:00Z'), clientId }, false)
+
+    expect(result.created).toBe(2)
+    expect(result.allocated).toBe(0)
+    expect(result.creditToAllocate).toEqual([])
+  })
+})

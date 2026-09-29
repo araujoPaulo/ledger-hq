@@ -30,6 +30,10 @@ export type LedgerEntry = {
 
 export type GenerateChargesResult = {
   toCreate: Array<{ clientId: string; planId: string; periodLabel: string; amountCents: number; dueOn: string }>
+  /** What the credit on hand would settle, once `toCreate` exists. Empty when no client has credit. */
+  creditToAllocate: ProposedAllocationRow[]
+  created: number
+  allocated: number
 }
 
 export type ApplyCreditResult = {
@@ -40,6 +44,20 @@ export type ApplyCreditResult = {
 
 function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10)
+}
+
+function toWireItem(item: { clientId: string; planId: string; period: { label: string }; amountCents: number; dueOn: Date }) {
+  return { clientId: item.clientId, planId: item.planId, periodLabel: item.period.label, amountCents: item.amountCents, dueOn: isoDate(item.dueOn) }
+}
+
+/**
+ * A confirmed allocation always names a real payment. `paymentId` is only
+ * ever `null` for the payment being recorded in the same request, which this
+ * path never has.
+ */
+function toConfirmedAllocation(allocation: ProposedAllocation): { paymentId: string; chargeId: string; amountCents: number } {
+  if (allocation.paymentId === null) throw new AppError('billing.allocation_exceeds_available_credit', {}, 422)
+  return { paymentId: allocation.paymentId, chargeId: allocation.chargeId, amountCents: allocation.amountCents }
 }
 
 @Injectable()
@@ -86,9 +104,45 @@ export class BillingService {
       }
     }
 
-    if (!dryRun) {
+    const clientIds = [...new Set(toCreate.map((item) => item.clientId))]
+    let created = 0
+    let allocated = 0
+    const creditToAllocate: ProposedAllocationRow[] = []
+
+    if (dryRun) {
+      // The charges do not exist yet, so the proposal is built from what
+      // `toCreate` describes rather than from `charge_balances`: a preview
+      // that ignored them would always report nothing to spend.
+      for (const clientId of clientIds) {
+        const credit = await this.getAvailableCredit(clientId)
+        if (credit.totalCents === 0) continue
+
+        const pending = toCreate
+          .filter((item) => item.clientId === clientId)
+          .map((item) => ({
+            id: `pending:${item.planId}:${item.period.label}`,
+            clientId,
+            kind: 'RETAINER' as const,
+            periodLabel: item.period.label,
+            dueOn: item.dueOn,
+            amountCents: item.amountCents,
+            allocatedCents: 0,
+            outstandingCents: item.amountCents,
+            status: 'OPEN' as const,
+            description: `Retainer — ${item.period.label}`,
+          }))
+
+        const existing = await this.openChargesFor(clientId, input.asOf)
+        const charges = [...existing, ...pending]
+        creditToAllocate.push(...this.toProposalRows(proposeAllocation(credit.sources, charges), charges))
+      }
+
+      return { toCreate: toCreate.map(toWireItem), creditToAllocate, created: 0, allocated: 0 }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
       for (const item of toCreate) {
-        await this.prisma.charge.create({
+        await tx.charge.create({
           data: {
             id: uuidv7(),
             clientId: item.clientId,
@@ -101,18 +155,28 @@ export class BillingService {
             dueOn: item.dueOn,
           },
         })
+        created += 1
       }
+    })
+
+    // Outside the creation transaction, and deliberately: a client whose
+    // credit cannot be spent for any reason must still get its charges. The
+    // charges are the statement of debt; spending credit against them is a
+    // convenience that can be retried from the ledger.
+    for (const clientId of clientIds) {
+      const credit = await this.getAvailableCredit(clientId)
+      if (credit.totalCents === 0) continue
+
+      const charges = await this.openChargesFor(clientId, input.asOf)
+      const proposed = proposeAllocation(credit.sources, charges)
+      if (proposed.length === 0) continue
+
+      const result = await this.applyCredit(clientId, { allocations: proposed.map(toConfirmedAllocation) }, false)
+      allocated += result.allocated
+      creditToAllocate.push(...this.toProposalRows(proposed, charges))
     }
 
-    return {
-      toCreate: toCreate.map((item) => ({
-        clientId: item.clientId,
-        planId: item.planId,
-        periodLabel: item.period.label,
-        amountCents: item.amountCents,
-        dueOn: isoDate(item.dueOn),
-      })),
-    }
+    return { toCreate: toCreate.map(toWireItem), creditToAllocate, created, allocated }
   }
 
   /** Only for a client with no plan at all — see `renewRetainerPlan` for a fee change. */
