@@ -15,8 +15,24 @@ describe('validateEnv', () => {
   })
 
   it('passes a config with AUTH_SALT_SECRET set through unchanged', () => {
-    const config = { AUTH_SALT_SECRET: 'a-real-secret', OTHER_VAR: '1' }
+    const config = { AUTH_SALT_SECRET: 'a-real-secret', ATTACHMENTS_DIR: '/tmp/ledger-hq-attachments', OTHER_VAR: '1' }
 
     expect(validateEnv(config)).toEqual(config)
+  })
+})
+
+describe('ATTACHMENTS_DIR', () => {
+  it('refuses to start without one', () => {
+    expect(() => validateEnv({ AUTH_SALT_SECRET: 'secret' })).toThrow(/ATTACHMENTS_DIR/)
+  })
+
+  it('refuses an empty one', () => {
+    expect(() => validateEnv({ AUTH_SALT_SECRET: 'secret', ATTACHMENTS_DIR: '' })).toThrow(/ATTACHMENTS_DIR/)
+  })
+
+  it('accepts a path', () => {
+    expect(validateEnv({ AUTH_SALT_SECRET: 'secret', ATTACHMENTS_DIR: '/var/lib/ledger-hq/attachments' })).toMatchObject({
+      ATTACHMENTS_DIR: '/var/lib/ledger-hq/attachments',
+    })
   })
 })

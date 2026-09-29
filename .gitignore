@@ -6,6 +6,7 @@ dist/
 .env.*
 !.env.example
 coverage/
+apps/api/.attachments/
 playwright-report/
 test-results/
 # Prisma 7 writes the generated client into the source tree.
