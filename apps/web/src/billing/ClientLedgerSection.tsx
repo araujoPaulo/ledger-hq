@@ -6,6 +6,7 @@ import { formatCurrency } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
 import { getClientLedger, getCurrentRetainerPlan, writeOffCharge } from './api'
 import { AddAdHocChargeForm } from './AddAdHocChargeForm'
+import { ApplyCreditForm } from './ApplyCreditForm'
 import { RecordPaymentForm } from './RecordPaymentForm'
 import { RetainerPlanForm } from './RetainerPlanForm'
 
@@ -20,7 +21,12 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
   const ledger = useQuery({ queryKey: ['client-ledger', clientId], queryFn: () => getClientLedger(clientId) })
   const currentPlan = useQuery({ queryKey: ['current-retainer-plan', clientId], queryFn: () => getCurrentRetainerPlan(clientId) })
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['client-ledger', clientId] })
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['client-ledger', clientId] })
+    // SummaryRow and ReceivablesSection both read this key; spending credit
+    // changes what they show.
+    void queryClient.invalidateQueries({ queryKey: ['receivables'] })
+  }
 
   const writeOff = useMutation({
     mutationFn: () => writeOffCharge(writingOffChargeId!, writeOffReason),
@@ -112,6 +118,10 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
       )}
 
       <ErrorMessage error={writeOff.error} />
+
+      {ledger.data !== undefined && (
+        <ApplyCreditForm clientId={clientId} availableCreditCents={ledger.data.availableCreditCents} onApplied={invalidate} />
+      )}
 
       <RecordPaymentForm clientId={clientId} onRecorded={invalidate} />
 
