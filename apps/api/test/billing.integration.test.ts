@@ -447,3 +447,60 @@ describe('billing regressions', () => {
     expect(response.body.find((row: { clientId: string }) => row.clientId === clientId)).toBeUndefined()
   })
 })
+
+describe('getAvailableCredit', () => {
+  it('returns each payment with money left, oldest first, and their total', async () => {
+    const clientId = await createClient('502111111')
+    const older = uuidv7()
+    const newer = uuidv7()
+    await prisma.payment.create({
+      data: { id: older, clientId, amountCents: 10000, receivedOn: new Date('2026-01-10T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.payment.create({
+      data: { id: newer, clientId, amountCents: 5000, receivedOn: new Date('2026-03-10T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    const credit = await billing.getAvailableCredit(clientId)
+
+    expect(credit.totalCents).toBe(15000)
+    expect(credit.sources.map((source) => source.paymentId)).toEqual([older, newer])
+    expect(credit.sources[0]?.availableCents).toBe(10000)
+    expect(credit.sources[0]?.receivedOn).toBeInstanceOf(Date)
+  })
+
+  it('omits a payment that is fully allocated', async () => {
+    const clientId = await createClient('502222222')
+    const chargeId = uuidv7()
+    await prisma.charge.create({
+      data: {
+        id: chargeId,
+        clientId,
+        kind: 'EXTRA',
+        description: 'Ad-hoc',
+        amountCents: 9000,
+        issuedOn: new Date('2026-01-01T00:00:00Z'),
+        dueOn: new Date('2026-01-31T00:00:00Z'),
+      },
+    })
+    const paymentId = uuidv7()
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 9000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 9000 } })
+
+    const credit = await billing.getAvailableCredit(clientId)
+
+    expect(credit.sources).toEqual([])
+    expect(credit.totalCents).toBe(0)
+  })
+
+  it("never sees another client's credit", async () => {
+    const mine = await createClient('502333333')
+    const theirs = await createClient('502444444')
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId: theirs, amountCents: 20000, receivedOn: new Date('2026-01-10T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    expect((await billing.getAvailableCredit(mine)).totalCents).toBe(0)
+  })
+})

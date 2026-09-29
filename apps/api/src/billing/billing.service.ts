@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { uuidv7 } from 'uuidv7'
 import { AppError, chargeDueDate, chargePeriodsSince, proposeAllocation } from '@ledger-hq/domain'
-import type { ChargeBalance, CreateAdHocChargeInput, CreateRetainerPlanInput, ProposedAllocation, RecordPaymentInput, RenewRetainerPlanInput } from '@ledger-hq/domain'
+import type { AllocationSource, ChargeBalance, CreateAdHocChargeInput, CreateRetainerPlanInput, ProposedAllocation, RecordPaymentInput, RenewRetainerPlanInput } from '@ledger-hq/domain'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { PrismaService } from '../common/prisma.service.js'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
@@ -200,6 +200,25 @@ export class BillingService {
     })
 
     return { proposed: rows, excessCents: amountCents - allocatedCents }
+  }
+
+  /**
+   * Money this client has already paid that no charge has claimed
+   * (Phase 4a design §4.1). Ordered oldest first, which is the order
+   * `proposeAllocation` spends them in.
+   */
+  async getAvailableCredit(clientId: string): Promise<{ sources: AllocationSource[]; totalCents: number }> {
+    const rows = await this.prisma.$queryRaw<Array<{ paymentId: string; receivedOn: Date; creditCents: number }>>`
+      SELECT "paymentId", "receivedOn", "creditCents"
+      FROM payment_credits
+      WHERE "clientId" = ${clientId}::uuid AND "creditCents" > 0
+      ORDER BY "receivedOn" ASC, "paymentId" ASC
+    `
+
+    return {
+      sources: rows.map((row) => ({ paymentId: row.paymentId, availableCents: row.creditCents, receivedOn: row.receivedOn })),
+      totalCents: rows.reduce((sum, row) => sum + row.creditCents, 0),
+    }
   }
 
   /**
