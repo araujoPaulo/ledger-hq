@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -27,7 +28,11 @@ export class FileStorageService {
     // Synchronous, in the constructor, on purpose: a directory that cannot
     // be created is a misconfigured deployment, and the process should
     // refuse to come up rather than accept an upload it cannot store.
-    mkdirSync(this.root, { recursive: true })
+    //
+    // Owner-only (0o700): the receipts stored under here are kept in
+    // plaintext (design §3.2's own tradeoff), so this directory's
+    // permissions are the only barrier left.
+    mkdirSync(this.root, { recursive: true, mode: 0o700 })
   }
 
   pathFor(obligationId: string, attachmentId: string): string {
@@ -38,17 +43,24 @@ export class FileStorageService {
   }
 
   /**
-   * Atomic against a crash mid-stream: the bytes land on `<path>.tmp` and are
-   * renamed into place, so a half-written file is never visible under the
-   * real name. `rename` within one directory is atomic on every filesystem
-   * this runs on.
+   * Atomic against a crash mid-stream: the bytes land on a per-call temporary
+   * file and are renamed into place, so a half-written file is never visible
+   * under the real name. `rename` within one directory is atomic on every
+   * filesystem this runs on.
+   *
+   * The temporary name carries a random suffix, not just the attachment id:
+   * two concurrent writes for the same id (a doubled submit, a retry) would
+   * otherwise share one `.tmp` path and could interleave their bytes before
+   * either `rename` fires.
    */
   async write(obligationId: string, attachmentId: string, bytes: Buffer): Promise<void> {
     const path = this.pathFor(obligationId, attachmentId)
-    await mkdir(join(this.root, obligationId), { recursive: true })
+    // Owner-only (0o700) — see the constructor's note on why.
+    await mkdir(join(this.root, obligationId), { recursive: true, mode: 0o700 })
 
-    const temporary = `${path}.tmp`
-    await writeFile(temporary, bytes)
+    const temporary = `${path}.${randomUUID()}.tmp`
+    // Owner-only (0o600): these are plaintext receipts (design §3.2).
+    await writeFile(temporary, bytes, { mode: 0o600 })
     await rename(temporary, path)
   }
 

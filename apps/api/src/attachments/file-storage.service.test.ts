@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -56,6 +56,38 @@ describe('write', () => {
     await storage.write(OBLIGATION, ATTACHMENT, Buffer.from('second'))
 
     expect(await readFile(storage.pathFor(OBLIGATION, ATTACHMENT), 'utf8')).toBe('second')
+  })
+
+  // These are plaintext receipts (design §3.2): the directory's permissions
+  // are the only barrier left, so owner-only is load-bearing, not tidiness.
+  // Windows has no POSIX mode bits to assert on, so this is skipped there.
+  // The mask (`& 0o777`) strips the file-type bits `stat` reports alongside
+  // the permission bits, so the comparison is exact on the bits that matter
+  // without being sensitive to how the platform encodes the rest of `mode`.
+  it.skipIf(process.platform === 'win32')('writes the file and the obligation directory owner-only', async () => {
+    await storage.write(OBLIGATION, ATTACHMENT, Buffer.from('x'))
+
+    const fileMode = (await stat(storage.pathFor(OBLIGATION, ATTACHMENT))).mode & 0o777
+    const dirMode = (await stat(join(root, OBLIGATION))).mode & 0o777
+
+    expect(fileMode).toBe(0o600)
+    expect(dirMode).toBe(0o700)
+  })
+
+  // Two writes for the same id — a doubled submit, a retry — must not share
+  // one temporary file: if they did, one write's bytes could land on the
+  // other's temp path before either rename fires, corrupting the result.
+  it('does not corrupt the result when two writes for the same id race', async () => {
+    const first = Buffer.alloc(64_000, 'a')
+    const second = Buffer.alloc(64_000, 'b')
+
+    await Promise.all([
+      storage.write(OBLIGATION, ATTACHMENT, first),
+      storage.write(OBLIGATION, ATTACHMENT, second),
+    ])
+
+    const written = await readFile(storage.pathFor(OBLIGATION, ATTACHMENT))
+    expect([first, second]).toContainEqual(written)
   })
 })
 
