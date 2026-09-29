@@ -5,6 +5,11 @@ export type AgeingBucket = '0-30' | '31-60' | '61-90' | '90+'
 export type ReceivablesRow = {
   clientId: string
   clientName: string
+  /** What the client owes before its own unspent money is counted. */
+  grossOutstandingCents: number
+  /** Unspent payment money, netted off `outstandingCents` notionally. */
+  creditCents: number
+  /** Net, floored at zero — what this client actually still owes. */
   outstandingCents: number
   oldestDueOn: string
   ageingBucket: AgeingBucket

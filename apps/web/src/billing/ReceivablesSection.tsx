@@ -48,6 +48,14 @@ export function ReceivablesSection() {
                 }
                 value={
                   <>
+                    {row.creditCents > 0 && (
+                      // Where the net number came from, so nobody has to open
+                      // the client to find out why it fell.
+                      <span className="text-xs text-muted">
+                        {t('receivables.gross')} <Money cents={row.grossOutstandingCents} size="sm" /> ·{' '}
+                        {t('receivables.credit')} <Money cents={row.creditCents} size="sm" tone="credit" />
+                      </span>
+                    )}
                     <Badge tone={AGEING_TONE[row.ageingBucket]}>
                       {t(`receivables.bucket.${row.ageingBucket}`)}
                     </Badge>

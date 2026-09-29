@@ -3,6 +3,8 @@
     "title": "Recebíveis",
     "empty": "Sem valores em atraso.",
     "emptyHint": "Está tudo liquidado. Os encargos aparecem aqui quando se vencem.",
+    "gross": "Bruto",
+    "credit": "Crédito",
     "bucket": {
       "0-30": "0-30 dias",
       "31-60": "31-60 dias",

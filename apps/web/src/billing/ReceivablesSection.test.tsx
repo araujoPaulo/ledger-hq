@@ -73,6 +73,8 @@ describe('ReceivablesSection', () => {
       {
         clientId: 'c1',
         clientName: 'Padaria Central',
+        grossOutstandingCents: 27000,
+        creditCents: 0,
         outstandingCents: 27000,
         oldestDueOn: '2026-01-08',
         ageingBucket: '61-90',
@@ -88,6 +90,8 @@ describe('ReceivablesSection', () => {
       {
         clientId: 'c1',
         clientName: 'Padaria Central',
+        grossOutstandingCents: 27_000,
+        creditCents: 0,
         outstandingCents: 27_000,
         oldestDueOn: '2026-01-08',
         ageingBucket: '61-90',
@@ -104,6 +108,8 @@ describe('ReceivablesSection', () => {
       {
         clientId: 'c1',
         clientName: 'Padaria Central',
+        grossOutstandingCents: 27_000,
+        creditCents: 0,
         outstandingCents: 27_000,
         oldestDueOn: '2026-01-08',
         ageingBucket: '61-90',
@@ -111,6 +117,8 @@ describe('ReceivablesSection', () => {
       {
         clientId: 'c2',
         clientName: 'Clínica Aurora',
+        grossOutstandingCents: 13_000,
+        creditCents: 0,
         outstandingCents: 13_000,
         oldestDueOn: '2026-03-02',
         ageingBucket: '0-30',
@@ -128,6 +136,8 @@ describe('ReceivablesSection', () => {
       {
         clientId: 'c1',
         clientName: 'Sociedade de Construções e Empreitadas do Vale do Sousa, Unipessoal Lda',
+        grossOutstandingCents: 27_000,
+        creditCents: 0,
         outstandingCents: 27_000,
         oldestDueOn: '2026-01-08',
         ageingBucket: '61-90',
@@ -152,5 +162,66 @@ describe('ReceivablesSection', () => {
     await waitFor(() => {
       expect(container.querySelectorAll('[aria-hidden="true"].animate-pulse').length).toBeGreaterThan(0)
     })
+  })
+})
+
+describe('client credit', () => {
+  it('shows gross and credit beside the net figure when credit is involved', async () => {
+    getReceivablesMock.mockResolvedValue([
+      {
+        clientId: 'c1',
+        clientName: 'Padaria Central',
+        grossOutstandingCents: 20000,
+        creditCents: 15000,
+        outstandingCents: 5000,
+        oldestDueOn: '2026-05-31',
+        ageingBucket: '0-30',
+      },
+    ])
+
+    renderSection()
+
+    const link = await screen.findByRole('link', { name: /padaria central/i })
+    expect(link).toBeVisible()
+    const row = link.closest('div')
+    expect(row).not.toBeNull()
+    // Scoped to the row: with a single receivable the total below carries
+    // the same net figure, so an unscoped query matches twice.
+    expect(within(row!).getByText(shown(formatCurrency(5000, 'pt-PT')))).toBeVisible()
+    expect(screen.getByText(shown(formatCurrency(20000, 'pt-PT')))).toBeVisible()
+    expect(screen.getByText(shown(formatCurrency(15000, 'pt-PT')))).toBeVisible()
+  })
+
+  it('shows only the one figure when there is no credit', async () => {
+    getReceivablesMock.mockResolvedValue([
+      {
+        clientId: 'c1',
+        clientName: 'Padaria Central',
+        grossOutstandingCents: 20000,
+        creditCents: 0,
+        outstandingCents: 20000,
+        oldestDueOn: '2026-05-31',
+        ageingBucket: '0-30',
+      },
+    ])
+
+    renderSection()
+
+    await screen.findByText('Padaria Central')
+    // One amount in the row, plus the list total — never a redundant
+    // "gross 200,00 EUR, credit 0,00 EUR" restating the same number twice.
+    expect(screen.queryByText(/bruto/i)).toBeNull()
+    expect(screen.queryByText(/crédito/i)).toBeNull()
+  })
+
+  it('totals the net figures', async () => {
+    getReceivablesMock.mockResolvedValue([
+      { clientId: 'c1', clientName: 'A', grossOutstandingCents: 20000, creditCents: 15000, outstandingCents: 5000, oldestDueOn: '2026-05-31', ageingBucket: '0-30' },
+      { clientId: 'c2', clientName: 'B', grossOutstandingCents: 9000, creditCents: 0, outstandingCents: 9000, oldestDueOn: '2026-01-05', ageingBucket: '90+' },
+    ])
+
+    renderSection()
+
+    expect(await screen.findByText(shown(formatCurrency(14000, 'pt-PT')))).toBeVisible()
   })
 })

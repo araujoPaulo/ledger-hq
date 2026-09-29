@@ -3,6 +3,8 @@
     "title": "Receivables",
     "empty": "No outstanding balances.",
     "emptyHint": "Every client is settled. Charges appear here once they fall due.",
+    "gross": "Gross",
+    "credit": "Credit",
     "bucket": {
       "0-30": "0-30 days",
       "31-60": "31-60 days",
