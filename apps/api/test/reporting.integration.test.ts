@@ -229,3 +229,118 @@ describe('GET /api/v1/reporting/at-risk', () => {
     expect(response.status).toBe(401)
   })
 })
+
+describe('GET /api/v1/reporting/period-summary', () => {
+  it('counts obligations due and done inside the window', async () => {
+    const clientId = await createClient('503111111', 'Padaria Central, Lda.')
+    await overdueObligation(clientId, '2026-Q1', '2026-02-15')
+    await overdueObligation(clientId, '2026-Q2', '2026-05-15')
+    await prisma.obligationInstance.updateMany({
+      where: { clientId, periodLabel: '2026-Q1' },
+      data: { status: 'DONE', completedAt: new Date('2026-02-20T00:00:00Z') },
+    })
+
+    const response = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual(
+      expect.objectContaining({ from: '2026-01-01', to: '2026-03-31', obligationsDue: 1, obligationsDone: 1 }),
+    )
+  })
+
+  it('sums charges issued and payments received inside the window only', async () => {
+    const clientId = await createClient('503222222', 'Padaria Central, Lda.')
+    await prisma.charge.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        kind: 'EXTRA',
+        description: 'Dentro',
+        amountCents: 9000,
+        issuedOn: new Date('2026-02-01T00:00:00Z'),
+        dueOn: new Date('2026-02-28T00:00:00Z'),
+      },
+    })
+    await prisma.charge.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        kind: 'EXTRA',
+        description: 'Fora',
+        amountCents: 5000,
+        issuedOn: new Date('2026-04-01T00:00:00Z'),
+        dueOn: new Date('2026-04-30T00:00:00Z'),
+      },
+    })
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId, amountCents: 4000, receivedOn: new Date('2026-02-10T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId, amountCents: 7000, receivedOn: new Date('2026-04-10T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    const response = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+
+    expect(response.body.chargesIssuedCents).toBe(9000)
+    expect(response.body.paymentsReceivedCents).toBe(4000)
+  })
+
+  it('reports the position at the close of the window, not today', async () => {
+    const clientId = await createClient('503333333', 'Padaria Central, Lda.')
+    const charge = await prisma.charge.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        kind: 'EXTRA',
+        description: 'Cobrança',
+        amountCents: 9000,
+        issuedOn: new Date('2026-02-01T00:00:00Z'),
+        dueOn: new Date('2026-02-28T00:00:00Z'),
+      },
+    })
+    // Paid AFTER the window closed, so at close it was still outstanding.
+    const paymentId = uuidv7()
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 9000, receivedOn: new Date('2026-05-10T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.paymentAllocation.create({ data: { paymentId, chargeId: charge.id, amountCents: 9000 } })
+
+    const response = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+
+    expect(response.body.outstandingAtCloseCents).toBe(9000)
+  })
+
+  it('returns zeros for an empty window rather than nulls', async () => {
+    const response = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+
+    expect(response.body).toEqual({
+      from: '2026-01-01',
+      to: '2026-03-31',
+      obligationsDue: 0,
+      obligationsDone: 0,
+      chargesIssuedCents: 0,
+      paymentsReceivedCents: 0,
+      outstandingAtCloseCents: 0,
+    })
+  })
+
+  it('returns every numeric field as a JSON-safe number', async () => {
+    const clientId = await createClient('503444444', 'Padaria Central, Lda.')
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId, amountCents: 4000, receivedOn: new Date('2026-02-10T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    const response = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+
+    for (const key of ['obligationsDue', 'obligationsDone', 'chargesIssuedCents', 'paymentsReceivedCents', 'outstandingAtCloseCents']) {
+      expect(typeof response.body[key]).toBe('number')
+    }
+  })
+
+  it('rejects a window that ends before it starts', async () => {
+    const response = await get('/api/v1/reporting/period-summary?from=2026-03-31&to=2026-01-01')
+
+    expect(response.status).toBe(422)
+    expect(response.body.error.code).toBe('common.validation_failed')
+  })
+})

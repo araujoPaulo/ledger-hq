@@ -13,6 +13,16 @@ export type AtRiskRow = {
   oldestChargeDueOn: string
 }
 
+export type PeriodSummary = {
+  from: string
+  to: string
+  obligationsDue: number
+  obligationsDone: number
+  chargesIssuedCents: number
+  paymentsReceivedCents: number
+  outstandingAtCloseCents: number
+}
+
 function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
@@ -123,5 +133,80 @@ export class ReportsService {
     }
 
     return rows.sort((a, b) => b.outstandingCents - a.outstandingCents || a.oldestDueDate.localeCompare(b.oldestDueDate))
+  }
+
+  /**
+   * What a window contained (design §3.7). Every figure already exists in
+   * Phase 2 and Phase 3 data — a window and four aggregates, no new derived
+   * state.
+   *
+   * `outstandingAtCloseCents` reconstructs the position **at `to`**, not
+   * today: it counts only allocations from payments received by then, so a
+   * charge settled the month after the quarter closed still shows as
+   * outstanding in that quarter's summary. Reporting today's balance under a
+   * past period's heading would make every historical summary change as new
+   * money arrives.
+   */
+  async periodSummary(from: Date, to: Date): Promise<PeriodSummary> {
+    const [row] = await this.prisma.$queryRaw<
+      Array<{
+        obligationsDue: number
+        obligationsDone: number
+        chargesIssuedCents: number
+        paymentsReceivedCents: number
+        outstandingAtCloseCents: number
+      }>
+    >`
+      WITH obligations AS (
+        SELECT
+          COUNT(*)::int AS "obligationsDue",
+          COUNT(*) FILTER (WHERE status = 'DONE')::int AS "obligationsDone"
+        FROM "ObligationInstance"
+        WHERE "dueDate" BETWEEN ${from} AND ${to}
+      ),
+      charges AS (
+        SELECT COALESCE(SUM("amountCents"), 0)::int AS "chargesIssuedCents"
+        FROM "Charge"
+        WHERE "issuedOn" BETWEEN ${from} AND ${to}
+      ),
+      payments AS (
+        SELECT COALESCE(SUM("amountCents"), 0)::int AS "paymentsReceivedCents"
+        FROM "Payment"
+        WHERE "receivedOn" BETWEEN ${from} AND ${to}
+      ),
+      -- Charges that existed at close and had not been forgiven by then.
+      issued AS (
+        SELECT id, "amountCents"
+        FROM "Charge"
+        WHERE "issuedOn" <= ${to}
+          AND ("writtenOffAt" IS NULL OR "writtenOffAt"::date > ${to})
+      ),
+      -- Only money that had actually arrived by close counts against them.
+      settled AS (
+        SELECT a."chargeId", SUM(a."amountCents")::int AS "allocatedCents"
+        FROM "PaymentAllocation" a
+        JOIN "Payment" p ON p.id = a."paymentId"
+        WHERE p."receivedOn" <= ${to}
+        GROUP BY a."chargeId"
+      ),
+      closing AS (
+        SELECT COALESCE(SUM(GREATEST(i."amountCents" - COALESCE(s."allocatedCents", 0), 0)), 0)::int AS "outstandingAtCloseCents"
+        FROM issued i
+        LEFT JOIN settled s ON s."chargeId" = i.id
+      )
+      SELECT o."obligationsDue", o."obligationsDone", ch."chargesIssuedCents",
+             p."paymentsReceivedCents", cl."outstandingAtCloseCents"
+      FROM obligations o, charges ch, payments p, closing cl
+    `
+
+    return {
+      from: isoDate(from),
+      to: isoDate(to),
+      obligationsDue: row?.obligationsDue ?? 0,
+      obligationsDone: row?.obligationsDone ?? 0,
+      chargesIssuedCents: row?.chargesIssuedCents ?? 0,
+      paymentsReceivedCents: row?.paymentsReceivedCents ?? 0,
+      outstandingAtCloseCents: row?.outstandingAtCloseCents ?? 0,
+    }
   }
 }
