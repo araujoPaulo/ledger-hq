@@ -187,6 +187,16 @@ Built today (`apps/api/prisma/schema.prisma`):
   `detail`), written by `docker/backup.sh`; read by
   `GET /api/v1/system/health-report`.
 
+Two read-only views compute money rather than storing it, so neither can
+drift from the ledger rows they aggregate: `charge_balances` sums each
+charge's allocations to derive `allocatedCents`, `outstandingCents` and a
+`status`, and `payment_credits` (Phase 4a) mirrors it from the payment
+side, summing each payment's own allocations to derive `creditCents` — a
+client's advance-payment credit, which is never itself stored. Prisma does
+not model database views, so both are read through `prisma.$queryRaw`
+(`apps/api/src/billing/billing.service.ts`), with every aggregate cast
+`::int` at the query itself, per [ADR 0007](adr/0007-billing-generator-and-view.md).
+
 Not in the schema yet, and out of scope for Phase 0 (see the design spec,
 section 14, and the plan's closing "what Phase 0 deliberately leaves out"):
 the credential vault and its item encryption, the obligation catalog and

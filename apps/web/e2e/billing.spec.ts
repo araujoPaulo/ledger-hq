@@ -95,3 +95,64 @@ test('creates a retainer plan, charges a client, records a payment, and sees the
   await page.goto('/')
   await expect(receivables.getByText(/padaria central faturação/i)).toHaveCount(0)
 })
+
+test('records an advance payment, sees it as credit, and spends it on a later charge', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByLabel(/email/i).fill('paulo@example.com')
+  await page.getByLabel(/^palavra-passe mestra$/i).fill(MASTER_PASSWORD)
+  const confirmPasswordField = page.getByLabel(/confirma/i)
+  if (await confirmPasswordField.isVisible().catch(() => false)) {
+    await confirmPasswordField.fill(MASTER_PASSWORD)
+  }
+  await page.getByRole('button', { name: /criar|entrar/i }).click()
+  await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
+
+  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByLabel(/tipo/i).selectOption('COMPANY')
+  await page.getByLabel(/^nome$/i).fill('Talho do Bairro Crédito, Lda.')
+  // Checksum-valid and unused by any other spec in apps/web/e2e (the others
+  // take 123456789 and 5014426xx).
+  await page.getByLabel(/^nif$/i).fill('507555554')
+  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByRole('button', { name: /guardar/i }).click() // fiscal profile defaults
+
+  const ledger = page.getByRole('region', { name: /^faturação$/i })
+  const adHocCharge = ledger.getByRole('form', { name: /nova cobrança avulsa/i })
+  const payment = ledger.getByRole('region', { name: /registar pagamento/i })
+  const credit = ledger.getByRole('region', { name: /crédito disponível/i })
+
+  // A payment with nothing to settle: every cent becomes credit.
+  await payment.getByLabel(/valor \(cêntimos\)/i).fill('27000')
+  await payment.getByLabel(/data de receção/i).fill('2026-01-05')
+  await payment.getByRole('button', { name: /propor alocação/i }).click()
+  await payment.getByRole('button', { name: /^confirmar$/i }).click()
+
+  await expect(credit.getByText(/crédito disponível/i)).toBeVisible()
+
+  // Now give it something to settle, due in the past so it has fallen due.
+  await adHocCharge.getByLabel(/descrição/i).fill('Trabalho extra')
+  await adHocCharge.getByLabel(/valor \(cêntimos\)/i).fill('9000')
+  await adHocCharge.getByLabel(/data de vencimento/i).fill('2026-02-28')
+  // AddAdHocChargeForm's submit button carries the shared "create" label
+  // ("Criar"), the same one ledger's own ad-hoc form uses above — not
+  // "Guardar", which belongs to the client and fiscal-profile forms.
+  await adHocCharge.getByRole('button', { name: /^criar$/i }).click()
+
+  await credit.getByRole('button', { name: /aplicar crédito/i }).click()
+  await expect(credit.getByText(/trabalho extra/i)).toBeVisible()
+  await credit.getByRole('button', { name: /^confirmar$/i }).click()
+
+  // The 90,00 EUR charge was settled out of the 270,00 EUR credit, leaving
+  // 180,00 EUR — proving the spend applied the right amount rather than
+  // draining or ignoring the balance.
+  await expect(credit.getByText('180,00')).toBeVisible()
+
+  // The debt is settled from credit alone, so the client never appears in
+  // receivables. There is no "início"/"home" nav link (the sidebar's home
+  // destination is labelled "Prazos"), so returning to the home page
+  // reuses this file's own idiom above.
+  await page.goto('/')
+  await expect(page.getByText('Talho do Bairro Crédito, Lda.')).toHaveCount(0)
+})
