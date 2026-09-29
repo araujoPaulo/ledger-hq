@@ -48,14 +48,17 @@ describe('assertAcceptable', () => {
   })
 
   it('rejects a file whose bytes match nothing accepted, however it is labelled', () => {
+    const bytes = Buffer.from('#!/bin/sh\nrm -rf /')
+    expect(() => assertAcceptable('application/pdf', bytes)).toThrow(AppError)
     try {
-      assertAcceptable('application/pdf', Buffer.from('#!/bin/sh\nrm -rf /'))
+      assertAcceptable('application/pdf', bytes)
     } catch (error) {
       expect((error as AppError).code).toBe('attachments.type_not_allowed')
     }
   })
 
   it('rejects an accepted-looking file declared as an unaccepted type', () => {
+    expect(() => assertAcceptable('application/zip', PDF)).toThrow(AppError)
     try {
       assertAcceptable('application/zip', PDF)
     } catch (error) {
