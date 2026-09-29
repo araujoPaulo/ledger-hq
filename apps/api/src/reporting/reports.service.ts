@@ -31,64 +31,97 @@ export class ReportsService {
    * definition `groupByUrgency`'s `overdue` bucket uses; the arrears side
    * uses `getReceivables`'s filters and nets credit as Phase 4a does. So this
    * report cannot disagree with either screen.
+   *
+   * `oldestChargeDueOn` in particular must name the same charge
+   * `getReceivables` (`billing.service.ts`) points the operator at, not
+   * merely the oldest charge on file: a `MIN(dueOn)` over the raw balances
+   * would name a charge the client's own unspent credit has already
+   * answered. So charges are fetched per row, not pre-aggregated, and
+   * credit is spent against them on paper — oldest charge first, same as a
+   * real allocation — keeping the first charge it fails to cover in full.
+   * A charge the credit only partially reaches is still the oldest
+   * uncovered one and must not be skipped past.
    */
   async atRisk(asOf: Date): Promise<AtRiskRow[]> {
-    const rows = await this.prisma.$queryRaw<
-      Array<{
-        clientId: string
-        clientName: string
-        overdueObligations: number
-        oldestDueDate: Date
-        grossOutstandingCents: number
-        creditCents: number
-        outstandingCents: number
-        oldestChargeDueOn: Date
-      }>
+    // Aggregated per client, not joined against balances: this alone
+    // carries no fan-out risk, since nothing here multiplies against
+    // another table's rows. Excludes archived clients up front, same as
+    // `getReceivables`.
+    const overdue = await this.prisma.$queryRaw<
+      Array<{ clientId: string; clientName: string; overdueObligations: number; oldestDueDate: Date }>
     >`
-      -- Three CTEs, not three joins in one pass: joining obligations and
-      -- balances directly multiplies each client's rows by the other side's
-      -- count and inflates both aggregates. Each aggregate carries ::int
-      -- (ADR 0007) — COUNT/SUM over Int return bigint, which the serializer
-      -- throws on.
-      WITH overdue AS (
-        SELECT "clientId", COUNT(*)::int AS "overdueObligations", MIN("dueDate") AS "oldestDueDate"
-        FROM "ObligationInstance"
-        WHERE status IN ('PENDING', 'IN_PROGRESS') AND "dueDate" < ${asOf}
-        GROUP BY "clientId"
-      ),
-      arrears AS (
-        SELECT "clientId", SUM("outstandingCents")::int AS "grossOutstandingCents", MIN("dueOn") AS "oldestChargeDueOn"
-        FROM charge_balances
-        WHERE "outstandingCents" > 0 AND status != 'WRITTEN_OFF' AND "dueOn" <= ${asOf}
-        GROUP BY "clientId"
-      ),
-      credit AS (
-        SELECT "clientId", SUM("creditCents")::int AS "creditCents"
-        FROM payment_credits
-        WHERE "creditCents" > 0
-        GROUP BY "clientId"
-      )
-      SELECT c.id AS "clientId", c.name AS "clientName",
-             o."overdueObligations", o."oldestDueDate",
-             a."grossOutstandingCents",
-             COALESCE(cr."creditCents", 0) AS "creditCents",
-             GREATEST(a."grossOutstandingCents" - COALESCE(cr."creditCents", 0), 0) AS "outstandingCents",
-             a."oldestChargeDueOn"
-      FROM "Client" c
-      JOIN overdue o ON o."clientId" = c.id
-      JOIN arrears a ON a."clientId" = c.id
-      LEFT JOIN credit cr ON cr."clientId" = c.id
-      WHERE c."archivedAt" IS NULL
-        -- A client whose own unspent money covers its debt is not in
-        -- arrears, whatever the gross figure says.
-        AND GREATEST(a."grossOutstandingCents" - COALESCE(cr."creditCents", 0), 0) > 0
-      ORDER BY "outstandingCents" DESC, o."oldestDueDate" ASC
+      SELECT o."clientId", c.name AS "clientName",
+             COUNT(*)::int AS "overdueObligations", MIN(o."dueDate") AS "oldestDueDate"
+      FROM "ObligationInstance" o
+      JOIN "Client" c ON c.id = o."clientId"
+      WHERE o.status IN ('PENDING', 'IN_PROGRESS') AND o."dueDate" < ${asOf} AND c."archivedAt" IS NULL
+      GROUP BY o."clientId", c.name
+    `
+    if (overdue.length === 0) return []
+
+    // Per charge, not pre-aggregated — mirrors `BillingService#openChargesFor`
+    // / `getReceivables`, so the credit walk below can name the same charge
+    // the receivables screen would.
+    const charges = await this.prisma.$queryRaw<Array<{ clientId: string; dueOn: Date; outstandingCents: number }>>`
+      SELECT "clientId", "dueOn", "outstandingCents"
+      FROM charge_balances
+      WHERE "outstandingCents" > 0 AND status != 'WRITTEN_OFF' AND "dueOn" <= ${asOf}
+      ORDER BY "clientId", "dueOn" ASC
     `
 
-    return rows.map((row) => ({
-      ...row,
-      oldestDueDate: isoDate(row.oldestDueDate),
-      oldestChargeDueOn: isoDate(row.oldestChargeDueOn),
-    }))
+    const credits = await this.prisma.$queryRaw<Array<{ clientId: string; creditCents: number }>>`
+      SELECT "clientId", SUM("creditCents")::int AS "creditCents"
+      FROM payment_credits
+      WHERE "creditCents" > 0
+      GROUP BY "clientId"
+    `
+    const creditByClient = new Map(credits.map((row) => [row.clientId, row.creditCents]))
+
+    const chargesByClient = new Map<string, Array<{ dueOn: Date; outstandingCents: number }>>()
+    for (const charge of charges) {
+      const list = chargesByClient.get(charge.clientId) ?? []
+      list.push({ dueOn: charge.dueOn, outstandingCents: charge.outstandingCents })
+      chargesByClient.set(charge.clientId, list)
+    }
+
+    const rows: AtRiskRow[] = []
+    for (const entry of overdue) {
+      const clientCharges = chargesByClient.get(entry.clientId) ?? []
+      const grossOutstandingCents = clientCharges.reduce((sum, charge) => sum + charge.outstandingCents, 0)
+      const creditCents = creditByClient.get(entry.clientId) ?? 0
+
+      // Spend the credit on paper, oldest charge first — the same order
+      // `getReceivables` (and a real allocation) would use — and keep the
+      // first charge it fails to cover in full. A partially covered charge
+      // is still the oldest uncovered one, so it is kept, not skipped.
+      let remainingCredit = creditCents
+      let oldestUncovered: Date | null = null
+      for (const charge of clientCharges) {
+        if (remainingCredit >= charge.outstandingCents) {
+          remainingCredit -= charge.outstandingCents
+          continue
+        }
+        oldestUncovered = charge.dueOn
+        break
+      }
+
+      const outstandingCents = Math.max(grossOutstandingCents - creditCents, 0)
+      // A client whose own unspent money covers its debt is not in
+      // arrears, whatever the gross figure says.
+      if (outstandingCents === 0 || oldestUncovered === null) continue
+
+      rows.push({
+        clientId: entry.clientId,
+        clientName: entry.clientName,
+        overdueObligations: entry.overdueObligations,
+        oldestDueDate: isoDate(entry.oldestDueDate),
+        grossOutstandingCents,
+        creditCents,
+        outstandingCents,
+        oldestChargeDueOn: isoDate(oldestUncovered),
+      })
+    }
+
+    return rows.sort((a, b) => b.outstandingCents - a.outstandingCents || a.oldestDueDate.localeCompare(b.oldestDueDate))
   }
 }

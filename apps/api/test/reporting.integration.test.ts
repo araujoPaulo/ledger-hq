@@ -154,6 +154,39 @@ describe('GET /api/v1/reporting/at-risk', () => {
     )
   })
 
+  // Fix round 1: `oldestChargeDueOn` must name the same charge the
+  // receivables screen points at. Credit fully covers the oldest charge and
+  // only partially covers the second; a `MIN(dueOn)` over the raw balances
+  // would wrongly report the oldest charge on file — the one the client's
+  // own money has already answered — instead of the first charge the
+  // credit still fails to reach in full.
+  it('names the oldest charge the credit does not reach, not the oldest charge on file', async () => {
+    const clientId = await createClient('501111222', 'Parcialmente Cobrado, Lda.')
+    await overdueObligation(clientId, '2026-Q1', '2026-02-15')
+    await openCharge(clientId, 5000, '2026-03-31')
+    await openCharge(clientId, 8000, '2026-04-30')
+    await openCharge(clientId, 3000, '2026-05-31')
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId, amountCents: 9000, receivedOn: new Date('2026-01-05T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    const [row] = (await get(`/api/v1/reporting/at-risk?asOf=${AS_OF}`)).body
+
+    // Credit (9000) fully covers the 5000 charge and reaches 4000 into the
+    // 8000 charge, leaving it partially outstanding — the third charge is
+    // never even considered, because the second is already the oldest
+    // uncovered one.
+    expect(row).toEqual(
+      expect.objectContaining({
+        clientId,
+        grossOutstandingCents: 16000,
+        creditCents: 9000,
+        outstandingCents: 7000,
+        oldestChargeDueOn: '2026-04-30',
+      }),
+    )
+  })
+
   it('excludes archived clients and written-off charges', async () => {
     const archived = await createClient('501888888', 'Arquivado, Lda.')
     await overdueObligation(archived, '2026-Q1', '2026-05-15')
