@@ -2341,6 +2341,15 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ### Task 8: CSV, built in the browser
 
+> **Correction applied during execution.** This task's `escapeField` guards the
+> delimiter, the quote and newlines, but not a field whose first character is
+> `=`, `+`, `-`, `@`, a tab or a carriage return — which Excel and LibreOffice
+> interpret as a formula when the file is opened. Client names, ad-hoc charge
+> descriptions and write-off reasons are free text and all reach this export,
+> and opening the file in Excel is the whole reason it exists. Prefix such a
+> field with an apostrophe before the normal quoting, and test that a value
+> merely *containing* `-` — every date in the file — is left alone.
+
 **Files:**
 - Create: `apps/web/src/reporting/toCsv.ts`
 - Create: `apps/web/src/reporting/toCsv.test.ts`
