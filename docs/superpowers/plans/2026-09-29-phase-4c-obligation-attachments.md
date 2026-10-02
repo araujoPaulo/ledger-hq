@@ -1542,6 +1542,20 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ### Task 8: The four routes, and the multer error that would have been swallowed
 
+> **Correction applied during execution, and it is the important one.** This
+> task's `@Catch(MulterError)` filter never fires against a real request:
+> `@nestjs/platform-express`'s `FileInterceptor` rewrites `LIMIT_FILE_SIZE`
+> into `PayloadTooLargeException`, and every other multer code into
+> `BadRequestException`, in its own `transformException()` before any filter
+> sees a `MulterError`. That is the same swallowing this task exists to
+> prevent, one layer deeper — and the task's integration tests covered the
+> happy paths only, so it would have shipped invisibly broken. The filter must
+> also match the exceptions Nest actually throws, and an integration test must
+> drive an oversized upload end to end rather than unit-testing the filter in
+> isolation. Separately, busboy defaults multipart header params to latin1, so
+> `FileInterceptor` needs `defParamCharset: 'utf8'` or every non-ASCII filename
+> arrives mojibake.
+
 **Files:**
 - Create: `apps/api/src/attachments/attachments.controller.ts`
 - Create: `apps/api/src/attachments/multer-error.filter.ts`
