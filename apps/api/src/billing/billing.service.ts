@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import { uuidv7 } from 'uuidv7'
 import { AppError, chargeDueDate, chargePeriodsSince, proposeAllocation } from '@ledger-hq/domain'
 import type { AllocationSource, ApplyCreditInput, ChargeBalance, CreateAdHocChargeInput, CreateRetainerPlanInput, ProposedAllocation, RecordPaymentInput, RenewRetainerPlanInput } from '@ledger-hq/domain'
@@ -53,15 +53,25 @@ function toWireItem(item: { clientId: string; planId: string; period: { label: s
 /**
  * A confirmed allocation always names a real payment. `paymentId` is only
  * ever `null` for the payment being recorded in the same request, which this
- * path never has.
+ * path never has — its sources all come from `getAvailableCredit`, which
+ * reads real `payment_credits` rows.
+ *
+ * The `null` branch is therefore a programming invariant, not something a
+ * request can trigger, so it is reported as `common.internal_error` rather
+ * than an operator-facing billing code: `allocation_exceeds_available_credit`
+ * translates to "the amount exceeds the credit available on this payment",
+ * which would be actively misleading for a bug that has nothing to do with
+ * a specific payment's balance.
  */
 function toConfirmedAllocation(allocation: ProposedAllocation): { paymentId: string; chargeId: string; amountCents: number } {
-  if (allocation.paymentId === null) throw new AppError('billing.allocation_exceeds_available_credit', {}, 422)
+  if (allocation.paymentId === null) throw new AppError('common.internal_error', {}, 500)
   return { paymentId: allocation.paymentId, chargeId: allocation.chargeId, amountCents: allocation.amountCents }
 }
 
 @Injectable()
 export class BillingService {
+  private readonly logger = new Logger(BillingService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly clients: ClientsService,
@@ -104,7 +114,21 @@ export class BillingService {
       }
     }
 
-    const clientIds = [...new Set(toCreate.map((item) => item.clientId))]
+    // Not just `toCreate`'s own clients: a client whose charge was created on
+    // an earlier run and has only now fallen due has nothing new to create
+    // today, so a `toCreate`-only set would never revisit them and the
+    // credit sitting on their books would never get swept (see the comment
+    // on the confirm loop below for why `dueOn` gates that sweep at all).
+    // Scoped to `input.clientId` when one was given, so a single-client call
+    // never reaches into another client's credit.
+    const creditHolderRows = input.clientId
+      ? await this.prisma.$queryRaw<Array<{ clientId: string }>>`
+          SELECT DISTINCT "clientId" FROM payment_credits WHERE "creditCents" > 0 AND "clientId" = ${input.clientId}::uuid
+        `
+      : await this.prisma.$queryRaw<Array<{ clientId: string }>>`
+          SELECT DISTINCT "clientId" FROM payment_credits WHERE "creditCents" > 0
+        `
+    const clientIds = [...new Set([...toCreate.map((item) => item.clientId), ...creditHolderRows.map((row) => row.clientId)])]
     let created = 0
     let allocated = 0
     const creditToAllocate: ProposedAllocationRow[] = []
@@ -117,8 +141,13 @@ export class BillingService {
         const credit = await this.getAvailableCredit(clientId)
         if (credit.totalCents === 0) continue
 
+        // Only the pending items that would actually be due by `asOf`: the
+        // confirm path below only ever spends credit against
+        // `openChargesFor`, which is bound the same way, so a preview that
+        // ignored `dueOn` here would show credit settling a charge the
+        // confirm will not touch until a later run.
         const pending = toCreate
-          .filter((item) => item.clientId === clientId)
+          .filter((item) => item.clientId === clientId && item.dueOn <= input.asOf)
           .map((item) => ({
             id: `pending:${item.planId}:${item.period.label}`,
             clientId,
@@ -163,17 +192,30 @@ export class BillingService {
     // credit cannot be spent for any reason must still get its charges. The
     // charges are the statement of debt; spending credit against them is a
     // convenience that can be retried from the ledger.
+    //
+    // Each client's sweep is wrapped on its own: a throw while applying one
+    // client's credit must not abort every client after it in the same run.
+    // Unlike the charges above, this has no self-heal on the next run for a
+    // client with nothing new to create — see `creditHolderRows` above — so
+    // a failure here is logged and skipped rather than left to retry itself.
     for (const clientId of clientIds) {
-      const credit = await this.getAvailableCredit(clientId)
-      if (credit.totalCents === 0) continue
+      try {
+        const credit = await this.getAvailableCredit(clientId)
+        if (credit.totalCents === 0) continue
 
-      const charges = await this.openChargesFor(clientId, input.asOf)
-      const proposed = proposeAllocation(credit.sources, charges)
-      if (proposed.length === 0) continue
+        const charges = await this.openChargesFor(clientId, input.asOf)
+        const proposed = proposeAllocation(credit.sources, charges)
+        if (proposed.length === 0) continue
 
-      const result = await this.applyCredit(clientId, { allocations: proposed.map(toConfirmedAllocation) }, false)
-      allocated += result.allocated
-      creditToAllocate.push(...this.toProposalRows(proposed, charges))
+        const result = await this.applyCredit(clientId, { allocations: proposed.map(toConfirmedAllocation) }, false)
+        allocated += result.allocated
+        creditToAllocate.push(...this.toProposalRows(proposed, charges))
+      } catch (error) {
+        this.logger.error(
+          `generateCharges: failed to apply credit for client ${clientId}`,
+          error instanceof Error ? error.stack : String(error),
+        )
+      }
     }
 
     return { toCreate: toCreate.map(toWireItem), creditToAllocate, created, allocated }

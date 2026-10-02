@@ -705,6 +705,71 @@ describe('generateCharges and client credit', () => {
     expect(balances.map((row) => row.outstandingCents)).toEqual([0, 8000, 9000])
   })
 
+  it('agrees with the confirm when the newly generated charge is not yet due', async () => {
+    // dueDayOfMonth 8 on a plan generated `asOf` its own period start (the
+    // 1st): the charge exists once this call returns, but is not due for
+    // another week, so nothing should be proposed to spend credit on yet.
+    const clientId = await clientWithPlanAndCredit('504555555', 9000)
+    const asOf = new Date('2026-01-01T00:00:00Z')
+
+    const preview = await billing.generateCharges({ asOf, clientId }, true)
+    expect(preview.toCreate).toEqual([{ clientId, planId: expect.any(String), periodLabel: '2026-01', amountCents: 9000, dueOn: '2026-01-08' }])
+    // The preview must not show credit settling a charge the confirm below
+    // will not touch — that mismatch is exactly what the dry run's own
+    // due-date-blind synthesis used to produce.
+    expect(preview.creditToAllocate).toEqual([])
+
+    const confirm = await billing.generateCharges({ asOf, clientId }, false)
+    expect(confirm.created).toBe(1)
+    expect(confirm.allocated).toBe(0)
+
+    const balances = await prisma.$queryRaw<Array<{ outstandingCents: number }>>`
+      SELECT "outstandingCents" FROM charge_balances WHERE "clientId" = ${clientId}::uuid
+    `
+    expect(balances).toEqual([{ outstandingCents: 9000 }])
+    expect((await billing.getAvailableCredit(clientId)).totalCents).toBe(9000)
+  })
+
+  it('sweeps a client credit once its already-created charge falls due, even with nothing new to create', async () => {
+    const clientId = await createClient('504666666')
+    await prisma.retainerPlan.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        amountCents: 9000,
+        periodicity: 'MONTHLY',
+        dueDayOfMonth: 8,
+        validFrom: new Date('2026-01-01T00:00:00Z'),
+        validTo: null,
+      },
+    })
+
+    // First run, on the period's first day: creates the January charge,
+    // due the 8th — not yet due, so nothing is swept.
+    const first = await billing.generateCharges({ asOf: new Date('2026-01-01T00:00:00Z'), clientId }, false)
+    expect(first.created).toBe(1)
+    expect(first.allocated).toBe(0)
+
+    // The client pays in full before the due date: pure credit for now.
+    await prisma.payment.create({
+      data: { id: uuidv7(), clientId, amountCents: 9000, receivedOn: new Date('2026-01-03T00:00:00Z'), method: 'TRANSFER' },
+    })
+
+    // Second run, on the due date itself: no new period has started, so
+    // `toCreate` is empty for this client — but the January charge it
+    // already holds has just fallen due, and the credit on its books
+    // should settle it.
+    const second = await billing.generateCharges({ asOf: new Date('2026-01-08T00:00:00Z'), clientId }, false)
+    expect(second.created).toBe(0)
+    expect(second.allocated).toBe(1)
+
+    const balances = await prisma.$queryRaw<Array<{ outstandingCents: number }>>`
+      SELECT "outstandingCents" FROM charge_balances WHERE "clientId" = ${clientId}::uuid
+    `
+    expect(balances).toEqual([{ outstandingCents: 0 }])
+    expect((await billing.getAvailableCredit(clientId)).totalCents).toBe(0)
+  })
+
   it('generates charges unchanged for a client with no credit', async () => {
     const clientId = await createClient('504444444')
     await prisma.retainerPlan.create({
