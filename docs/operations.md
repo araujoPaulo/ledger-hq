@@ -99,6 +99,13 @@ Database migrations run automatically at API container startup
 (`prisma migrate deploy`, wired into `docker/Dockerfile.api`'s `CMD`) — no
 separate migration step is needed.
 
+The Phase 4b migration (`20260929171716_search_vectors`) rewrites five
+tables — `Client`, `Platform`, `ObligationDefinition`, `ObligationInstance`
+and `Charge` — to add a generated, stored `searchVector` column and its own
+GIN index to each. That is a full table rewrite under an exclusive lock, not
+the quick, additive migrations this update step is usually run with mid-day;
+schedule this particular update for the maintenance window.
+
 ## Rollback
 
 If an update causes a regression:
@@ -186,6 +193,13 @@ docker compose exec -T postgres rm -f /tmp/restore-test.dump
 If the counts don't match (accounting for the time between the dump and the
 comparison), the backup pipeline is broken — investigate before the next
 scheduled backup runs, not after a real incident forces the issue.
+
+The database also carries the `unaccent` extension and the
+`portuguese_unaccent` text-search configuration that the search indexes
+depend on (Phase 4b). `pg_dump` carries the configuration, so a restore into
+a database where `unaccent` is installed needs no extra step — but restoring
+where it is absent fails at the configuration, not at the first query. Check
+for it the same way you check for `btree_gist`.
 
 ## What is stored where
 

@@ -32,7 +32,7 @@ not `nestjs-zod`) and the browser form's validator in the same place.
 
 ## Backend modules — as built
 
-`apps/api/src/app.module.ts` imports seven modules. This is a finer split
+`apps/api/src/app.module.ts` imports eleven modules. This is a finer split
 than the six-module table in the design spec's section 5.2 (which groups
 `clients`, `vault`, `obligations`, `billing` and `reporting` at that
 granularity): the profile and employment logic that spec table folds into
@@ -47,22 +47,31 @@ too. Real dependency graph, read from each module's `imports: []`:
 | `clients` | Client CRUD, archiving | `auth` |
 | `fiscal-profiles` | Per-client fiscal profile upsert | `auth`, `audit`, `clients` |
 | `employments` | Employment spells between clients | `auth`, `clients` |
+| `vault` | Credential storage, client-side encrypted | `auth`, `clients` |
+| `obligations` | Fiscal catalog, generated deadlines, the daily generation cron | `auth`, `clients` |
+| `billing` | Retainer plans, ad-hoc charges, payments, the daily billing cron | `auth`, `clients` |
 | `system` | `GET /api/v1/system/health-report` (backup status) | `auth` |
+| `reporting` | Global search (`GET /api/v1/search`) and the two cross-module reports (`GET /api/v1/reporting/*`) | `auth` |
 
-Not yet built: `vault` (credential storage), `obligations` (the fiscal
-catalog and deadline engine), `billing` (retainers, charges, payments) and
-`reporting` (cross-module read models). The rule the spec states for these
-already holds for the modules that do exist, and must keep holding as the
-rest are added: **`clients` is the core; `vault`, `obligations` and
-`billing` never import from one another.** A view that needs data from two
-of them belongs in `reporting`, never as a lateral import between two
-sibling modules. Nothing in the code today violates this — there is nothing
-yet that could — but it is the constraint every future module must respect.
+**`clients` is the core; `vault`, `obligations` and `billing` never import
+from one another.** A view that needs data from two of them belongs in
+`reporting`, never as a lateral import between two sibling modules.
+
+`reporting` is the exception the rule anticipated. It imports `auth` alone
+and reads `Client`, `Platform`, `ObligationInstance`, `ObligationDefinition`,
+`Charge`, `charge_balances` and `payment_credits` directly through
+`$queryRaw`. A cross-module read model has no other way to be a single
+query, and that is precisely the trade this rule was written to permit: the
+coupling is one-directional and confined to one module, rather than a
+lateral import between two siblings. `reporting` calls no sibling service,
+and no sibling imports it.
 
 Each module exposes a typed service and owns its own Prisma-backed
 persistence; no module reaches into another module's Prisma models
 directly (`fiscal-profiles` and `employments` both depend on `clients`
-through `ClientsService`, not through `Client` rows they query themselves).
+through `ClientsService`, not through `Client` rows they query themselves;
+`reporting`'s own direct table reads, above, are the sole declared
+exception to that rule).
 
 ## API conventions
 
@@ -149,11 +158,11 @@ to:
               ┌──────────────────┼───────────────────────┐
               │                  │                        │
      ┌────────▼────────┐  ┌──────▼───────┐      ┌─────────▼─────────┐
-     │  FiscalProfile   │  │  Employment  │      │  (future) Vault,   │
+     │  FiscalProfile   │  │  Employment  │      │  Vault,            │
      │  one per client  │  │  employer ↔  │      │  Obligations,      │
-     │                  │  │  employee,   │      │  Billing           │
-     │                  │  │  both FK to  │      │  aggregates — not  │
-     │                  │  │ (id, kind)   │      │  yet in the schema │
+     │                  │  │  employee,   │      │  Billing — each    │
+     │                  │  │  both FK to  │      │  its own aggregate │
+     │                  │  │ (id, kind)   │      │  off Client (above)│
      └──────────────────┘  └──────────────┘      └────────────────────┘
 ```
 
@@ -170,7 +179,7 @@ Built today (`apps/api/prisma/schema.prisma`):
   only for companies and `socialSecurityNo`/`dateOfBirth` only for
   individuals.
 - **`FiscalProfile`** — one-to-one with `Client`, `clientId` is its own
-  primary key. Drives the (not-yet-built) obligation engine.
+  primary key. Drives the obligation engine (`obligations`, below).
 - **`Employment`** — links a `COMPANY` client (employer) to an `INDIVIDUAL`
   client (employee). Both `employerKind` and `employeeKind` are pinned by
   `CHECK` constraints, and the foreign keys are composite
@@ -187,9 +196,23 @@ Built today (`apps/api/prisma/schema.prisma`):
   `detail`), written by `docker/backup.sh`; read by
   `GET /api/v1/system/health-report`.
 
-Not in the schema yet, and out of scope for Phase 0 (see the design spec,
-section 14, and the plan's closing "what Phase 0 deliberately leaves out"):
-the credential vault and its item encryption, the obligation catalog and
-generated instances, and the billing/retainer/payment ledger. When they
-arrive, each is its own aggregate hanging off `Client`, per the module
-boundary above — none of them reach into each other's tables.
+The credential vault and its item encryption, the obligation catalog and
+generated instances, and the billing/retainer/payment ledger were out of
+scope for Phase 0 (see the design spec, section 14, and the plan's closing
+"what Phase 0 deliberately leaves out") and have since shipped. Each is its
+own aggregate hanging off `Client`, per the module boundary above — none of
+them reach into each other's tables; `reporting` (above) is the sole,
+declared exception, reading rather than importing.
+
+Two read-only views compute money rather than storing it, so neither can
+drift from the ledger rows they aggregate: `charge_balances` sums each
+charge's allocations to derive `allocatedCents`, `outstandingCents` and a
+`status`, and `payment_credits` mirrors it from the payment side, summing
+each payment's own allocations to derive a client's advance-payment
+credit, which is never itself stored. `Client`, `Platform`,
+`ObligationDefinition`, `ObligationInstance` and `Charge` each also carry a
+generated `searchVector` column, covered by its own GIN index, that global
+search (`reporting`, Phase 4b) reads. Prisma models neither kind of object:
+the views are read through `prisma.$queryRaw`, and a `tsvector` column is
+declared `Unsupported("tsvector")` in the schema, so Prisma leaves it
+alone.

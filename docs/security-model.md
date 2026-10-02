@@ -196,6 +196,14 @@ the master password is lost (see "Recovery, not just reset" below).
 > is the property zero-knowledge buys, and this is its cost. The recovery
 > code must be written on paper and stored off-site.
 
+Global search (Phase 4b) indexes clients, platforms, obligations and charges.
+It cannot index credentials: the server holds `ciphertext` and `iv` it has no
+key for, so no server-side index can cover them. `Credential.label` is not
+indexed either — it is a per-client disambiguator whose meaning comes from
+the client row that would already have matched. Typing a credential's
+username into the search box finds nothing; it finds the client and the
+platform, from which the operator unlocks the vault.
+
 **Offline reads, no offline writes.** `apps/web/src/vault/vault-db.ts`
 caches ciphertext, IVs and non-sensitive metadata (never plaintext —
 enforced at runtime by `putCachedCredentials`'s field-shape guard, not
