@@ -31,6 +31,41 @@ describe('toCsv', () => {
   it('emits a header row and no data rows for an empty report', () => {
     expect(toCsv(['A', 'B'], [], 'pt-PT')).toBe('﻿A;B\r\n')
   })
+
+  describe('formula injection guard', () => {
+    // Excel and LibreOffice read a cell as a formula, not text, from its
+    // first character alone — one per dangerous leading character.
+    it('guards a leading =', () => {
+      expect(toCsv(['A'], [['=SUM(A1:A2)']], 'pt-PT')).toBe('﻿A\r\n\'=SUM(A1:A2)\r\n')
+    })
+
+    it('guards a leading +', () => {
+      expect(toCsv(['A'], [['+351912345678']], 'pt-PT')).toBe('﻿A\r\n\'+351912345678\r\n')
+    })
+
+    it('guards a leading -', () => {
+      expect(toCsv(['A'], [['-trigger']], 'pt-PT')).toBe('﻿A\r\n\'-trigger\r\n')
+    })
+
+    it('guards a leading @', () => {
+      expect(toCsv(['A'], [['@SUM(1,1)']], 'pt-PT')).toBe('﻿A\r\n\'@SUM(1,1)\r\n')
+    })
+
+    it('guards a leading tab', () => {
+      expect(toCsv(['A'], [['\tdata']], 'pt-PT')).toBe('﻿A\r\n\'\tdata\r\n')
+    })
+
+    it('guards a leading carriage return, which is also still quote-triggering', () => {
+      expect(toCsv(['A'], [['\rdata']], 'pt-PT')).toBe('﻿A\r\n"\'\rdata"\r\n')
+    })
+
+    // The one that matters: an over-eager guard would mangle every date and
+    // every description that happens to contain a dash.
+    it('leaves a value that merely contains = or - partway through untouched', () => {
+      expect(toCsv(['A'], [['2026-01-08']], 'pt-PT')).toBe('﻿A\r\n2026-01-08\r\n')
+      expect(toCsv(['A'], [['Total = 100']], 'pt-PT')).toBe('﻿A\r\nTotal = 100\r\n')
+    })
+  })
 })
 
 describe('formatCsvAmount', () => {

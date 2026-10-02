@@ -25,11 +25,34 @@ export function formatCsvAmount(cents: number, locale: SupportedLocale): string 
   }).format(cents / 100)
 }
 
+// As a cell's first character, each of these makes Excel or LibreOffice
+// read the cell as a formula rather than as text. `=`, `+` and `@` are the
+// well-known triggers; a leading `-` also starts a (broken) formula, and a
+// leading tab or carriage return has historically been used to smuggle a
+// formula past a guard that only checks for `=`. The data reaching this
+// export — client names, charge descriptions, write-off reasons — is free
+// text the operator or client chose, not something this code controls.
+const FORMULA_TRIGGER_CHARS = new Set(['=', '+', '-', '@', '\t', '\r'])
+
+/**
+ * The single leading apostrophe is not a stray character: it is the
+ * spreadsheet convention for "this cell is text, not a formula". Without
+ * it, a client named e.g. `=HYPERLINK(...)` would execute as a formula the
+ * moment someone opens this file in Excel — the export's only destination.
+ * Only the first character is checked, deliberately: a value that merely
+ * *contains* `=` or `-` further in, like a date (`2026-01-08`) or a
+ * description (`Total = 100`), must pass through untouched.
+ */
+function guardFormula(field: string): string {
+  return FORMULA_TRIGGER_CHARS.has(field.charAt(0)) ? `'${field}` : field
+}
+
 function escapeField(field: string, delimiter: string): string {
-  if (!field.includes(delimiter) && !field.includes('"') && !field.includes('\n') && !field.includes('\r')) {
-    return field
+  const guarded = guardFormula(field)
+  if (!guarded.includes(delimiter) && !guarded.includes('"') && !guarded.includes('\n') && !guarded.includes('\r')) {
+    return guarded
   }
-  return `"${field.replaceAll('"', '""')}"`
+  return `"${guarded.replaceAll('"', '""')}"`
 }
 
 /**
