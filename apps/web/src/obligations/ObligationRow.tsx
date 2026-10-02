@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { formatDate } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
-import { Badge } from '../ui'
 import type { ObligationResponse } from './api'
 
 type Props = {
@@ -12,8 +11,6 @@ type Props = {
   onEdit?: () => void
   /** Omitted on the global dashboard, which is mark-done only (design doc §3.4); supplied by the per-client section. */
   onManageAttachments?: () => void
-  /** Rendered as a count badge when above zero. Omitted means "not known here". */
-  attachmentCount?: number
 }
 
 export function ObligationRow({
@@ -22,7 +19,6 @@ export function ObligationRow({
   onMarkDone,
   onEdit,
   onManageAttachments,
-  attachmentCount,
 }: Props) {
   const { t, i18n } = useTranslation('obligations')
   const isActionable = obligation.status === 'PENDING' || obligation.status === 'IN_PROGRESS'
@@ -55,11 +51,6 @@ export function ObligationRow({
       {onManageAttachments && (
         <button type="button" onClick={onManageAttachments} className="flex items-center gap-1 text-xs underline">
           {t('attachments.manage')}
-          {attachmentCount !== undefined && attachmentCount > 0 && (
-            <Badge tone="accent" data-testid="attachment-count">
-              {attachmentCount}
-            </Badge>
-          )}
         </button>
       )}
     </li>
