@@ -2,7 +2,7 @@ import { Controller, Delete, Get, HttpCode, Param, Post, Res, UploadedFile, UseF
 import { FileInterceptor } from '@nestjs/platform-express'
 import { memoryStorage } from 'multer'
 import type { Response } from 'express'
-import { MAX_ATTACHMENT_BYTES, attachmentParamsSchema, obligationParamsSchema } from '@ledger-hq/domain'
+import { AppError, MAX_ATTACHMENT_BYTES, attachmentParamsSchema, obligationParamsSchema } from '@ledger-hq/domain'
 import type { AttachmentParams, ObligationParams } from '@ledger-hq/domain'
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js'
 import { SessionGuard } from '../auth/session.guard.js'
@@ -38,6 +38,14 @@ export class AttachmentsController {
     @Param(new ZodValidationPipe(obligationParamsSchema)) params: ObligationParams,
     @UploadedFile() file: Express.Multer.File,
   ): Promise<AttachmentResponse> {
+    // Multer leaves `file` undefined when the part named "file" is missing,
+    // or the body isn't multipart at all — neither of which is a
+    // `MulterError`, so `MulterErrorFilter` never sees it. Reject here,
+    // first, rather than let `attachments.service`'s `file.mimetype` throw a
+    // bare TypeError that the global filter can only render as
+    // `common.internal_error` (ADR 0004 wants a code, not a 500).
+    if (!file) throw new AppError('common.validation_failed', {}, 422)
+
     return this.attachments.upload(params.obligationId, file)
   }
 

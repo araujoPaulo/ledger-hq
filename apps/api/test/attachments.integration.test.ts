@@ -202,4 +202,23 @@ describe('attachment upload, list, download and delete', () => {
     expect(response.body).toEqual({ error: { code: 'attachments.too_large', params: { maxBytes: 10 * 1024 * 1024 } } })
     expect(await prisma.obligationAttachment.count()).toBe(0)
   })
+
+  // Multer leaves `@UploadedFile()` undefined when the part named "file" is
+  // absent, which is not a `MulterError` and so never reaches
+  // `MulterErrorFilter`. Before the controller guarded against it, this hit
+  // `file.mimetype` inside the service and surfaced as 500
+  // `common.internal_error`.
+  it('answers 422 common.validation_failed for a multipart body with no file part', async () => {
+    const obligationId = await anObligation('509222333')
+
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/obligations/${obligationId}/attachments`)
+      .set('Cookie', cookie)
+      .set('X-Requested-With', 'ledger-hq')
+      .field('notAFile', 'value')
+      .expect(422)
+
+    expect(response.body).toEqual({ error: { code: 'common.validation_failed', params: {} } })
+    expect(await prisma.obligationAttachment.count()).toBe(0)
+  })
 })
