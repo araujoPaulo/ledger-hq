@@ -1,7 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { CalendarCheck, Users, Vault } from 'lucide-react'
+import { CalendarCheck, ChartColumn, Users, Vault } from 'lucide-react'
 import { AccountMenu } from './AccountMenu'
+import { SearchBox } from '../search/SearchBox'
 
 // "Deadlines" reuses the obligations dashboard's own title rather than adding
 // a nav key that would say the same word twice.
@@ -9,6 +10,7 @@ const DESTINATIONS = [
   { to: '/', labelKey: 'obligations:dashboard.title', icon: CalendarCheck },
   { to: '/clients', labelKey: 'common:nav.clients', icon: Users },
   { to: '/vault/platforms', labelKey: 'common:nav.vault', icon: Vault },
+  { to: '/reporting', labelKey: 'common:nav.reporting', icon: ChartColumn },
 ] as const
 
 export function Sidebar() {
@@ -25,6 +27,8 @@ export function Sidebar() {
         </span>
         {t('common:appName')}
       </span>
+
+      <SearchBox />
 
       <div className="flex flex-1 flex-col gap-1">
         {DESTINATIONS.map(({ to, labelKey, icon: Icon }) => (

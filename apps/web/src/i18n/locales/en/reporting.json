@@ -1,0 +1,31 @@
+{
+  "title": "Reports",
+  "download": "Download CSV",
+  "atRisk": {
+    "title": "At risk",
+    "hint": "Clients overdue on an obligation and behind on payment.",
+    "empty": "No client at risk.",
+    "emptyHint": "Nobody is carrying both a missed deadline and a debt.",
+    "column": {
+      "client": "Client",
+      "overdueObligations": "Overdue obligations",
+      "oldestDueDate": "Oldest deadline",
+      "gross": "Gross debt",
+      "credit": "Credit",
+      "outstanding": "Outstanding",
+      "oldestChargeDueOn": "Oldest unpaid charge"
+    }
+  },
+  "periodSummary": {
+    "title": "Period summary",
+    "from": "From",
+    "to": "To",
+    "invalidRange": "Invalid range: the \"To\" date is before the \"From\" date.",
+    "obligationsDue": "Obligations due",
+    "obligationsDone": "Obligations filed",
+    "chargesIssued": "Charges issued",
+    "paymentsReceived": "Payments received",
+    "unappliedCreditAtClose": "Unapplied credit at close",
+    "outstandingAtClose": "Outstanding at close"
+  }
+}

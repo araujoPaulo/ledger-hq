@@ -5,6 +5,7 @@ import domain from './domain.json'
 import employments from './employments.json'
 import errors from './errors.json'
 import obligations from './obligations.json'
+import reporting from './reporting.json'
 import vault from './vault.json'
 
-export const resources = { billing, clients, common, domain, employments, errors, obligations, vault }
+export const resources = { billing, clients, common, domain, employments, errors, obligations, reporting, vault }

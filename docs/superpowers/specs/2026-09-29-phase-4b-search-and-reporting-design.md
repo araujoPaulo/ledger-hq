@@ -253,6 +253,16 @@ test is `dueDate < asOf` on a still-open status, the definition
 uses `getReceivables`'s filters. So this report cannot disagree with either
 screen.
 
+**Open question, not settled here:** `getReceivables` has no `archivedAt`
+filter at all, while this report's `overdue` CTE excludes archived clients.
+An archived client still carrying debt can therefore appear on the
+receivables screen but never on this one. Whole-branch review named this
+divergence explicitly and ruled it stays as-is for now: whether an archived
+client's debt belongs on the main receivables screen is a question for the
+practice, not something to settle silently at the end of a phase, and
+hiding real debt from that screen would be the worse mistake in the
+meantime.
+
 **When 4a lands, this report reads the net figure.** 4a nets unconsumed
 credit into `getReceivables` (4a spec §4.4); a client whose credit covers its
 debt is not in arrears and must not be listed. Whichever of 4a and 4b lands
@@ -268,8 +278,23 @@ export type PeriodSummary = {
   obligationsDue: number; obligationsDone: number
   chargesIssuedCents: number; paymentsReceivedCents: number
   outstandingAtCloseCents: number
+  unappliedCreditAtCloseCents: number
 }
 ```
+
+**`outstandingAtCloseCents` answers a different question from the
+receivables screen and the at-risk report, deliberately.** It is gross of
+credit, counts every client including archived ones, and includes charges
+not yet due at `to` — none of which the net, due-only, active-clients-only
+figures on the other two screens do. An operator comparing this total
+against receivables for a window ending today will see them disagree for
+every client holding unspent credit, which is exactly the state Phase 4a
+exists to create. `unappliedCreditAtCloseCents` — unspent payment money at
+the same instant, by the same "as it stood at `to`" rule — exists so that
+disagreement is explainable rather than silent: it does not make the two
+figures reconcile exactly (receivables also excludes charges not yet due),
+but it is the bridge that lets an operator get from one number to the
+other instead of just noticing they differ.
 
 Two reports. Not a reporting framework, not a query builder, not a
 saved-query store: two questions that are actually asked, one query each. A

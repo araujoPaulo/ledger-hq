@@ -307,7 +307,7 @@ describe('billing constraints', () => {
     const payment = await prisma.payment.create({
       data: { id: uuidv7(), clientId: client.id, amountCents: 4000, receivedOn: new Date('2026-01-05T00:00:00Z'), method: 'TRANSFER' },
     })
-    await prisma.paymentAllocation.create({ data: { paymentId: payment.id, chargeId: charge.id, amountCents: 4000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId: payment.id, chargeId: charge.id, amountCents: 4000 } })
 
     const rows = await prisma.$queryRaw<Array<{ outstandingCents: number; status: string }>>`
       SELECT "outstandingCents", status FROM charge_balances WHERE id = ${charge.id}::uuid
@@ -316,6 +316,99 @@ describe('billing constraints', () => {
     expect(typeof rows[0]!.outstandingCents).toBe('number')
     expect(rows[0]!.outstandingCents).toBe(6000)
     expect(rows[0]!.status).toBe('PARTIAL')
+  })
+})
+
+describe('search vectors', () => {
+  // Review Focus 5: accents fold both ways, and a number matches by prefix.
+  it('finds an accented name from an unaccented query and back', async () => {
+    await createClient('501111111', 'Padaria Araújo, Lda.')
+
+    const unaccented = await prisma.$queryRaw<Array<{ name: string }>>`
+      SELECT name FROM "Client" WHERE "searchVector" @@ to_tsquery('portuguese_unaccent', 'araujo:*')
+    `
+    const accented = await prisma.$queryRaw<Array<{ name: string }>>`
+      SELECT name FROM "Client" WHERE "searchVector" @@ to_tsquery('portuguese_unaccent', 'araújo:*')
+    `
+
+    expect(unaccented).toHaveLength(1)
+    expect(accented).toHaveLength(1)
+  })
+
+  it('finds a client by the first digits of its tax number', async () => {
+    await createClient('501442634', 'Padaria Central, Lda.')
+
+    const rows = await prisma.$queryRaw<Array<{ name: string }>>`
+      SELECT name FROM "Client" WHERE "searchVector" @@ to_tsquery('portuguese_unaccent', '5014:*')
+    `
+
+    expect(rows).toHaveLength(1)
+  })
+
+  it('recomputes the vector when the row changes', async () => {
+    const clientId = await createClient('501222222', 'Old Name, Lda.')
+    await prisma.client.update({ where: { id: clientId }, data: { name: 'Renamed Bakery, Lda.' } })
+
+    const stale = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "Client" WHERE "searchVector" @@ to_tsquery('portuguese_unaccent', 'old:*')
+    `
+    const fresh = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "Client" WHERE "searchVector" @@ to_tsquery('portuguese_unaccent', 'renamed:*')
+    `
+
+    expect(stale).toEqual([])
+    expect(fresh).toHaveLength(1)
+  })
+
+  it('weights a name above a note', async () => {
+    await createClient('501333333', 'Talho Silva, Lda.')
+    const otherId = await createClient('501444444', 'Mercearia Costa, Lda.')
+    await prisma.client.update({ where: { id: otherId }, data: { notes: 'Talho vizinho do Silva' } })
+
+    const rows = await prisma.$queryRaw<Array<{ name: string; rank: number }>>`
+      SELECT name, ts_rank_cd("searchVector", to_tsquery('portuguese_unaccent', 'silva:*')) AS rank
+      FROM "Client"
+      WHERE "searchVector" @@ to_tsquery('portuguese_unaccent', 'silva:*')
+      ORDER BY rank DESC
+    `
+
+    expect(rows[0]?.name).toBe('Talho Silva, Lda.')
+  })
+})
+
+describe('search vector guard (the migrate dev drift hazard)', () => {
+  // `prisma migrate dev` cannot tell a GENERATED ALWAYS AS (...) STORED column
+  // or a GIN index it doesn't recognise from schema.prisma apart from
+  // something safe to drop — see the header of the search_vectors migration
+  // for the full story. If a future `migrate dev` run (or schema drift) ever
+  // strips the configuration or an index, search silently degrades to
+  // sequential scans with no error anywhere. This test turns that into a red
+  // test instead of silence.
+  it('keeps the portuguese_unaccent configuration and all five GIN search indexes on a freshly migrated database', async () => {
+    const configs = await prisma.$queryRaw<Array<{ cfgname: string }>>`
+      SELECT cfgname FROM pg_ts_config WHERE cfgname = 'portuguese_unaccent'
+    `
+    expect(configs).toHaveLength(1)
+
+    const indexes = await prisma.$queryRaw<Array<{ indexname: string; indexdef: string }>>`
+      SELECT indexname, indexdef FROM pg_indexes
+      WHERE indexname IN (
+        'Client_searchVector_idx',
+        'Platform_searchVector_idx',
+        'ObligationDefinition_searchVector_idx',
+        'ObligationInstance_searchVector_idx',
+        'Charge_searchVector_idx'
+      )
+      ORDER BY indexname
+    `
+    expect(indexes.map((row) => row.indexname)).toEqual([
+      'Charge_searchVector_idx',
+      'Client_searchVector_idx',
+      'ObligationDefinition_searchVector_idx',
+      'ObligationInstance_searchVector_idx',
+      'Platform_searchVector_idx',
+    ])
+    expect(indexes.every((row) => row.indexdef.includes('USING gin'))).toBe(true)
   })
 })
 
@@ -338,7 +431,7 @@ describe('payment_credits view', () => {
     await prisma.payment.create({
       data: { id: paymentId, clientId, amountCents: 12000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
     })
-    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 5000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId, chargeId, amountCents: 5000 } })
 
     const [row] = await prisma.$queryRaw<Array<{ creditCents: number; allocatedCents: number }>>`
       SELECT "creditCents", "allocatedCents" FROM payment_credits WHERE "paymentId" = ${paymentId}::uuid
@@ -369,7 +462,7 @@ describe('payment_credits view', () => {
     await prisma.payment.create({
       data: { id: paymentId, clientId, amountCents: 9000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
     })
-    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 9000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId, chargeId, amountCents: 9000 } })
 
     const [row] = await prisma.$queryRaw<Array<{ creditCents: number }>>`
       SELECT "creditCents" FROM payment_credits WHERE "paymentId" = ${paymentId}::uuid

@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { CalendarCheck, Users, Vault } from 'lucide-react'
+import { CalendarCheck, ChartColumn, Search, Users, Vault } from 'lucide-react'
 import { AccountMenu } from './AccountMenu'
 import { ConnectionStatus } from './ConnectionStatus'
 
@@ -8,6 +8,7 @@ const DESTINATIONS = [
   { to: '/', labelKey: 'obligations:dashboard.title', icon: CalendarCheck },
   { to: '/clients', labelKey: 'common:nav.clients', icon: Users },
   { to: '/vault/platforms', labelKey: 'common:nav.vault', icon: Vault },
+  { to: '/reporting', labelKey: 'common:nav.reporting', icon: ChartColumn },
 ] as const
 
 export function MobileTopBar() {
@@ -29,6 +30,15 @@ export function MobileTopBar() {
         L
       </Link>
       <span className="flex items-center gap-2">
+        {/* Icon-only, so it carries the label the desktop box shows. */}
+        <Link
+          to="/search"
+          search={{ q: '' }}
+          aria-label={t('search.label')}
+          className="flex h-9 w-9 items-center justify-center rounded-surface text-muted"
+        >
+          <Search aria-hidden="true" className="h-5 w-5" />
+        </Link>
         <ConnectionStatus />
         <AccountMenu />
       </span>
