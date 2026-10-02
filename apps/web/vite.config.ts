@@ -28,6 +28,15 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,woff2,png,svg}'],
         navigateFallback: '/index.html',
+        // Without this, Workbox's own NavigationRoute (registered ahead of
+        // every rule below, and matching before them regardless of array
+        // order, since Workbox special-cases navigation requests) answers
+        // ANY `mode === 'navigate'` request — including a receipt URL under
+        // `/api/v1/...` — from the precached app shell. That is exactly
+        // what "open in new tab" on a receipt link does on a phone when
+        // `<a download>` doesn't save: the natural fallback gesture, and it
+        // would silently hand back index.html saved as "recibo.pdf".
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
             // This one read has its own IndexedDB-backed offline fallback
