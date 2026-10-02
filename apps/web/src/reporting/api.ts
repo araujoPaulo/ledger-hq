@@ -20,8 +20,16 @@ export type PeriodSummary = {
   obligationsDone: number
   chargesIssuedCents: number
   paymentsReceivedCents: number
-  /** The position at the window's end, not today's. */
+  /**
+   * The position at the window's end, not today's. Gross of credit, counts
+   * every client including archived ones, and includes charges not yet due
+   * — so it will not match the receivables screen's net figure for a
+   * client holding unspent credit. `unappliedCreditAtCloseCents` is what
+   * bridges that gap.
+   */
   outstandingAtCloseCents: number
+  /** Unspent payment money at the same instant `outstandingAtCloseCents` reconstructs. */
+  unappliedCreditAtCloseCents: number
 }
 
 export function getAtRisk(asOf?: string): Promise<AtRiskRow[]> {

@@ -27,7 +27,13 @@ export class ReportingController {
 
   @Get('reporting/at-risk')
   async atRisk(@Query(new ZodValidationPipe(atRiskQuerySchema)) query: AtRiskQuery): Promise<AtRiskRow[]> {
-    const asOf = query.asOf === undefined ? new Date() : new Date(`${query.asOf}T00:00:00Z`)
+    // Normalised to midnight UTC, same as an explicit `?asOf=YYYY-MM-DD`:
+    // `new Date()` carries the time of day, and `reports.atRisk` compares it
+    // against a `@db.Date` column, so an un-normalised "now" would count an
+    // obligation due today as overdue — disagreeing with `groupByUrgency`'s
+    // `overdue` bucket, which this report is documented to never disagree
+    // with.
+    const asOf = new Date(`${query.asOf ?? new Date().toISOString().slice(0, 10)}T00:00:00Z`)
     return this.reports.atRisk(asOf)
   }
 

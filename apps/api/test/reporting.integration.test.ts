@@ -220,6 +220,24 @@ describe('GET /api/v1/reporting/at-risk', () => {
     expect(typeof row.outstandingCents).toBe('number')
   })
 
+  // Finding 1 of the whole-branch review: the default `asOf` (no query
+  // param) must normalise to midnight UTC, the same as an explicit
+  // `?asOf=YYYY-MM-DD`, or an obligation due exactly today would count as
+  // overdue here while `groupByUrgency` and every other caller say it is
+  // not. Every other test in this file passes an explicit `asOf`, which is
+  // exactly why this one regressed unnoticed.
+  it('does not treat an obligation due today as overdue when asOf is omitted', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const clientId = await createClient('509111111', 'Vence Hoje, Lda.')
+    await overdueObligation(clientId, '2026-Q1', today)
+    await openCharge(clientId, 20000, today)
+
+    const response = await get('/api/v1/reporting/at-risk')
+
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual([])
+  })
+
   it('rejects a malformed asOf', async () => {
     const response = await get('/api/v1/reporting/at-risk?asOf=29/09/2026')
 
@@ -325,6 +343,7 @@ describe('GET /api/v1/reporting/period-summary', () => {
       chargesIssuedCents: 0,
       paymentsReceivedCents: 0,
       outstandingAtCloseCents: 0,
+      unappliedCreditAtCloseCents: 0,
     })
   })
 
@@ -336,9 +355,53 @@ describe('GET /api/v1/reporting/period-summary', () => {
 
     const response = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
 
-    for (const key of ['obligationsDue', 'obligationsDone', 'chargesIssuedCents', 'paymentsReceivedCents', 'outstandingAtCloseCents']) {
+    for (const key of [
+      'obligationsDue',
+      'obligationsDone',
+      'chargesIssuedCents',
+      'paymentsReceivedCents',
+      'outstandingAtCloseCents',
+      'unappliedCreditAtCloseCents',
+    ]) {
       expect(typeof response.body[key]).toBe('number')
     }
+  })
+
+  // Finding 3 of the whole-branch review: `outstandingAtCloseCents` is gross
+  // of credit and cannot be reconciled against the receivables screen on its
+  // own. `unappliedCreditAtCloseCents` is the bridge — unspent payment money
+  // as it stood at `to`, same cutoff rule as `outstandingAtCloseCents`.
+  it('reports unspent payment money at close as its own figure, separate from the gross outstanding total', async () => {
+    const clientId = await createClient('503555555', 'Com Crédito, Lda.')
+    const charge = await prisma.charge.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        kind: 'EXTRA',
+        description: 'Parcialmente coberta',
+        amountCents: 9000,
+        issuedOn: new Date('2026-02-01T00:00:00Z'),
+        dueOn: new Date('2026-02-28T00:00:00Z'),
+      },
+    })
+    const paymentId = uuidv7()
+    // 12000 received by close, only 9000 of it ever allocated — 3000 sits
+    // as unspent credit as of `to`.
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 12000, receivedOn: new Date('2026-02-10T00:00:00Z'), method: 'TRANSFER' },
+    })
+    // createdAt backdated into the window: left at its real-clock default,
+    // this allocation would be created "now" — long after `to` — and
+    // outstandingAtCloseCents would (correctly) still show it unsettled,
+    // which is not what this test means to exercise.
+    await prisma.paymentAllocation.create({
+      data: { id: uuidv7(), paymentId, chargeId: charge.id, amountCents: 9000, createdAt: new Date('2026-02-15T00:00:00Z') },
+    })
+
+    const response = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+
+    expect(response.body.outstandingAtCloseCents).toBe(0)
+    expect(response.body.unappliedCreditAtCloseCents).toBe(3000)
   })
 
   it('rejects a window that ends before it starts', async () => {

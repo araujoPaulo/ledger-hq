@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { uuidv7 } from 'uuidv7'
-import { AppError, chargeDueDate, chargePeriodsSince, proposeAllocation } from '@ledger-hq/domain'
+import { AppError, chargeDueDate, chargePeriodsSince, proposeAllocation, settleOnPaper } from '@ledger-hq/domain'
 import type { AllocationSource, ApplyCreditInput, ChargeBalance, CreateAdHocChargeInput, CreateRetainerPlanInput, ProposedAllocation, RecordPaymentInput, RenewRetainerPlanInput } from '@ledger-hq/domain'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { PrismaService } from '../common/prisma.service.js'
@@ -494,37 +494,26 @@ export class BillingService {
 
     const rows = []
     for (const [clientId, entry] of byClient) {
-      const grossOutstandingCents = entry.charges.reduce((sum, charge) => sum + charge.outstandingCents, 0)
       const creditCents = creditByClient.get(clientId) ?? 0
+      // `settleOnPaper` (`@ledger-hq/domain`) spends the credit against
+      // `entry.charges` oldest due date first and names the first charge it
+      // fails to cover in full — that charge, not the oldest debt on the
+      // books, is what this client is actually overdue on. Shared with the
+      // at-risk report so the two cannot drift apart again.
+      const settlement = settleOnPaper(entry.charges, creditCents)
 
-      // Spend the credit on paper, oldest charge first — the same order a
-      // real allocation would use — and keep the first charge it fails to
-      // cover. That charge, not the oldest debt on the books, is what this
-      // client is actually overdue on.
-      let remainingCredit = creditCents
-      let oldestUncovered: Date | null = null
-      for (const charge of entry.charges) {
-        if (remainingCredit >= charge.outstandingCents) {
-          remainingCredit -= charge.outstandingCents
-          continue
-        }
-        oldestUncovered = charge.dueOn
-        break
-      }
+      if (settlement.outstandingCents === 0 || settlement.oldestUncoveredDueOn === null) continue
 
-      const outstandingCents = Math.max(grossOutstandingCents - creditCents, 0)
-      if (outstandingCents === 0 || oldestUncovered === null) continue
-
-      const daysOverdue = Math.floor((asOf.getTime() - oldestUncovered.getTime()) / ONE_DAY_MS)
+      const daysOverdue = Math.floor((asOf.getTime() - settlement.oldestUncoveredDueOn.getTime()) / ONE_DAY_MS)
       const ageingBucket = daysOverdue > 90 ? '90+' : daysOverdue > 60 ? '61-90' : daysOverdue > 30 ? '31-60' : '0-30'
 
       rows.push({
         clientId,
         clientName: entry.clientName,
-        grossOutstandingCents,
+        grossOutstandingCents: settlement.grossCents,
         creditCents,
-        outstandingCents,
-        oldestDueOn: isoDate(oldestUncovered),
+        outstandingCents: settlement.outstandingCents,
+        oldestDueOn: isoDate(settlement.oldestUncoveredDueOn),
         ageingBucket: ageingBucket as '0-30' | '31-60' | '61-90' | '90+',
       })
     }

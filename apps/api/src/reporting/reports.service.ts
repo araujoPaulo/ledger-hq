@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { settleOnPaper } from '@ledger-hq/domain'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { PrismaService } from '../common/prisma.service.js'
 
@@ -21,6 +22,7 @@ export type PeriodSummary = {
   chargesIssuedCents: number
   paymentsReceivedCents: number
   outstandingAtCloseCents: number
+  unappliedCreditAtCloseCents: number
 }
 
 function isoDate(date: Date): string {
@@ -47,16 +49,20 @@ export class ReportsService {
    * merely the oldest charge on file: a `MIN(dueOn)` over the raw balances
    * would name a charge the client's own unspent credit has already
    * answered. So charges are fetched per row, not pre-aggregated, and
-   * credit is spent against them on paper — oldest charge first, same as a
-   * real allocation — keeping the first charge it fails to cover in full.
-   * A charge the credit only partially reaches is still the oldest
-   * uncovered one and must not be skipped past.
+   * `settleOnPaper` (`@ledger-hq/domain`) spends the credit against them —
+   * the same walk `getReceivables` uses, extracted so the two cannot drift
+   * apart again the way they already have once.
    */
   async atRisk(asOf: Date): Promise<AtRiskRow[]> {
     // Aggregated per client, not joined against balances: this alone
     // carries no fan-out risk, since nothing here multiplies against
-    // another table's rows. Excludes archived clients up front, same as
-    // `getReceivables`.
+    // another table's rows. Excludes archived clients up front — `getReceivables`
+    // does not filter on `archivedAt` at all, so an archived client still
+    // carrying debt can appear on the receivables screen but never here.
+    // That is a deliberate divergence, not an oversight: whether an
+    // archived client's debt belongs on the main receivables screen is a
+    // question for the practice, not one this report should settle by
+    // silently hiding real debt (see the spec's open-questions note, §3.7).
     const overdue = await this.prisma.$queryRaw<
       Array<{ clientId: string; clientName: string; overdueObligations: number; oldestDueDate: Date }>
     >`
@@ -97,38 +103,22 @@ export class ReportsService {
     const rows: AtRiskRow[] = []
     for (const entry of overdue) {
       const clientCharges = chargesByClient.get(entry.clientId) ?? []
-      const grossOutstandingCents = clientCharges.reduce((sum, charge) => sum + charge.outstandingCents, 0)
       const creditCents = creditByClient.get(entry.clientId) ?? 0
+      const settlement = settleOnPaper(clientCharges, creditCents)
 
-      // Spend the credit on paper, oldest charge first — the same order
-      // `getReceivables` (and a real allocation) would use — and keep the
-      // first charge it fails to cover in full. A partially covered charge
-      // is still the oldest uncovered one, so it is kept, not skipped.
-      let remainingCredit = creditCents
-      let oldestUncovered: Date | null = null
-      for (const charge of clientCharges) {
-        if (remainingCredit >= charge.outstandingCents) {
-          remainingCredit -= charge.outstandingCents
-          continue
-        }
-        oldestUncovered = charge.dueOn
-        break
-      }
-
-      const outstandingCents = Math.max(grossOutstandingCents - creditCents, 0)
       // A client whose own unspent money covers its debt is not in
       // arrears, whatever the gross figure says.
-      if (outstandingCents === 0 || oldestUncovered === null) continue
+      if (settlement.outstandingCents === 0 || settlement.oldestUncoveredDueOn === null) continue
 
       rows.push({
         clientId: entry.clientId,
         clientName: entry.clientName,
         overdueObligations: entry.overdueObligations,
         oldestDueDate: isoDate(entry.oldestDueDate),
-        grossOutstandingCents,
+        grossOutstandingCents: settlement.grossCents,
         creditCents,
-        outstandingCents,
-        oldestChargeDueOn: isoDate(oldestUncovered),
+        outstandingCents: settlement.outstandingCents,
+        oldestChargeDueOn: isoDate(settlement.oldestUncoveredDueOn),
       })
     }
 
@@ -155,6 +145,19 @@ export class ReportsService {
    * settle a charge inside it, changing that period's answer depending on
    * when it's asked. `createdAt` is the only timestamp that actually says
    * when the allocation — the event that spends the money — happened.
+   *
+   * `outstandingAtCloseCents` answers a different question from the
+   * receivables screen and the at-risk report: it is gross of credit,
+   * counts every client including archived ones, and includes charges not
+   * yet due at `to`. It cannot be reconciled against either of those
+   * net, due-only, active-clients-only figures on its own.
+   * `unappliedCreditAtCloseCents` — unspent payment money at the same
+   * instant, by the same "as it stood at `to`" rule — is what bridges the
+   * gap: gross outstanding minus unapplied credit gets an operator most of
+   * the way to what the receivables screen would call net (it still won't
+   * match exactly, since receivables excludes charges not yet due and this
+   * figure does not), rather than leaving them to wonder why the two
+   * screens disagree.
    */
   async periodSummary(from: Date, to: Date): Promise<PeriodSummary> {
     const [row] = await this.prisma.$queryRaw<
@@ -164,6 +167,7 @@ export class ReportsService {
         chargesIssuedCents: number
         paymentsReceivedCents: number
         outstandingAtCloseCents: number
+        unappliedCreditAtCloseCents: number
       }>
     >`
       WITH obligations AS (
@@ -207,10 +211,29 @@ export class ReportsService {
         SELECT COALESCE(SUM(GREATEST(i."amountCents" - COALESCE(s."allocatedCents", 0), 0)), 0)::int AS "outstandingAtCloseCents"
         FROM issued i
         LEFT JOIN settled s ON s."chargeId" = i.id
+      ),
+      -- Unspent payment money at close: every cent received by close, minus
+      -- every cent allocated by close (the same createdAt-keyed rule the
+      -- 'settled' CTE above uses, so this cannot disagree with it). Not
+      -- scoped to charges in 'issued' -- a payment's own existence, not any
+      -- one charge's, is what makes its unspent remainder credit.
+      receivedByClose AS (
+        SELECT COALESCE(SUM("amountCents"), 0)::int AS "receivedCents"
+        FROM "Payment"
+        WHERE "receivedOn" <= ${to}
+      ),
+      allocatedByClose AS (
+        SELECT COALESCE(SUM("amountCents"), 0)::int AS "allocatedCents"
+        FROM "PaymentAllocation"
+        WHERE "createdAt"::date <= ${to}
+      ),
+      unapplied AS (
+        SELECT GREATEST(r."receivedCents" - a."allocatedCents", 0)::int AS "unappliedCreditAtCloseCents"
+        FROM receivedByClose r, allocatedByClose a
       )
       SELECT o."obligationsDue", o."obligationsDone", ch."chargesIssuedCents",
-             p."paymentsReceivedCents", cl."outstandingAtCloseCents"
-      FROM obligations o, charges ch, payments p, closing cl
+             p."paymentsReceivedCents", cl."outstandingAtCloseCents", u."unappliedCreditAtCloseCents"
+      FROM obligations o, charges ch, payments p, closing cl, unapplied u
     `
 
     return {
@@ -221,6 +244,7 @@ export class ReportsService {
       chargesIssuedCents: row?.chargesIssuedCents ?? 0,
       paymentsReceivedCents: row?.paymentsReceivedCents ?? 0,
       outstandingAtCloseCents: row?.outstandingAtCloseCents ?? 0,
+      unappliedCreditAtCloseCents: row?.unappliedCreditAtCloseCents ?? 0,
     }
   }
 }
