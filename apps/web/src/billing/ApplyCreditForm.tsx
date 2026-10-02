@@ -32,8 +32,14 @@ export function ApplyCreditForm({ clientId, availableCreditCents, onApplied }: P
         false,
         // Only the allocation itself goes back on the wire; the description
         // and period the proposal carries are for the operator, and the
-        // endpoint's schema is strict.
-        (proposal?.proposed ?? []).map((row) => ({ paymentId: row.paymentId, chargeId: row.chargeId, amountCents: row.amountCents })),
+        // endpoint's schema is strict — `paymentId` is a `uuidSchema`, so a
+        // null one (which this screen's proposals never actually carry,
+        // since they all name a real credited payment) is dropped rather
+        // than sent, to keep an unreachable case from ever reaching a raw
+        // Zod 400.
+        (proposal?.proposed ?? [])
+          .filter((row): row is typeof row & { paymentId: string } => row.paymentId !== null)
+          .map((row) => ({ paymentId: row.paymentId, chargeId: row.chargeId, amountCents: row.amountCents })),
       ),
     onSuccess: () => {
       setProposal(null)
