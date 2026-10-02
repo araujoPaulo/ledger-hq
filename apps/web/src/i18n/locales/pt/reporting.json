@@ -19,6 +19,7 @@
     "title": "Resumo do período",
     "from": "De",
     "to": "Até",
+    "invalidRange": "Intervalo inválido: a data \"Até\" é anterior à data \"De\".",
     "obligationsDue": "Obrigações com prazo",
     "obligationsDone": "Obrigações entregues",
     "chargesIssued": "Cobranças emitidas",

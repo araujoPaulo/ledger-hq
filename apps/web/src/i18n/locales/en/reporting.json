@@ -19,6 +19,7 @@
     "title": "Period summary",
     "from": "From",
     "to": "To",
+    "invalidRange": "Invalid range: the \"To\" date is before the \"From\" date.",
     "obligationsDue": "Obligations due",
     "obligationsDone": "Obligations filed",
     "chargesIssued": "Charges issued",

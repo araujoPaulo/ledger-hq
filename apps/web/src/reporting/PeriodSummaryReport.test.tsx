@@ -95,7 +95,7 @@ describe('PeriodSummaryReport', () => {
     expect(screen.queryByRole('button', { name: /descarregar csv/i })).toBeNull()
   })
 
-  it('never asks the server for an inverted range', async () => {
+  it('never asks the server for an inverted range, and says so instead of loading forever', async () => {
     getPeriodSummaryMock.mockResolvedValue({
       from: '2026-01-01',
       to: '2026-12-31',
@@ -114,7 +114,13 @@ describe('PeriodSummaryReport', () => {
     // "Até" (to) moved before "De" (from): the window is now inverted.
     fireEvent.change(screen.getByLabelText('Até'), { target: { value: '2020-01-01' } })
 
-    await waitFor(() => expect(container.querySelector('[aria-busy="true"]')).not.toBeNull())
+    // The invalid-range message is its own state: not the skeleton (nothing
+    // is coming), not the error surface (nothing failed), and not the stale
+    // figures from before the edit.
+    expect(await screen.findByText(/intervalo inválido/i)).toBeVisible()
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/obrigações com prazo/i)).not.toBeInTheDocument()
     expect(getPeriodSummaryMock).not.toHaveBeenCalled()
   })
 })

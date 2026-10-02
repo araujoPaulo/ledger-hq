@@ -92,7 +92,16 @@ export function PeriodSummaryReport() {
         </div>
       </header>
 
-      {summary.isPending ? (
+      {isInverted ? (
+        // Not an error (nothing failed) and not the loading skeleton (nothing
+        // is coming): `enabled: false` would otherwise leave the query
+        // parked in `pending` forever, so this branch has to come first or
+        // the skeleton below would show indefinitely for a range that will
+        // never be asked for.
+        <p role="status" className="text-sm text-danger-700">
+          {t('periodSummary.invalidRange')}
+        </p>
+      ) : summary.isPending ? (
         <ReportingPageSkeleton />
       ) : summary.isError ? (
         <ErrorMessage error={summary.error} />
