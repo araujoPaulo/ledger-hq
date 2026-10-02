@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { expect, test } from '@playwright/test'
 
 const MASTER_PASSWORD = 'a sufficiently long master password'

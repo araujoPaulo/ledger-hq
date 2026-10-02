@@ -143,7 +143,13 @@ age --decrypt -i /path/to/age-private-key.txt \
   "${BACKUP_LOCAL_DIR}/ledger-hq-<timestamp>.files.tar.age"
 docker compose up -d api
 docker cp /tmp/rollback-files.tar "$(docker compose ps -q api)":/tmp/rollback-files.tar
-docker compose exec -T api sh -c 'rm -rf /var/lib/ledger-hq/attachments && tar -xf /tmp/rollback-files.tar -C /var/lib/ledger-hq'
+# `/var/lib/ledger-hq/attachments` is the volume's own mount point, not an
+# ordinary directory: removing it (`rm -rf` on the path itself) fails with
+# "Resource busy" after it has already deleted everything *inside* it —
+# `tar -xf` then never runs because of the `&&`, leaving the volume empty
+# and nothing restored. Clear its contents instead, with the mount point
+# left standing.
+docker compose exec -T api sh -c 'find /var/lib/ledger-hq/attachments -mindepth 1 -delete && tar -xf /tmp/rollback-files.tar -C /var/lib/ledger-hq'
 
 # Clean up the decrypted archive on both the host and inside the container —
 # it is plaintext and must not linger in either place.
@@ -194,7 +200,11 @@ docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
 #     directions. Neither list should surprise you.
 docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d restore_drill -At \
   -c 'SELECT "obligationId" || $$/$$ || id FROM "ObligationAttachment"' | sort > /tmp/rows.txt
-docker compose exec -T api sh -c 'cd /var/lib/ledger-hq/attachments && find . -type f -printf "%P\n"' \
+# `-printf` is GNU find; the `api` image's BusyBox `find` doesn't have it and
+# exits with "unrecognized: -printf", silently leaving `/tmp/files.txt`
+# empty — which then makes the `comm -23` below report every attachment row
+# as missing from disk. Plain `find` plus `sed` works on both.
+docker compose exec -T api sh -c "cd /var/lib/ledger-hq/attachments && find . -type f | sed 's|^\./||'" \
   | sort > /tmp/files.txt
 
 # On disk, not in the database: a failed upload or a stale restore. Harmless
