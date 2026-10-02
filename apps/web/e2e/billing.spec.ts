@@ -1,6 +1,15 @@
 import { expect, test } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
 const MASTER_PASSWORD = 'a sufficiently long master password'
+
+/** Parses a `Money` component's rendered pt-PT currency text back into cents. */
+async function readMoneyCents(locator: Locator): Promise<number> {
+  await expect(locator).toBeVisible()
+  const text = await locator.innerText()
+  const normalized = text.replace(/[^\d,]/g, '').replace(',', '.')
+  return Math.round(Number.parseFloat(normalized) * 100)
+}
 
 test('creates a retainer plan, charges a client, records a payment, and sees the client clear from receivables', async ({ page }) => {
   await page.goto('/')
@@ -139,15 +148,41 @@ test('records an advance payment, sees it as credit, and spends it on a later ch
   // ("Criar"), the same one ledger's own ad-hoc form uses above — not
   // "Guardar", which belongs to the client and fiscal-profile forms.
   await adHocCharge.getByRole('button', { name: /^criar$/i }).click()
+  await expect(ledger.getByText(/trabalho extra/i)).toBeVisible()
+
+  // `getReceivables` nets credit against debt notionally (design §4.4) the
+  // moment a due charge exists, regardless of whether that credit has ever
+  // actually been spent: `outstandingCents = max(gross - credit, 0)`, and
+  // spending credit lowers `gross` and `credit` by the same amount, so that
+  // net figure — and the home page's "Em dívida" tile, which sums it — is
+  // mathematically unchanged by this confirm. It was already 0,00 EUR for
+  // this client before the confirm below (270,00 EUR of credit already
+  // covers the 90,00 EUR charge on paper) and stays 0,00 EUR after, so
+  // asserting a fall there would either be vacuously true or, worse, false.
+  // What the confirm actually writes is real `PaymentAllocation` rows that
+  // convert notional credit into spent credit, which is only visible in
+  // `payment_credits.creditCents` — the figure this form itself shows. That
+  // is what is captured before and after here, so the assertion fails if
+  // the confirm were ever a no-op rather than passing for the wrong reason.
+  const availableCredit = credit.locator('.tabular-nums').first()
+  const creditBeforeCents = await readMoneyCents(availableCredit)
+  expect(creditBeforeCents).toBe(27000)
 
   await credit.getByRole('button', { name: /aplicar crédito/i }).click()
   await expect(credit.getByText(/trabalho extra/i)).toBeVisible()
   await credit.getByRole('button', { name: /^confirmar$/i }).click()
 
+  // The confirm mutation's own success handler re-fetches the ledger
+  // asynchronously, so reading `availableCredit` right away would race it —
+  // wait for the figure itself to settle on its new value first.
+  await expect(availableCredit).toHaveText('180,00 €')
+
   // The 90,00 EUR charge was settled out of the 270,00 EUR credit, leaving
-  // 180,00 EUR — proving the spend applied the right amount rather than
-  // draining or ignoring the balance.
-  await expect(credit.getByText('180,00')).toBeVisible()
+  // exactly 180,00 EUR — not just "less than before", but the precise
+  // amount the charge was worth.
+  const creditAfterCents = await readMoneyCents(availableCredit)
+  expect(creditBeforeCents - creditAfterCents).toBe(9000)
+  expect(creditAfterCents).toBe(18000)
 
   // The debt is settled from credit alone, so the client never appears in
   // receivables. There is no "início"/"home" nav link (the sidebar's home
