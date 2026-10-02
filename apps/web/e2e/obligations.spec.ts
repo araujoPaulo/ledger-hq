@@ -136,8 +136,21 @@ test('attaches a receipt to an obligation, downloads it, and keeps it out of the
   expect(downloaded.headers()['content-type']).toContain('application/pdf')
   expect(downloaded.headers()['content-disposition']).toContain(`filename*=UTF-8''Declara%C3%A7%C3%A3o`)
 
-  // The receipt must not be sitting in the PWA read cache in plaintext.
+  // `page.request.get` above is Playwright's APIRequestContext: a separate
+  // HTTP client that never touches the page's service worker, so it proves
+  // nothing about the NetworkOnly cache rule below. The rule only ever sees
+  // a request that the page itself issues — exactly what "open in new tab"
+  // or the anchor's own click does — so proving the rule still exists means
+  // driving the same download through `page.evaluate`'s `fetch`, which the
+  // controlling service worker's fetch handler actually intercepts.
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 20_000 })
+  const swFetchOk = await page.evaluate(async (url) => {
+    const response = await fetch(url)
+    return response.ok
+  }, href!)
+  expect(swFetchOk).toBe(true)
+
+  // The receipt must not be sitting in the PWA read cache in plaintext.
   const cachedUrls = await page.evaluate(async () => {
     const names = await caches.keys()
     const urls: string[] = []
