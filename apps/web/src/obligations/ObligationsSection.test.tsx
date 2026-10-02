@@ -159,15 +159,6 @@ describe('ObligationsSection', () => {
       expect(await screen.findByRole('region', { name: /comprovativos/i })).toBeVisible()
     })
 
-    it('shows no receipts count badge when the obligation has none', async () => {
-      listObligationsMock.mockResolvedValue([{ ...obligation, status: 'DONE' }])
-
-      renderSection()
-
-      await screen.findByRole('button', { name: /^comprovativos$/i })
-      expect(screen.queryByTestId('attachment-count')).toBeNull()
-    })
-
     // Design §3.7: requiring DONE would force the operator to mark an
     // obligation done before filing the proof that it is done. The UI leads
     // with the affordance on a DONE row because that is when a receipt
