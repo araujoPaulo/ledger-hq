@@ -1,6 +1,15 @@
 import { expect, test } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
 const MASTER_PASSWORD = 'a sufficiently long master password'
+
+/** Parses a `Money` component's rendered pt-PT currency text back into cents. */
+async function readMoneyCents(locator: Locator): Promise<number> {
+  await expect(locator).toBeVisible()
+  const text = await locator.innerText()
+  const normalized = text.replace(/[^\d,]/g, '').replace(',', '.')
+  return Math.round(Number.parseFloat(normalized) * 100)
+}
 
 test('creates a retainer plan, charges a client, records a payment, and sees the client clear from receivables', async ({ page }) => {
   await page.goto('/')
@@ -94,4 +103,91 @@ test('creates a retainer plan, charges a client, records a payment, and sees the
   // And the charge being fully allocated clears the client from receivables.
   await page.goto('/')
   await expect(receivables.getByText(/padaria central faturação/i)).toHaveCount(0)
+})
+
+test('records an advance payment, sees it as credit, and spends it on a later charge', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByLabel(/email/i).fill('paulo@example.com')
+  await page.getByLabel(/^palavra-passe mestra$/i).fill(MASTER_PASSWORD)
+  const confirmPasswordField = page.getByLabel(/confirma/i)
+  if (await confirmPasswordField.isVisible().catch(() => false)) {
+    await confirmPasswordField.fill(MASTER_PASSWORD)
+  }
+  await page.getByRole('button', { name: /criar|entrar/i }).click()
+  await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
+
+  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByLabel(/tipo/i).selectOption('COMPANY')
+  await page.getByLabel(/^nome$/i).fill('Talho do Bairro Crédito, Lda.')
+  // Checksum-valid and unused by any other spec in apps/web/e2e (the others
+  // take 123456789 and 5014426xx).
+  await page.getByLabel(/^nif$/i).fill('507555554')
+  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByRole('button', { name: /guardar/i }).click() // fiscal profile defaults
+
+  const ledger = page.getByRole('region', { name: /^faturação$/i })
+  const adHocCharge = ledger.getByRole('form', { name: /nova cobrança avulsa/i })
+  const payment = ledger.getByRole('region', { name: /registar pagamento/i })
+  const credit = ledger.getByRole('region', { name: /crédito disponível/i })
+
+  // A payment with nothing to settle: every cent becomes credit.
+  await payment.getByLabel(/valor \(cêntimos\)/i).fill('27000')
+  await payment.getByLabel(/data de receção/i).fill('2026-01-05')
+  await payment.getByRole('button', { name: /propor alocação/i }).click()
+  await payment.getByRole('button', { name: /^confirmar$/i }).click()
+
+  await expect(credit.getByText(/crédito disponível/i)).toBeVisible()
+
+  // Now give it something to settle, due in the past so it has fallen due.
+  await adHocCharge.getByLabel(/descrição/i).fill('Trabalho extra')
+  await adHocCharge.getByLabel(/valor \(cêntimos\)/i).fill('9000')
+  await adHocCharge.getByLabel(/data de vencimento/i).fill('2026-02-28')
+  // AddAdHocChargeForm's submit button carries the shared "create" label
+  // ("Criar"), the same one ledger's own ad-hoc form uses above — not
+  // "Guardar", which belongs to the client and fiscal-profile forms.
+  await adHocCharge.getByRole('button', { name: /^criar$/i }).click()
+  await expect(ledger.getByText(/trabalho extra/i)).toBeVisible()
+
+  // `getReceivables` nets credit against debt notionally (design §4.4) the
+  // moment a due charge exists, regardless of whether that credit has ever
+  // actually been spent: `outstandingCents = max(gross - credit, 0)`, and
+  // spending credit lowers `gross` and `credit` by the same amount, so that
+  // net figure — and the home page's "Em dívida" tile, which sums it — is
+  // mathematically unchanged by this confirm. It was already 0,00 EUR for
+  // this client before the confirm below (270,00 EUR of credit already
+  // covers the 90,00 EUR charge on paper) and stays 0,00 EUR after, so
+  // asserting a fall there would either be vacuously true or, worse, false.
+  // What the confirm actually writes is real `PaymentAllocation` rows that
+  // convert notional credit into spent credit, which is only visible in
+  // `payment_credits.creditCents` — the figure this form itself shows. That
+  // is what is captured before and after here, so the assertion fails if
+  // the confirm were ever a no-op rather than passing for the wrong reason.
+  const availableCredit = credit.locator('.tabular-nums').first()
+  const creditBeforeCents = await readMoneyCents(availableCredit)
+  expect(creditBeforeCents).toBe(27000)
+
+  await credit.getByRole('button', { name: /aplicar crédito/i }).click()
+  await expect(credit.getByText(/trabalho extra/i)).toBeVisible()
+  await credit.getByRole('button', { name: /^confirmar$/i }).click()
+
+  // The confirm mutation's own success handler re-fetches the ledger
+  // asynchronously, so reading `availableCredit` right away would race it —
+  // wait for the figure itself to settle on its new value first.
+  await expect(availableCredit).toHaveText('180,00 €')
+
+  // The 90,00 EUR charge was settled out of the 270,00 EUR credit, leaving
+  // exactly 180,00 EUR — not just "less than before", but the precise
+  // amount the charge was worth.
+  const creditAfterCents = await readMoneyCents(availableCredit)
+  expect(creditBeforeCents - creditAfterCents).toBe(9000)
+  expect(creditAfterCents).toBe(18000)
+
+  // The debt is settled from credit alone, so the client never appears in
+  // receivables. There is no "início"/"home" nav link (the sidebar's home
+  // destination is labelled "Prazos"), so returning to the home page
+  // reuses this file's own idiom above.
+  await page.goto('/')
+  await expect(page.getByText('Talho do Bairro Crédito, Lda.')).toHaveCount(0)
 })

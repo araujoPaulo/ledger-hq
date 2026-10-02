@@ -20,4 +20,16 @@ export type ChargeBalance = {
   status: ChargeStatus
 }
 
-export type ProposedAllocation = { chargeId: string; amountCents: number }
+/**
+ * `paymentId` is `null` for the payment being recorded in the same request,
+ * which has no id until `recordPayment`'s transaction mints one. Every
+ * source drawn from existing credit carries a real id.
+ */
+export type ProposedAllocation = { paymentId: string | null; chargeId: string; amountCents: number }
+
+/**
+ * Money available to allocate. `availableCents` is a row of the
+ * `payment_credits` view (`creditCents`) for existing credit, or the full
+ * amount of the payment being recorded right now.
+ */
+export type AllocationSource = { paymentId: string | null; availableCents: number; receivedOn: Date }

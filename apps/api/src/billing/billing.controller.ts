@@ -1,8 +1,10 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common'
 import type { Response } from 'express'
 import {
+  applyCreditSchema,
   createAdHocChargeSchema,
   createRetainerPlanSchema,
+  dryRunQuerySchema,
   generateChargesBodySchema,
   generateChargesQuerySchema,
   proposeAllocationSchema,
@@ -11,8 +13,10 @@ import {
   writeOffChargeSchema,
 } from '@ledger-hq/domain'
 import type {
+  ApplyCreditInput,
   CreateAdHocChargeInput,
   CreateRetainerPlanInput,
+  DryRunQuery,
   GenerateChargesInput,
   GenerateChargesQuery,
   ProposeAllocationInput,
@@ -24,7 +28,7 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe.js'
 import { SessionGuard } from '../auth/session.guard.js'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { BillingService } from './billing.service.js'
-import type { GenerateChargesResult } from './billing.service.js'
+import type { ApplyCreditResult, GenerateChargesResult } from './billing.service.js'
 
 @Controller('billing')
 @UseGuards(SessionGuard)
@@ -79,6 +83,17 @@ export class BillingController {
   @Post('payments')
   async recordPayment(@Body(new ZodValidationPipe(recordPaymentSchema)) body: RecordPaymentInput) {
     return this.billing.recordPayment(body)
+  }
+
+  @Post('clients/:clientId/apply-credit')
+  async applyCredit(
+    @Param('clientId') clientId: string,
+    @Query(new ZodValidationPipe(dryRunQuerySchema)) query: DryRunQuery,
+    @Body(new ZodValidationPipe(applyCreditSchema)) body: ApplyCreditInput,
+  ): Promise<ApplyCreditResult> {
+    // Same safe default as generate-charges: an omitted or malformed dryRun
+    // never applies.
+    return this.billing.applyCredit(clientId, body, query.dryRun !== 'false')
   }
 
   @Post('charges')

@@ -17,9 +17,13 @@ recovery-code account recovery, and offline vault reads),
 generator, and ad-hoc obligation tracking), and **Phase 3 — Billing**
 (retainer plans, monthly charge generation, payment recording with FIFO
 allocation, ad-hoc charges and write-offs, and the receivables and
-per-client ledger views). That is every phase the
-[design specification](docs/superpowers/specs/2026-09-04-ledger-hq-design.md)
-scopes; the questions it leaves open (section 16) are Phase 4 material.
+per-client ledger views),
+and **Phase 4a — Client Credit** (unallocated payment excess derived as
+credit, netted into the receivables views, and spendable both when charges
+are generated and on demand). Phase 4's remaining sub-phases — 4b search
+and reporting, 4c obligation attachments — are mapped in
+[the Phase 4a design](docs/superpowers/specs/2026-09-28-phase-4a-client-credit-design.md)
+(section 2).
 
 ## Requirements
 

@@ -34,6 +34,7 @@ export const ERROR_CODES = [
   'billing.write_off_reason_required',
   'billing.allocation_exceeds_payment',
   'billing.allocation_exceeds_charge_balance',
+  'billing.allocation_exceeds_available_credit',
   'billing.plan_overlap',
   'billing.charge_already_written_off',
 ] as const

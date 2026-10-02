@@ -3,6 +3,8 @@
     "title": "Recebíveis",
     "empty": "Sem valores em atraso.",
     "emptyHint": "Está tudo liquidado. Os encargos aparecem aqui quando se vencem.",
+    "gross": "Bruto",
+    "credit": "Crédito",
     "bucket": {
       "0-30": "0-30 dias",
       "31-60": "31-60 dias",
@@ -16,6 +18,14 @@
     "empty": "Sem movimentos de faturação.",
     "charge": "Cobrança",
     "payment": "Pagamento"
+  },
+  "credit": {
+    "title": "Crédito disponível",
+    "hint": "Dinheiro já recebido que ainda não foi aplicado a nenhuma cobrança.",
+    "propose": "Aplicar crédito",
+    "confirm": "Confirmar",
+    "nothingToApply": "Não há cobranças vencidas onde aplicar este crédito.",
+    "remaining": "Sobram {{amount}} de crédito."
   },
   "retainerPlan": {
     "createTitle": "Criar plano de retainer",

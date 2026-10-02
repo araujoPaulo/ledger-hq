@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import { uuidv7 } from 'uuidv7'
 import { AppError, chargeDueDate, chargePeriodsSince, proposeAllocation } from '@ledger-hq/domain'
-import type { ChargeBalance, CreateAdHocChargeInput, CreateRetainerPlanInput, ProposedAllocation, RecordPaymentInput, RenewRetainerPlanInput } from '@ledger-hq/domain'
+import type { AllocationSource, ApplyCreditInput, ChargeBalance, CreateAdHocChargeInput, CreateRetainerPlanInput, ProposedAllocation, RecordPaymentInput, RenewRetainerPlanInput } from '@ledger-hq/domain'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
 import { PrismaService } from '../common/prisma.service.js'
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- constructor-injected: `emitDecoratorMetadata` needs the real class reference, not a type-only one.
@@ -30,14 +30,48 @@ export type LedgerEntry = {
 
 export type GenerateChargesResult = {
   toCreate: Array<{ clientId: string; planId: string; periodLabel: string; amountCents: number; dueOn: string }>
+  /** What the credit on hand would settle, once `toCreate` exists. Empty when no client has credit. */
+  creditToAllocate: ProposedAllocationRow[]
+  created: number
+  allocated: number
+}
+
+export type ApplyCreditResult = {
+  proposed: ProposedAllocationRow[]
+  remainingCreditCents: number
+  allocated: number
 }
 
 function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
+function toWireItem(item: { clientId: string; planId: string; period: { label: string }; amountCents: number; dueOn: Date }) {
+  return { clientId: item.clientId, planId: item.planId, periodLabel: item.period.label, amountCents: item.amountCents, dueOn: isoDate(item.dueOn) }
+}
+
+/**
+ * A confirmed allocation always names a real payment. `paymentId` is only
+ * ever `null` for the payment being recorded in the same request, which this
+ * path never has — its sources all come from `getAvailableCredit`, which
+ * reads real `payment_credits` rows.
+ *
+ * The `null` branch is therefore a programming invariant, not something a
+ * request can trigger, so it is reported as `common.internal_error` rather
+ * than an operator-facing billing code: `allocation_exceeds_available_credit`
+ * translates to "the amount exceeds the credit available on this payment",
+ * which would be actively misleading for a bug that has nothing to do with
+ * a specific payment's balance.
+ */
+function toConfirmedAllocation(allocation: ProposedAllocation): { paymentId: string; chargeId: string; amountCents: number } {
+  if (allocation.paymentId === null) throw new AppError('common.internal_error', {}, 500)
+  return { paymentId: allocation.paymentId, chargeId: allocation.chargeId, amountCents: allocation.amountCents }
+}
+
 @Injectable()
 export class BillingService {
+  private readonly logger = new Logger(BillingService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly clients: ClientsService,
@@ -80,9 +114,64 @@ export class BillingService {
       }
     }
 
-    if (!dryRun) {
+    // Not just `toCreate`'s own clients: a client whose charge was created on
+    // an earlier run and has only now fallen due has nothing new to create
+    // today, so a `toCreate`-only set would never revisit them and the
+    // credit sitting on their books would never get swept (see the comment
+    // on the confirm loop below for why `dueOn` gates that sweep at all).
+    // Scoped to `input.clientId` when one was given, so a single-client call
+    // never reaches into another client's credit.
+    const creditHolderRows = input.clientId
+      ? await this.prisma.$queryRaw<Array<{ clientId: string }>>`
+          SELECT DISTINCT "clientId" FROM payment_credits WHERE "creditCents" > 0 AND "clientId" = ${input.clientId}::uuid
+        `
+      : await this.prisma.$queryRaw<Array<{ clientId: string }>>`
+          SELECT DISTINCT "clientId" FROM payment_credits WHERE "creditCents" > 0
+        `
+    const clientIds = [...new Set([...toCreate.map((item) => item.clientId), ...creditHolderRows.map((row) => row.clientId)])]
+    let created = 0
+    let allocated = 0
+    const creditToAllocate: ProposedAllocationRow[] = []
+
+    if (dryRun) {
+      // The charges do not exist yet, so the proposal is built from what
+      // `toCreate` describes rather than from `charge_balances`: a preview
+      // that ignored them would always report nothing to spend.
+      for (const clientId of clientIds) {
+        const credit = await this.getAvailableCredit(clientId)
+        if (credit.totalCents === 0) continue
+
+        // Only the pending items that would actually be due by `asOf`: the
+        // confirm path below only ever spends credit against
+        // `openChargesFor`, which is bound the same way, so a preview that
+        // ignored `dueOn` here would show credit settling a charge the
+        // confirm will not touch until a later run.
+        const pending = toCreate
+          .filter((item) => item.clientId === clientId && item.dueOn <= input.asOf)
+          .map((item) => ({
+            id: `pending:${item.planId}:${item.period.label}`,
+            clientId,
+            kind: 'RETAINER' as const,
+            periodLabel: item.period.label,
+            dueOn: item.dueOn,
+            amountCents: item.amountCents,
+            allocatedCents: 0,
+            outstandingCents: item.amountCents,
+            status: 'OPEN' as const,
+            description: `Retainer — ${item.period.label}`,
+          }))
+
+        const existing = await this.openChargesFor(clientId, input.asOf)
+        const charges = [...existing, ...pending]
+        creditToAllocate.push(...this.toProposalRows(proposeAllocation(credit.sources, charges), charges))
+      }
+
+      return { toCreate: toCreate.map(toWireItem), creditToAllocate, created: 0, allocated: 0 }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
       for (const item of toCreate) {
-        await this.prisma.charge.create({
+        await tx.charge.create({
           data: {
             id: uuidv7(),
             clientId: item.clientId,
@@ -95,18 +184,41 @@ export class BillingService {
             dueOn: item.dueOn,
           },
         })
+        created += 1
+      }
+    })
+
+    // Outside the creation transaction, and deliberately: a client whose
+    // credit cannot be spent for any reason must still get its charges. The
+    // charges are the statement of debt; spending credit against them is a
+    // convenience that can be retried from the ledger.
+    //
+    // Each client's sweep is wrapped on its own: a throw while applying one
+    // client's credit must not abort every client after it in the same run.
+    // Unlike the charges above, this has no self-heal on the next run for a
+    // client with nothing new to create — see `creditHolderRows` above — so
+    // a failure here is logged and skipped rather than left to retry itself.
+    for (const clientId of clientIds) {
+      try {
+        const credit = await this.getAvailableCredit(clientId)
+        if (credit.totalCents === 0) continue
+
+        const charges = await this.openChargesFor(clientId, input.asOf)
+        const proposed = proposeAllocation(credit.sources, charges)
+        if (proposed.length === 0) continue
+
+        const result = await this.applyCredit(clientId, { allocations: proposed.map(toConfirmedAllocation) }, false)
+        allocated += result.allocated
+        creditToAllocate.push(...this.toProposalRows(proposed, charges))
+      } catch (error) {
+        this.logger.error(
+          `generateCharges: failed to apply credit for client ${clientId}`,
+          error instanceof Error ? error.stack : String(error),
+        )
       }
     }
 
-    return {
-      toCreate: toCreate.map((item) => ({
-        clientId: item.clientId,
-        planId: item.planId,
-        periodLabel: item.period.label,
-        amountCents: item.amountCents,
-        dueOn: isoDate(item.dueOn),
-      })),
-    }
+    return { toCreate: toCreate.map(toWireItem), creditToAllocate, created, allocated }
   }
 
   /** Only for a client with no plan at all — see `renewRetainerPlan` for a fee change. */
@@ -167,28 +279,32 @@ export class BillingService {
     return this.prisma.retainerPlan.findFirst({ where: { clientId, validTo: null } })
   }
 
-  async proposeAllocationForClient(clientId: string, amountCents: number): Promise<{ proposed: ProposedAllocationRow[]; excessCents: number }> {
-    // `charge_balances` carries no `description` (it is derived state over
-    // amounts, not a copy of the charge), so join the charge back in for the
-    // human-readable half of each proposal row.
-    const openCharges = await this.prisma.$queryRaw<Array<ChargeBalance & { description: string }>>`
+  /**
+   * A client's charges that are open, due, and not forgiven — the only
+   * charges any proposal may touch. `charge_balances` carries no
+   * `description` (it is derived state over amounts, not a copy of the
+   * charge), so the charge is joined back in for the human-readable half.
+   */
+  private async openChargesFor(clientId: string, asOf: Date): Promise<Array<ChargeBalance & { description: string }>> {
+    return this.prisma.$queryRaw<Array<ChargeBalance & { description: string }>>`
       SELECT b.*, c.description
       FROM charge_balances b
       JOIN "Charge" c ON c.id = b.id
-      WHERE b."clientId" = ${clientId}::uuid AND b."outstandingCents" > 0 AND b.status != 'WRITTEN_OFF'
+      WHERE b."clientId" = ${clientId}::uuid
+        AND b."outstandingCents" > 0
+        AND b.status != 'WRITTEN_OFF'
+        AND b."dueOn" <= ${asOf}
       ORDER BY b."dueOn" ASC
     `
-    const proposed = proposeAllocation(amountCents, openCharges)
-    const allocatedCents = proposed.reduce((sum, allocation) => sum + allocation.amountCents, 0)
+  }
 
-    // Design doc §3.2: the proposal is the one place FIFO is reviewed rather
-    // than applied automatically ("only the accountant knows"), so each row
-    // carries what identifies the charge to a human. The bare `chargeId` the
-    // allocator returns is a UUID, which tells the operator nothing.
-    const byId = new Map(openCharges.map((charge) => [charge.id, charge]))
-    const rows = proposed.map((allocation) => {
+  /** Decorates a bare proposal with what identifies each charge to a human. */
+  private toProposalRows(proposed: ProposedAllocation[], charges: Array<ChargeBalance & { description: string }>): ProposedAllocationRow[] {
+    const byId = new Map(charges.map((charge) => [charge.id, charge]))
+    return proposed.map((allocation) => {
       const charge = byId.get(allocation.chargeId)
       return {
+        paymentId: allocation.paymentId,
         chargeId: allocation.chargeId,
         amountCents: allocation.amountCents,
         description: charge?.description ?? '',
@@ -196,8 +312,102 @@ export class BillingService {
         dueOn: charge ? isoDate(charge.dueOn) : null,
       }
     })
+  }
 
-    return { proposed: rows, excessCents: amountCents - allocatedCents }
+  async proposeAllocationForClient(clientId: string, amountCents: number): Promise<{ proposed: ProposedAllocationRow[]; excessCents: number }> {
+    const charges = await this.openChargesFor(clientId, new Date())
+    // One source: the payment being recorded now, which has no id yet.
+    const proposed = proposeAllocation([{ paymentId: null, availableCents: amountCents, receivedOn: new Date() }], charges)
+    const allocatedCents = proposed.reduce((sum, allocation) => sum + allocation.amountCents, 0)
+    return { proposed: this.toProposalRows(proposed, charges), excessCents: amountCents - allocatedCents }
+  }
+
+  /**
+   * Money this client has already paid that no charge has claimed
+   * (Phase 4a design §4.1). Ordered oldest first, which is the order
+   * `proposeAllocation` spends them in.
+   */
+  async getAvailableCredit(clientId: string): Promise<{ sources: AllocationSource[]; totalCents: number }> {
+    const rows = await this.prisma.$queryRaw<Array<{ paymentId: string; receivedOn: Date; creditCents: number }>>`
+      SELECT "paymentId", "receivedOn", "creditCents"
+      FROM payment_credits
+      WHERE "clientId" = ${clientId}::uuid AND "creditCents" > 0
+      ORDER BY "receivedOn" ASC, "paymentId" ASC
+    `
+
+    return {
+      sources: rows.map((row) => ({ paymentId: row.paymentId, availableCents: row.creditCents, receivedOn: row.receivedOn })),
+      totalCents: rows.reduce((sum, row) => sum + row.creditCents, 0),
+    }
+  }
+
+  /**
+   * Spends credit the client already paid against charges already due
+   * (Phase 4a design §4.3). Same propose-then-confirm discipline as
+   * `recordPayment`, without a new payment: a dry run proposes, a confirm
+   * writes exactly the allocations it was handed, re-validated against the
+   * database's own view of both halves.
+   */
+  async applyCredit(clientId: string, input: ApplyCreditInput | null, dryRun: boolean): Promise<ApplyCreditResult> {
+    const asOf = new Date()
+    const credit = await this.getAvailableCredit(clientId)
+
+    if (dryRun) {
+      const charges = await this.openChargesFor(clientId, asOf)
+      const proposed = proposeAllocation(credit.sources, charges)
+      const allocatedCents = proposed.reduce((sum, allocation) => sum + allocation.amountCents, 0)
+      return { proposed: this.toProposalRows(proposed, charges), remainingCreditCents: credit.totalCents - allocatedCents, allocated: 0 }
+    }
+
+    const allocations = input?.allocations ?? []
+    if (allocations.length === 0) return { proposed: [], remainingCreditCents: credit.totalCents, allocated: 0 }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const allocation of allocations) {
+        // Two locks, payment first then charge. `recordPayment` locks only
+        // the charge, and cannot deadlock against this: the payment it
+        // allocates from is created inside its own transaction, so no other
+        // writer can be holding that row. `FOR UPDATE` cannot be taken on
+        // either view (Postgres rejects it on a grouped query), so both
+        // locks go on the base tables.
+        await tx.$queryRaw`SELECT id FROM "Payment" WHERE id = ${allocation.paymentId}::uuid FOR UPDATE`
+        await tx.$queryRaw`SELECT id FROM "Charge" WHERE id = ${allocation.chargeId}::uuid FOR UPDATE`
+
+        // Bound to this client on both sides: without it, a stale proposal
+        // held across a client navigation could spend one client's credit on
+        // another client's debt.
+        const [credited] = await tx.$queryRaw<Array<{ creditCents: number }>>`
+          SELECT "creditCents" FROM payment_credits
+          WHERE "paymentId" = ${allocation.paymentId}::uuid AND "clientId" = ${clientId}::uuid
+        `
+        if (!credited || allocation.amountCents > credited.creditCents) {
+          throw new AppError('billing.allocation_exceeds_available_credit', { paymentId: allocation.paymentId }, 422)
+        }
+
+        const [balance] = await tx.$queryRaw<Array<{ outstandingCents: number }>>`
+          SELECT "outstandingCents" FROM charge_balances
+          WHERE id = ${allocation.chargeId}::uuid
+            AND "clientId" = ${clientId}::uuid
+            AND status != 'WRITTEN_OFF'
+        `
+        if (!balance || allocation.amountCents > balance.outstandingCents) {
+          throw new AppError('billing.allocation_exceeds_charge_balance', { chargeId: allocation.chargeId }, 422)
+        }
+
+        // An upsert, not a create: the composite primary key is
+        // (paymentId, chargeId), so a second allocation from the same
+        // payment to the same charge adds to the first rather than failing
+        // on a key collision.
+        await tx.paymentAllocation.upsert({
+          where: { paymentId_chargeId: { paymentId: allocation.paymentId, chargeId: allocation.chargeId } },
+          create: { paymentId: allocation.paymentId, chargeId: allocation.chargeId, amountCents: allocation.amountCents },
+          update: { amountCents: { increment: allocation.amountCents } },
+        })
+      }
+    })
+
+    const after = await this.getAvailableCredit(clientId)
+    return { proposed: [], remainingCreditCents: after.totalCents, allocated: allocations.length }
   }
 
   /**
@@ -281,25 +491,87 @@ export class BillingService {
     return this.prisma.charge.update({ where: { id }, data: { writtenOffAt: new Date(), writeOffReason: reason } })
   }
 
-  async getReceivables(asOf: Date): Promise<Array<{ clientId: string; clientName: string; outstandingCents: number; oldestDueOn: string; ageingBucket: '0-30' | '31-60' | '61-90' | '90+' }>> {
-    const rows = await this.prisma.$queryRaw<Array<{ clientId: string; clientName: string; outstandingCents: number; oldestDueOn: Date }>>`
-      SELECT
-        c.id AS "clientId",
-        c.name AS "clientName",
-        SUM(b."outstandingCents")::int AS "outstandingCents",
-        MIN(b."dueOn") AS "oldestDueOn"
+  /**
+   * Who owes what, netted against what they have already paid but not yet
+   * spent (Phase 4a design §4.4). The netting is **notional**: no allocation
+   * is written here. Both parts travel so the operator can see where the net
+   * figure came from without opening the client.
+   */
+  async getReceivables(asOf: Date): Promise<
+    Array<{
+      clientId: string
+      clientName: string
+      grossOutstandingCents: number
+      creditCents: number
+      outstandingCents: number
+      oldestDueOn: string
+      ageingBucket: '0-30' | '31-60' | '61-90' | '90+'
+    }>
+  > {
+    // Per charge, not per client: the ageing bucket has to know which
+    // individual charges the credit reaches before it can say how old the
+    // rest are.
+    const charges = await this.prisma.$queryRaw<Array<{ clientId: string; clientName: string; dueOn: Date; outstandingCents: number }>>`
+      SELECT c.id AS "clientId", c.name AS "clientName", b."dueOn", b."outstandingCents"
       FROM charge_balances b
       JOIN "Client" c ON c.id = b."clientId"
       WHERE b."outstandingCents" > 0 AND b.status != 'WRITTEN_OFF' AND b."dueOn" <= ${asOf}
-      GROUP BY c.id, c.name
-      ORDER BY "oldestDueOn" ASC
+      ORDER BY c.id, b."dueOn" ASC
     `
 
-    return rows.map((row) => {
-      const daysOverdue = Math.floor((asOf.getTime() - row.oldestDueOn.getTime()) / (24 * 60 * 60 * 1000))
+    const credits = await this.prisma.$queryRaw<Array<{ clientId: string; creditCents: number }>>`
+      SELECT "clientId", SUM("creditCents")::int AS "creditCents"
+      FROM payment_credits
+      WHERE "creditCents" > 0
+      GROUP BY "clientId"
+    `
+    const creditByClient = new Map(credits.map((row) => [row.clientId, row.creditCents]))
+
+    const byClient = new Map<string, { clientName: string; charges: Array<{ dueOn: Date; outstandingCents: number }> }>()
+    for (const charge of charges) {
+      const entry = byClient.get(charge.clientId) ?? { clientName: charge.clientName, charges: [] }
+      entry.charges.push({ dueOn: charge.dueOn, outstandingCents: charge.outstandingCents })
+      byClient.set(charge.clientId, entry)
+    }
+
+    const rows = []
+    for (const [clientId, entry] of byClient) {
+      const grossOutstandingCents = entry.charges.reduce((sum, charge) => sum + charge.outstandingCents, 0)
+      const creditCents = creditByClient.get(clientId) ?? 0
+
+      // Spend the credit on paper, oldest charge first — the same order a
+      // real allocation would use — and keep the first charge it fails to
+      // cover. That charge, not the oldest debt on the books, is what this
+      // client is actually overdue on.
+      let remainingCredit = creditCents
+      let oldestUncovered: Date | null = null
+      for (const charge of entry.charges) {
+        if (remainingCredit >= charge.outstandingCents) {
+          remainingCredit -= charge.outstandingCents
+          continue
+        }
+        oldestUncovered = charge.dueOn
+        break
+      }
+
+      const outstandingCents = Math.max(grossOutstandingCents - creditCents, 0)
+      if (outstandingCents === 0 || oldestUncovered === null) continue
+
+      const daysOverdue = Math.floor((asOf.getTime() - oldestUncovered.getTime()) / ONE_DAY_MS)
       const ageingBucket = daysOverdue > 90 ? '90+' : daysOverdue > 60 ? '61-90' : daysOverdue > 30 ? '31-60' : '0-30'
-      return { clientId: row.clientId, clientName: row.clientName, outstandingCents: row.outstandingCents, oldestDueOn: isoDate(row.oldestDueOn), ageingBucket }
-    })
+
+      rows.push({
+        clientId,
+        clientName: entry.clientName,
+        grossOutstandingCents,
+        creditCents,
+        outstandingCents,
+        oldestDueOn: isoDate(oldestUncovered),
+        ageingBucket: ageingBucket as '0-30' | '31-60' | '61-90' | '90+',
+      })
+    }
+
+    return rows.sort((a, b) => a.oldestDueOn.localeCompare(b.oldestDueOn))
   }
 
   /**
@@ -350,7 +622,8 @@ export class BillingService {
    * still counted forgiven debt as owed, and the client's own page contradicted
    * the receivables list, which has always excluded written-off charges.
    */
-  async getClientLedger(clientId: string): Promise<{ entries: LedgerEntry[]; balanceCents: number }> {
+  async getClientLedger(clientId: string): Promise<{ entries: LedgerEntry[]; balanceCents: number; availableCreditCents: number }> {
+    const credit = await this.getAvailableCredit(clientId)
     const charges = await this.prisma.charge.findMany({ where: { clientId }, orderBy: { issuedOn: 'asc' } })
     const payments = await this.prisma.payment.findMany({ where: { clientId }, orderBy: { receivedOn: 'asc' } })
     const allocations = await this.prisma.paymentAllocation.groupBy({
@@ -407,6 +680,6 @@ export class BillingService {
       }
     })
 
-    return { entries, balanceCents: runningBalanceCents }
+    return { entries, balanceCents: runningBalanceCents, availableCreditCents: credit.totalCents }
   }
 }
