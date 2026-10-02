@@ -133,8 +133,8 @@ test('downloads the period summary report as a CSV with the real figures in it',
   const withoutBom = csv.startsWith(bom) ? csv.slice(bom.length) : csv
   const [headerLine, ...dataLines] = withoutBom.trim().split('\r\n')
   expect(headerLine).toBe(
-    'De;Até;Obrigações com prazo;Obrigações entregues;Cobranças emitidas;Pagamentos recebidos;Em dívida no fecho',
+    'De;Até;Obrigações com prazo;Obrigações entregues;Cobranças emitidas;Pagamentos recebidos;Crédito por aplicar no fecho;Em dívida no fecho',
   )
   expect(dataLines).toHaveLength(1)
-  expect(dataLines[0]).toMatch(/^\d{2}\/\d{2}\/\d{4};\d{2}\/\d{2}\/\d{4};\d+;\d+;\d+,\d{2};\d+,\d{2};\d+,\d{2}$/)
+  expect(dataLines[0]).toMatch(/^\d{2}\/\d{2}\/\d{4};\d{2}\/\d{2}\/\d{4};\d+;\d+;\d+,\d{2};\d+,\d{2};\d+,\d{2};\d+,\d{2}$/)
 })

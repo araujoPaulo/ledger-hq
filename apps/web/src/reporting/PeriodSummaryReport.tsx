@@ -42,6 +42,7 @@ export function PeriodSummaryReport() {
       t('periodSummary.obligationsDone'),
       t('periodSummary.chargesIssued'),
       t('periodSummary.paymentsReceived'),
+      t('periodSummary.unappliedCreditAtClose'),
       t('periodSummary.outstandingAtClose'),
     ]
     const rows = [
@@ -52,6 +53,7 @@ export function PeriodSummaryReport() {
         String(summary.data.obligationsDone),
         formatCsvAmount(summary.data.chargesIssuedCents, locale),
         formatCsvAmount(summary.data.paymentsReceivedCents, locale),
+        formatCsvAmount(summary.data.unappliedCreditAtCloseCents, locale),
         formatCsvAmount(summary.data.outstandingAtCloseCents, locale),
       ],
     ]
@@ -117,6 +119,10 @@ export function PeriodSummaryReport() {
             <DataList.Row
               label={t('periodSummary.paymentsReceived')}
               value={<Money cents={summary.data.paymentsReceivedCents} tone="credit" />}
+            />
+            <DataList.Row
+              label={t('periodSummary.unappliedCreditAtClose')}
+              value={<Money cents={summary.data.unappliedCreditAtCloseCents} tone="credit" />}
             />
             <DataList.Total
               label={t('periodSummary.outstandingAtClose')}

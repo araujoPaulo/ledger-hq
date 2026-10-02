@@ -26,6 +26,7 @@ export function AtRiskReport() {
       t('atRisk.column.gross'),
       t('atRisk.column.credit'),
       t('atRisk.column.outstanding'),
+      t('atRisk.column.oldestChargeDueOn'),
     ]
     const rows = atRisk.data.map((row) => [
       row.clientName,
@@ -34,6 +35,7 @@ export function AtRiskReport() {
       formatCsvAmount(row.grossOutstandingCents, locale),
       formatCsvAmount(row.creditCents, locale),
       formatCsvAmount(row.outstandingCents, locale),
+      formatDate(row.oldestChargeDueOn, locale),
     ])
 
     // ISO in the filename deliberately: a filename is sorted, not read aloud.
@@ -78,6 +80,15 @@ export function AtRiskReport() {
                       {/* The count is its own element so it stays addressable by
                           text even though it sits beside the date in one span. */}
                       <span>{row.overdueObligations}</span> · {formatDate(row.oldestDueDate, locale)}
+                    </span>
+                    {/* The charge the credit walk actually names as the oldest
+                        uncovered one — not merely the oldest charge on file —
+                        is the whole reason this report fetches charges per
+                        row instead of pre-aggregating (see reports.service.ts).
+                        A field that answers "how long has this client owed me
+                        money" but is never shown is a fix nobody can verify. */}
+                    <span className="text-xs text-muted">
+                      {t('atRisk.column.oldestChargeDueOn')} {formatDate(row.oldestChargeDueOn, locale)}
                     </span>
                     {row.creditCents > 0 && (
                       <span className="text-xs text-muted">

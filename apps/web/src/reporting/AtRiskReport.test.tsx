@@ -71,6 +71,29 @@ describe('AtRiskReport', () => {
     expect(screen.getByText(shown(formatCurrency(20000, 'pt-PT')))).toBeVisible()
   })
 
+  // Finding 4 of the whole-branch review: `oldestChargeDueOn` is credit-aware
+  // (names the oldest charge the credit still fails to reach) but was never
+  // rendered, so a fix nobody could see by eye was also a fix nobody could
+  // verify by eye.
+  it('shows the oldest unpaid charge', async () => {
+    getAtRiskMock.mockResolvedValue([
+      {
+        clientId: 'c1',
+        clientName: 'Padaria Central, Lda.',
+        overdueObligations: 1,
+        oldestDueDate: '2026-03-15',
+        grossOutstandingCents: 20000,
+        creditCents: 0,
+        outstandingCents: 20000,
+        oldestChargeDueOn: '2026-05-31',
+      },
+    ])
+
+    renderReport()
+
+    expect(await screen.findByText(/31\/05\/2026/)).toBeVisible()
+  })
+
   it('shows credit beside the net figure when there is any', async () => {
     getAtRiskMock.mockResolvedValue([
       {

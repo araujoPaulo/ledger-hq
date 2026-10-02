@@ -48,16 +48,22 @@ beforeEach(() => {
   getPeriodSummaryMock.mockReset()
 })
 
+// Mirrors `defaultWindow()` in PeriodSummaryReport.tsx: hardcoding a year
+// here would fail every 1 January, the worst possible morning for this to
+// break for an accountancy practice.
+const YEAR = new Date().getUTCFullYear()
+
 describe('PeriodSummaryReport', () => {
   it('shows the figures for the default window', async () => {
     getPeriodSummaryMock.mockResolvedValue({
-      from: '2026-01-01',
-      to: '2026-12-31',
+      from: `${YEAR}-01-01`,
+      to: `${YEAR}-12-31`,
       obligationsDue: 12,
       obligationsDone: 9,
       chargesIssuedCents: 500000,
       paymentsReceivedCents: 300000,
       outstandingAtCloseCents: 200000,
+      unappliedCreditAtCloseCents: 50000,
     })
 
     renderReport()
@@ -67,7 +73,8 @@ describe('PeriodSummaryReport', () => {
     expect(screen.getByText(shown(formatCurrency(500000, 'pt-PT')))).toBeVisible()
     expect(screen.getByText(shown(formatCurrency(300000, 'pt-PT')))).toBeVisible()
     expect(screen.getByText(shown(formatCurrency(200000, 'pt-PT')))).toBeVisible()
-    expect(getPeriodSummaryMock).toHaveBeenCalledWith('2026-01-01', '2026-12-31')
+    expect(screen.getByText(shown(formatCurrency(50000, 'pt-PT')))).toBeVisible()
+    expect(getPeriodSummaryMock).toHaveBeenCalledWith(`${YEAR}-01-01`, `${YEAR}-12-31`)
   })
 
   it('shows a skeleton while the report is pending', async () => {
@@ -97,13 +104,14 @@ describe('PeriodSummaryReport', () => {
 
   it('never asks the server for an inverted range, and says so instead of loading forever', async () => {
     getPeriodSummaryMock.mockResolvedValue({
-      from: '2026-01-01',
-      to: '2026-12-31',
+      from: `${YEAR}-01-01`,
+      to: `${YEAR}-12-31`,
       obligationsDue: 3,
       obligationsDone: 1,
       chargesIssuedCents: 100,
       paymentsReceivedCents: 100,
       outstandingAtCloseCents: 0,
+      unappliedCreditAtCloseCents: 0,
     })
 
     const { container } = renderReport()

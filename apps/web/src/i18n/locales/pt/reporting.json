@@ -12,7 +12,8 @@
       "oldestDueDate": "Prazo mais antigo",
       "gross": "Dívida bruta",
       "credit": "Crédito",
-      "outstanding": "Em dívida"
+      "outstanding": "Em dívida",
+      "oldestChargeDueOn": "Cobrança por liquidar mais antiga"
     }
   },
   "periodSummary": {
@@ -24,6 +25,7 @@
     "obligationsDone": "Obrigações entregues",
     "chargesIssued": "Cobranças emitidas",
     "paymentsReceived": "Pagamentos recebidos",
+    "unappliedCreditAtClose": "Crédito por aplicar no fecho",
     "outstandingAtClose": "Em dívida no fecho"
   }
 }

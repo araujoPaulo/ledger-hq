@@ -12,7 +12,8 @@
       "oldestDueDate": "Oldest deadline",
       "gross": "Gross debt",
       "credit": "Credit",
-      "outstanding": "Outstanding"
+      "outstanding": "Outstanding",
+      "oldestChargeDueOn": "Oldest unpaid charge"
     }
   },
   "periodSummary": {
@@ -24,6 +25,7 @@
     "obligationsDone": "Obligations filed",
     "chargesIssued": "Charges issued",
     "paymentsReceived": "Payments received",
+    "unappliedCreditAtClose": "Unapplied credit at close",
     "outstandingAtClose": "Outstanding at close"
   }
 }
