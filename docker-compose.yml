@@ -41,6 +41,12 @@ services:
       COOKIE_SECURE: "true"
       SESSION_TTL_DAYS: "30"
       AUTH_SALT_SECRET: ${AUTH_SALT_SECRET}
+      ATTACHMENTS_DIR: /var/lib/ledger-hq/attachments
+    volumes:
+      # Mounted into `api` only. The web container serves the public bundle
+      # with no authentication (docker/Caddyfile); a receipt is not public,
+      # so every byte leaves through a route behind SessionGuard instead.
+      - attachments-data:/var/lib/ledger-hq/attachments
 
   web:
     build:
@@ -56,3 +62,4 @@ services:
 
 volumes:
   postgres-data:
+  attachments-data:

@@ -16,5 +16,15 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
     throw new Error('AUTH_SALT_SECRET must be set to a non-empty string')
   }
 
+  // Same reasoning as above, one layer out: a missing attachments directory
+  // fails lazily, on the first upload, in production, months after the
+  // deploy that forgot it. Failing at ConfigModule.forRoot time means the
+  // process refuses to start at all.
+  const attachmentsDir = config.ATTACHMENTS_DIR
+
+  if (typeof attachmentsDir !== 'string' || attachmentsDir.length === 0) {
+    throw new Error('ATTACHMENTS_DIR must be set to a non-empty path')
+  }
+
   return config
 }

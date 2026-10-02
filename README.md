@@ -19,12 +19,14 @@ generator, and ad-hoc obligation tracking), **Phase 3 — Billing**
 allocation, ad-hoc charges and write-offs, and the receivables and
 per-client ledger views), **Phase 4a — Client Credit** (unallocated payment
 excess derived as credit, netted into the receivables views, and spendable
-both when charges are generated and on demand), and **Phase 4b — Search and
+both when charges are generated and on demand), **Phase 4b — Search and
 Reporting** (global search across clients, platforms, obligations and
 charges, and two cross-module reports — at-risk clients and a period
-summary, each downloadable as a CSV; see the
-[spec](docs/superpowers/specs/2026-09-29-phase-4b-search-and-reporting-design.md)).
-Phase 4's remaining sub-phase — 4c obligation attachments — is mapped in
+summary, each downloadable as a CSV), and **Phase 4c — Obligation
+Attachments** (submission receipts stored against obligations, backed up
+nightly and covered by the restore drill). That is every phase the
+[design specification](docs/superpowers/specs/2026-09-04-ledger-hq-design.md)
+scopes, and every sub-phase of the decomposition in
 [the Phase 4a design](docs/superpowers/specs/2026-09-28-phase-4a-client-credit-design.md)
 (section 2).
 

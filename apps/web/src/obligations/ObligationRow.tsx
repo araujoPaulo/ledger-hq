@@ -9,9 +9,17 @@ type Props = {
   onMarkDone: () => void
   /** Omitted on the global dashboard (mark-done only, per design doc 3.4); provided by the per-client section, which hosts the full manual-adjustment controls. */
   onEdit?: () => void
+  /** Omitted on the global dashboard, which is mark-done only (design doc §3.4); supplied by the per-client section. */
+  onManageAttachments?: () => void
 }
 
-export function ObligationRow({ obligation, showClient, onMarkDone, onEdit }: Props) {
+export function ObligationRow({
+  obligation,
+  showClient,
+  onMarkDone,
+  onEdit,
+  onManageAttachments,
+}: Props) {
   const { t, i18n } = useTranslation('obligations')
   const isActionable = obligation.status === 'PENDING' || obligation.status === 'IN_PROGRESS'
 
@@ -38,6 +46,12 @@ export function ObligationRow({ obligation, showClient, onMarkDone, onEdit }: Pr
             {t('row.markDone')}
           </button>
         </div>
+      )}
+
+      {onManageAttachments && (
+        <button type="button" onClick={onManageAttachments} className="flex items-center gap-1 text-xs underline">
+          {t('attachments.manage')}
+        </button>
       )}
     </li>
   )

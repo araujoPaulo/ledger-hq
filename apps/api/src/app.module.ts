@@ -13,6 +13,7 @@ import { FiscalProfilesModule } from './fiscal-profiles/fiscal-profiles.module.j
 import { EmploymentsModule } from './employments/employments.module.js'
 import { VaultModule } from './vault/vault.module.js'
 import { ObligationsModule } from './obligations/obligations.module.js'
+import { AttachmentsModule } from './attachments/attachments.module.js'
 import { BillingModule } from './billing/billing.module.js'
 import { SystemModule } from './system/system.module.js'
 import { ReportingModule } from './reporting/reporting.module.js'
@@ -29,6 +30,7 @@ import { ReportingModule } from './reporting/reporting.module.js'
     EmploymentsModule,
     VaultModule,
     ObligationsModule,
+    AttachmentsModule,
     BillingModule,
     SystemModule,
     ReportingModule,

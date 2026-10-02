@@ -116,8 +116,11 @@ composed into it. This is the densest screen in the app and the one
 where the refresh has the most to prove.
 
 - **Screens**: `ClientDetailPage` plus `FiscalProfileForm`,
-  `ObligationsSection` (with `AddAdHocObligationForm` and
-  `AdjustObligationForm`), `ClientLedgerSection` (with
+  `ObligationsSection` (with `AddAdHocObligationForm`,
+  `AdjustObligationForm` and `ObligationAttachments` — the receipts panel
+  added in Phase 4c, built against this section's pre-refresh markup and
+  restyled here alongside its siblings; a candidate for `Dialog`);
+  `ClientLedgerSection` (with
   `RetainerPlanForm`, `RecordPaymentForm`, `AddAdHocChargeForm`),
   `EmploymentSection` (with `AddEmploymentForm`), and
   `CredentialsSection` (with `AddCredentialForm`, `CredentialRow`, and

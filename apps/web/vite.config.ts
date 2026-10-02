@@ -28,6 +28,15 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,woff2,png,svg}'],
         navigateFallback: '/index.html',
+        // Without this, Workbox's own NavigationRoute (registered ahead of
+        // every rule below, and matching before them regardless of array
+        // order, since Workbox special-cases navigation requests) answers
+        // ANY `mode === 'navigate'` request — including a receipt URL under
+        // `/api/v1/...` — from the precached app shell. That is exactly
+        // what "open in new tab" on a receipt link does on a phone when
+        // `<a download>` doesn't save: the natural fallback gesture, and it
+        // would silently hand back index.html saved as "recibo.pdf".
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
             // This one read has its own IndexedDB-backed offline fallback
@@ -55,6 +64,21 @@ export default defineConfig({
             // matches routes in array order, first match wins — same
             // reason the vault-envelope rule above is ordered first.
             urlPattern: ({ url }) => url.pathname === '/api/v1/search',
+            handler: 'NetworkOnly' as const,
+          },
+          {
+            // A downloaded receipt must never land in `api-reads`. That
+            // cache holds plaintext in Cache Storage for 24 hours on every
+            // device that opens one — the gap docs/security-model.md
+            // already names for the client register; there is no reason to
+            // widen it to document images. Same ordering rule as above:
+            // Workbox matches in array order, first match wins, so this
+            // must stay ahead of the generic NetworkFirst rule.
+            //
+            // The *list* route deliberately stays on NetworkFirst:
+            // filenames and sizes are metadata of the kind already cached.
+            urlPattern: ({ url, request }) =>
+              /^\/api\/v1\/obligations\/[^/]+\/attachments\/[^/]+$/.test(url.pathname) && request.method === 'GET',
             handler: 'NetworkOnly' as const,
           },
           {

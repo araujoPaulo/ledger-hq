@@ -54,5 +54,10 @@
     "allocation_exceeds_available_credit": "O valor excede o crédito disponível neste pagamento.",
     "plan_overlap": "Já existe um plano de retainer em vigor para este cliente.",
     "charge_already_written_off": "Esta cobrança já foi perdoada."
+  },
+  "attachments": {
+    "type_not_allowed": "Só são aceites ficheiros PDF, PNG ou JPEG.",
+    "too_large": "O ficheiro excede o limite de 10 MiB.",
+    "file_missing": "O ficheiro deste anexo não está no servidor. O registo foi mantido para saberes o que era preciso voltar a obter."
   }
 }

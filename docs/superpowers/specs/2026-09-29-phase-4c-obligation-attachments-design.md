@@ -380,17 +380,15 @@ design doc §3.4, restated in `ObligationRow`'s own comment on `onEdit`), and
 filing a receipt is per-obligation work, not triage.
 
 The section follows the idiom it already has for editing: a second piece of
-state beside `editing`, and two optional `ObligationRow` props supplied only by
+state beside `editing`, and an optional `ObligationRow` prop supplied only by
 the section, exactly as `onEdit` is today.
 
 ```tsx
 const [attachmentsFor, setAttachmentsFor] = useState<ObligationResponse | null>(null)
-// ObligationRow: onManageAttachments?: () => void; attachmentCount?: number
+// ObligationRow: onManageAttachments?: () => void
 ```
 
-The count renders as a `Badge` when above zero, mapped to a tone in
-`obligations/`'s own folder and never inside `ui/`, per
-`docs/design/guidelines.md` §5. `ObligationAttachments` renders below the list
+`ObligationAttachments` renders below the list
 when a row is selected: an `<ul>` of filename, size and date with a download
 link and a delete control per row, plus a file input. **A completed obligation
 with no attachment shows the affordance and nothing else** — no `EmptyState`,
@@ -432,7 +430,8 @@ translated `aria-label`.
 - **`Content-Disposition`** — a filename containing `"`, a newline and
   non-ASCII characters produces a well-formed header with an intact
   `filename*`, and that name never appears in the path on disk.
-- **Web** — the panel renders the list, the badge appears only above zero, the
+- **Web** — the panel renders the list, no receipts-count badge is rendered
+  (there is no count in the obligations list response to drive one), the
   delete control confirms first, and the upload helper sends
   `X-Requested-With` but **not** a JSON `Content-Type`.
 - **E2E** — attach a PDF, reload, confirm it is listed and downloadable, and

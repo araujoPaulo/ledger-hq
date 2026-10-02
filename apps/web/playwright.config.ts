@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
@@ -17,6 +19,10 @@ export default defineConfig({
       url: 'http://localhost:3000/api/v1/health',
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
+      // The API refuses to boot without this (env-validation.ts). Without
+      // it here, every spec in the suite fails on a dead web server, not
+      // on anything they actually assert.
+      env: { ATTACHMENTS_DIR: join(tmpdir(), 'ledger-hq-e2e-attachments') },
     },
     {
       command: 'pnpm --filter @ledger-hq/web preview --port 4173',

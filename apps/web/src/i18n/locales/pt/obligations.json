@@ -19,6 +19,18 @@
     "edit": "Editar",
     "waive": "Dispensar"
   },
+  "attachments": {
+    "title": "Comprovativos",
+    "manage": "Comprovativos",
+    "add": "Anexar ficheiro",
+    "download": "Transferir {{filename}}",
+    "delete": "Eliminar {{filename}}",
+    "confirmDelete": "Eliminar {{filename}}? Não há forma de o recuperar.",
+    "empty": "Ainda não há comprovativos anexados.",
+    "uploading": "A carregar…",
+    "close": "Fechar",
+    "hint": "PDF, PNG ou JPEG, até 10 MiB."
+  },
   "form": {
     "dueDate": { "label": "Prazo" },
     "status": { "label": "Estado" },

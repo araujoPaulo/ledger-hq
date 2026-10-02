@@ -37,6 +37,9 @@ export const ERROR_CODES = [
   'billing.allocation_exceeds_available_credit',
   'billing.plan_overlap',
   'billing.charge_already_written_off',
+  'attachments.type_not_allowed',
+  'attachments.too_large',
+  'attachments.file_missing',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]
