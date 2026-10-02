@@ -1,0 +1,28 @@
+{
+  "title": "Relatórios",
+  "download": "Descarregar CSV",
+  "atRisk": {
+    "title": "Em risco",
+    "hint": "Clientes em atraso numa obrigação e com valores por liquidar.",
+    "empty": "Nenhum cliente em risco.",
+    "emptyHint": "Ninguém acumula prazos em atraso e dívida ao mesmo tempo.",
+    "column": {
+      "client": "Cliente",
+      "overdueObligations": "Obrigações em atraso",
+      "oldestDueDate": "Prazo mais antigo",
+      "gross": "Dívida bruta",
+      "credit": "Crédito",
+      "outstanding": "Em dívida"
+    }
+  },
+  "periodSummary": {
+    "title": "Resumo do período",
+    "from": "De",
+    "to": "Até",
+    "obligationsDue": "Obrigações com prazo",
+    "obligationsDone": "Obrigações entregues",
+    "chargesIssued": "Cobranças emitidas",
+    "paymentsReceived": "Pagamentos recebidos",
+    "outstandingAtClose": "Em dívida no fecho"
+  }
+}

@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { CalendarCheck, Users, Vault } from 'lucide-react'
+import { CalendarCheck, ChartColumn, Users, Vault } from 'lucide-react'
 import { AccountMenu } from './AccountMenu'
 import { SearchBox } from '../search/SearchBox'
 
@@ -10,6 +10,7 @@ const DESTINATIONS = [
   { to: '/', labelKey: 'obligations:dashboard.title', icon: CalendarCheck },
   { to: '/clients', labelKey: 'common:nav.clients', icon: Users },
   { to: '/vault/platforms', labelKey: 'common:nav.vault', icon: Vault },
+  { to: '/reporting', labelKey: 'common:nav.reporting', icon: ChartColumn },
 ] as const
 
 export function Sidebar() {

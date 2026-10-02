@@ -11,6 +11,7 @@ import { VaultSetupPage } from './vault/VaultSetupPage'
 import { PlatformsPage } from './vault/PlatformsPage'
 import { HomePage } from './HomePage'
 import { SearchResultsPage } from './search/SearchResultsPage'
+import { ReportingPage } from './reporting/ReportingPage'
 
 export function RequireSession({ children }: { children: ReactNode }) {
   const bootstrap = useBootstrapRequired()
@@ -70,6 +71,12 @@ const searchRoute = createRoute({
   component: SearchResultsPage,
 })
 
+const reportingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reporting',
+  component: ReportingPage,
+})
+
 export const router = createRouter({
   routeTree: rootRoute.addChildren([
     indexRoute,
@@ -79,6 +86,7 @@ export const router = createRouter({
     vaultSetupRoute,
     platformsRoute,
     searchRoute,
+    reportingRoute,
   ]),
 })
 

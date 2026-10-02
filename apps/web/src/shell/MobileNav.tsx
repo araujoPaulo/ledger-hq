@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { CalendarCheck, Search, Users, Vault } from 'lucide-react'
+import { CalendarCheck, ChartColumn, Search, Users, Vault } from 'lucide-react'
 import { AccountMenu } from './AccountMenu'
 import { ConnectionStatus } from './ConnectionStatus'
 
@@ -8,6 +8,7 @@ const DESTINATIONS = [
   { to: '/', labelKey: 'obligations:dashboard.title', icon: CalendarCheck },
   { to: '/clients', labelKey: 'common:nav.clients', icon: Users },
   { to: '/vault/platforms', labelKey: 'common:nav.vault', icon: Vault },
+  { to: '/reporting', labelKey: 'common:nav.reporting', icon: ChartColumn },
 ] as const
 
 export function MobileTopBar() {
