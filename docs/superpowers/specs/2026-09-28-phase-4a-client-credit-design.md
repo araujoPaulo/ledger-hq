@@ -260,8 +260,15 @@ apps/web/src/billing/
   negative; a client whose credit covers its oldest charges reports the ageing
   bucket of the charges that remain.
 - E2E: record a payment larger than the open charges, confirm the client ledger
-  shows the credit, apply it against a later charge, and confirm the
-  receivables row and the home page total both fall.
+  shows the credit, apply it against a later charge, and confirm the available
+  credit falls by the amount spent.
+
+  The receivables row and the home page total fall when the **payment is
+  recorded**, not when the credit is later applied — that is what §4.4's
+  notional netting means, and an earlier draft of this line got the sequence
+  wrong. Applying credit reduces the gross debt and the credit by the same
+  amount, so `max(gross - credit, 0)` cannot move. The figure that does move at
+  that moment is the available credit, so that is what the test asserts.
 
 ## 8. Risks
 
