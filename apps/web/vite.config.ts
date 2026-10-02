@@ -44,6 +44,20 @@ export default defineConfig({
             handler: 'NetworkOnly' as const,
           },
           {
+            // `apps/web/src/search/api.ts` makes a distinct URL per
+            // debounced keystroke prefix, so the generic `api-reads` rule
+            // below would otherwise cache roughly one entry per keystroke —
+            // LRU-evicting the client-register reads the offline story
+            // depends on (its `maxEntries: 200` is sized for that register,
+            // not for a search session), and writing client names and
+            // charge descriptions into Cache Storage per prefix along the
+            // way. Must stay ahead of the generic rule — Workbox's router
+            // matches routes in array order, first match wins — same
+            // reason the vault-envelope rule above is ordered first.
+            urlPattern: ({ url }) => url.pathname === '/api/v1/search',
+            handler: 'NetworkOnly' as const,
+          },
+          {
             // Reads degrade to the last known state, clearly marked as stale.
             urlPattern: ({ url, request }) =>
               url.pathname.startsWith('/api/v1') && request.method === 'GET',
