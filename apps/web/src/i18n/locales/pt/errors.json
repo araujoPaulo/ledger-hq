@@ -56,7 +56,7 @@
   },
   "attachments": {
     "type_not_allowed": "Só são aceites ficheiros PDF, PNG ou JPEG.",
-    "too_large": "O ficheiro excede o limite de 10 MB.",
+    "too_large": "O ficheiro excede o limite de 10 MiB.",
     "file_missing": "O ficheiro deste anexo não está no servidor. O registo foi mantido para saberes o que era preciso voltar a obter."
   }
 }

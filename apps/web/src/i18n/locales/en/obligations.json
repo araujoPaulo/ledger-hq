@@ -29,7 +29,7 @@
     "empty": "No receipts attached yet.",
     "uploading": "Uploading…",
     "close": "Close",
-    "hint": "PDF, PNG or JPEG, up to 10 MB."
+    "hint": "PDF, PNG or JPEG, up to 10 MiB."
   },
   "form": {
     "dueDate": { "label": "Due date" },
