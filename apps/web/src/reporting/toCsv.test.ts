@@ -65,6 +65,47 @@ describe('toCsv', () => {
       expect(toCsv(['A'], [['2026-01-08']], 'pt-PT')).toBe('﻿A\r\n2026-01-08\r\n')
       expect(toCsv(['A'], [['Total = 100']], 'pt-PT')).toBe('﻿A\r\nTotal = 100\r\n')
     })
+
+    // A negative amount is entirely legitimate in a money report, and
+    // `formatCsvAmount` emits one with a leading `-`. The guard must not
+    // force it to text, or the brief's own requirement — amounts parse as
+    // numbers — breaks for every negative figure.
+    it('leaves formatCsvAmount\'s negative output unguarded, in both locales', () => {
+      expect(toCsv(['Amount'], [[formatCsvAmount(-5000, 'pt-PT')]], 'pt-PT')).toBe('﻿Amount\r\n-50,00\r\n')
+      expect(toCsv(['Amount'], [[formatCsvAmount(-5000, 'en-GB')]], 'en-GB')).toBe('﻿Amount\r\n-50.00\r\n')
+    })
+
+    // The plain-number exemption is narrow on purpose: this merely starts
+    // like a number but isn't one, and must still be guarded.
+    it('still guards a value that merely starts like a number', () => {
+      expect(toCsv(['A'], [['-1+1']], 'pt-PT')).toBe('﻿A\r\n\'-1+1\r\n')
+    })
+
+    // Locks in guard-before-quote: a single value carrying the delimiter, a
+    // quote, an embedded CRLF, AND a leading `=` all at once. A later
+    // refactor that quoted first and guarded second would either lose the
+    // apostrophe outside the quotes (breaking the guard) or never see this
+    // case fail, which is exactly why it needs its own test.
+    it('guards and correctly quotes a value combining the delimiter, a quote, a CRLF and a leading =', () => {
+      const field = '=a;b"c\r\nd'
+      const csv = toCsv(['A'], [[field]], 'pt-PT')
+
+      const header = '﻿A\r\n'
+      const trailer = '\r\n'
+      expect(csv.startsWith(header)).toBe(true)
+      expect(csv.endsWith(trailer)).toBe(true)
+
+      const quotedField = csv.slice(header.length, csv.length - trailer.length)
+      expect(quotedField.startsWith('"')).toBe(true)
+      expect(quotedField.endsWith('"')).toBe(true)
+
+      // RFC 4180 unescaping: strip the wrapping quotes, then collapse
+      // doubled quotes back to one. What's left must be exactly the
+      // guarded value — apostrophe first, then the original content intact.
+      const unescaped = quotedField.slice(1, -1).replaceAll('""', '"')
+      expect(unescaped).toBe(`'${field}`)
+      expect(unescaped.startsWith('\'')).toBe(true)
+    })
   })
 })
 

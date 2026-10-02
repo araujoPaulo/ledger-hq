@@ -35,6 +35,22 @@ export function formatCsvAmount(cents: number, locale: SupportedLocale): string 
 const FORMULA_TRIGGER_CHARS = new Set(['=', '+', '-', '@', '\t', '\r'])
 
 /**
+ * `formatCsvAmount` emits a leading `-` for every negative amount, and a
+ * money report has plenty of those. Without this exemption the guard below
+ * would force every one of them to text, breaking the brief's own
+ * requirement that amounts parse as numbers.
+ *
+ * The exemption is safe because the shape is anchored at both ends: a
+ * string of only digits and exactly one decimal separator cannot evaluate
+ * as a formula no matter what a leading `-` might otherwise start, since
+ * nothing can follow the decimal digits. A leading `-` is dangerous only
+ * when what follows it can be evaluated — `-1+cmd|...` — and an anchored
+ * match on the *whole* string is what rules that out: matching only a
+ * prefix would let `-1+1` get away with it.
+ */
+const PLAIN_NUMBER = /^-?\d+[.,]\d{2}$/
+
+/**
  * The single leading apostrophe is not a stray character: it is the
  * spreadsheet convention for "this cell is text, not a formula". Without
  * it, a client named e.g. `=HYPERLINK(...)` would execute as a formula the
@@ -44,6 +60,7 @@ const FORMULA_TRIGGER_CHARS = new Set(['=', '+', '-', '@', '\t', '\r'])
  * description (`Total = 100`), must pass through untouched.
  */
 function guardFormula(field: string): string {
+  if (PLAIN_NUMBER.test(field)) return field
   return FORMULA_TRIGGER_CHARS.has(field.charAt(0)) ? `'${field}` : field
 }
 
