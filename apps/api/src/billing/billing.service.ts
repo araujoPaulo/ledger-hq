@@ -352,14 +352,14 @@ export class BillingService {
           throw new AppError('billing.allocation_exceeds_charge_balance', { chargeId: allocation.chargeId }, 422)
         }
 
-        // An upsert, not a create: the composite primary key is
-        // (paymentId, chargeId), so a second allocation from the same
-        // payment to the same charge adds to the first rather than failing
-        // on a key collision.
-        await tx.paymentAllocation.upsert({
-          where: { paymentId_chargeId: { paymentId: allocation.paymentId, chargeId: allocation.chargeId } },
-          create: { paymentId: allocation.paymentId, chargeId: allocation.chargeId, amountCents: allocation.amountCents },
-          update: { amountCents: { increment: allocation.amountCents } },
+        // Always a new row, never merged into an existing one for the same
+        // (paymentId, chargeId): a top-up applied later must carry its own
+        // createdAt, not overwrite the amount on a row already dated to an
+        // earlier tranche. Over-allocation is still impossible — the
+        // credit and balance checks above just read fresh, and both
+        // aggregate over however many rows already exist for this pair.
+        await tx.paymentAllocation.create({
+          data: { id: uuidv7(), paymentId: allocation.paymentId, chargeId: allocation.chargeId, amountCents: allocation.amountCents },
         })
       }
     })
@@ -416,7 +416,7 @@ export class BillingService {
         if (!balance || allocation.amountCents > balance.outstandingCents) {
           throw new AppError('billing.allocation_exceeds_charge_balance', { chargeId: allocation.chargeId }, 422)
         }
-        await tx.paymentAllocation.create({ data: { paymentId, chargeId: allocation.chargeId, amountCents: allocation.amountCents } })
+        await tx.paymentAllocation.create({ data: { id: uuidv7(), paymentId, chargeId: allocation.chargeId, amountCents: allocation.amountCents } })
       }
 
       return { paymentId }

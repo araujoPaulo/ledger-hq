@@ -307,7 +307,7 @@ describe('billing constraints', () => {
     const payment = await prisma.payment.create({
       data: { id: uuidv7(), clientId: client.id, amountCents: 4000, receivedOn: new Date('2026-01-05T00:00:00Z'), method: 'TRANSFER' },
     })
-    await prisma.paymentAllocation.create({ data: { paymentId: payment.id, chargeId: charge.id, amountCents: 4000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId: payment.id, chargeId: charge.id, amountCents: 4000 } })
 
     const rows = await prisma.$queryRaw<Array<{ outstandingCents: number; status: string }>>`
       SELECT "outstandingCents", status FROM charge_balances WHERE id = ${charge.id}::uuid
@@ -431,7 +431,7 @@ describe('payment_credits view', () => {
     await prisma.payment.create({
       data: { id: paymentId, clientId, amountCents: 12000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
     })
-    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 5000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId, chargeId, amountCents: 5000 } })
 
     const [row] = await prisma.$queryRaw<Array<{ creditCents: number; allocatedCents: number }>>`
       SELECT "creditCents", "allocatedCents" FROM payment_credits WHERE "paymentId" = ${paymentId}::uuid
@@ -462,7 +462,7 @@ describe('payment_credits view', () => {
     await prisma.payment.create({
       data: { id: paymentId, clientId, amountCents: 9000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
     })
-    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 9000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId, chargeId, amountCents: 9000 } })
 
     const [row] = await prisma.$queryRaw<Array<{ creditCents: number }>>`
       SELECT "creditCents" FROM payment_credits WHERE "paymentId" = ${paymentId}::uuid

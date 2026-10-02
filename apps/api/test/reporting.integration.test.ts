@@ -307,7 +307,7 @@ describe('GET /api/v1/reporting/period-summary', () => {
     await prisma.payment.create({
       data: { id: paymentId, clientId, amountCents: 9000, receivedOn: new Date('2026-05-10T00:00:00Z'), method: 'TRANSFER' },
     })
-    await prisma.paymentAllocation.create({ data: { paymentId, chargeId: charge.id, amountCents: 9000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId, chargeId: charge.id, amountCents: 9000 } })
 
     const response = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
 
@@ -411,6 +411,56 @@ describe('GET /api/v1/reporting/period-summary', () => {
     expect(after.body).toEqual(before.body)
   })
 
+  // Reproduces the fix-round-2 defect: a charge already partly covered by
+  // one allocation from a payment, later topped up from the *same*
+  // payment's remaining credit. Under upsert-and-increment, the top-up
+  // overwrote amountCents on the original January row without moving its
+  // createdAt, so an already-closed period silently counted April's money
+  // as settled by 31 March. FIFO makes this the ordinary path for a
+  // partially covered charge, not a corner case.
+  it('does not change once a closed period is re-summarised after a later top-up on an already-partly-allocated charge', async () => {
+    const clientId = await createClient('503777000', 'Padaria Central, Lda.')
+    const charge = await prisma.charge.create({
+      data: {
+        id: uuidv7(),
+        clientId,
+        kind: 'EXTRA',
+        description: 'Março',
+        amountCents: 5000,
+        issuedOn: new Date('2026-02-01T00:00:00Z'),
+        dueOn: new Date('2026-02-28T00:00:00Z'),
+      },
+    })
+
+    // January: a 5000 payment, only 3000 of it allocated to the charge at
+    // the time (its own createdAt backdated to when that write actually
+    // happened — the live clock during a test run is always "now", which
+    // is after this window, so the real API can't produce a January row;
+    // the point under test is the top-up below, which does go through the
+    // real endpoint) — the remaining 2000 sits as unspent credit on this
+    // same payment until the top-up.
+    const paymentId = uuidv7()
+    await prisma.payment.create({
+      data: { id: paymentId, clientId, amountCents: 5000, receivedOn: new Date('2026-01-15T00:00:00Z'), method: 'TRANSFER' },
+    })
+    await prisma.paymentAllocation.create({
+      data: { id: uuidv7(), paymentId, chargeId: charge.id, amountCents: 3000, createdAt: new Date('2026-01-20T00:00:00Z') },
+    })
+
+    const before = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+    expect(before.body.outstandingAtCloseCents).toBe(2000)
+
+    // The remaining 2000 credit from the SAME payment tops up the SAME
+    // charge, well after the window closed.
+    const applied = await post(`/api/v1/billing/clients/${clientId}/apply-credit?dryRun=false`, {
+      allocations: [{ paymentId, chargeId: charge.id, amountCents: 2000 }],
+    })
+    expect(applied.status).toBe(201)
+
+    const after = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')
+    expect(after.body).toEqual(before.body)
+  })
+
   // `createdAt` is a timestamp, unlike the `@db.Date` columns the other
   // boundary test covers — an allocation made at 15:00 on the closing day
   // must still count as "by close", not just one made at its midnight start.
@@ -432,7 +482,7 @@ describe('GET /api/v1/reporting/period-summary', () => {
       data: { id: paymentId, clientId, amountCents: 4000, receivedOn: new Date('2026-01-15T00:00:00Z'), method: 'TRANSFER' },
     })
     await prisma.paymentAllocation.create({
-      data: { paymentId, chargeId: charge.id, amountCents: 4000, createdAt: new Date('2026-03-31T15:00:00Z') },
+      data: { id: uuidv7(), paymentId, chargeId: charge.id, amountCents: 4000, createdAt: new Date('2026-03-31T15:00:00Z') },
     })
 
     const response = await get('/api/v1/reporting/period-summary?from=2026-01-01&to=2026-03-31')

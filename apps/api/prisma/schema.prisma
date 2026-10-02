@@ -321,7 +321,16 @@ model Payment {
   @@index([clientId])
 }
 
+/// Append-only (Phase 4b fix round 2): a charge can be topped up by more
+/// than one application of credit, each on its own day, so one row can
+/// never speak for two tranches. There is deliberately no uniqueness on
+/// (paymentId, chargeId) — `BillingService#applyCredit` always creates a
+/// new row, never merges into an existing one. Every reader aggregates by
+/// paymentId or chargeId (`charge_balances`, `payment_credits`,
+/// `getClientLedger`'s groupBy, `periodSummary`'s `settled`), so nothing
+/// depends on one row per pair.
 model PaymentAllocation {
+  id          String   @id @db.Uuid
   paymentId   String   @db.Uuid
   chargeId    String   @db.Uuid
   amountCents Int
@@ -335,7 +344,8 @@ model PaymentAllocation {
   payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   charge  Charge  @relation(fields: [chargeId], references: [id], onDelete: Cascade)
 
-  @@id([paymentId, chargeId])
+  @@index([paymentId])
+  @@index([chargeId])
 }
 
 model AuditEvent {

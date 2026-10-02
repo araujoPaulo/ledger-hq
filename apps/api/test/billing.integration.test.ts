@@ -66,7 +66,7 @@ describe('BillingService#getReceivables', () => {
       data: { id: uuidv7(), clientId, kind: 'EXTRA', description: 'Paid', amountCents: 5000, issuedOn: new Date('2026-01-01T00:00:00Z'), dueOn: new Date('2026-01-01T00:00:00Z') },
     })
     const payment = await prisma.payment.create({ data: { id: uuidv7(), clientId, amountCents: 5000, receivedOn: new Date('2026-01-05T00:00:00Z'), method: 'TRANSFER' } })
-    await prisma.paymentAllocation.create({ data: { paymentId: payment.id, chargeId: charge.id, amountCents: 5000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId: payment.id, chargeId: charge.id, amountCents: 5000 } })
 
     const rows = await billing.getReceivables(new Date('2026-04-01T00:00:00Z'))
 
@@ -124,7 +124,7 @@ describe('BillingService#getCurrentMonth', () => {
       data: { id: uuidv7(), clientId, planId: plan.id, kind: 'RETAINER', description: 'March', periodLabel: '2026-03', amountCents: 9000, issuedOn: new Date('2026-03-01T00:00:00Z'), dueOn: new Date('2026-03-08T00:00:00Z') },
     })
     const payment = await prisma.payment.create({ data: { id: uuidv7(), clientId, amountCents: 9000, receivedOn: new Date('2026-03-05T00:00:00Z'), method: 'TRANSFER' } })
-    await prisma.paymentAllocation.create({ data: { paymentId: payment.id, chargeId: charge.id, amountCents: 9000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId: payment.id, chargeId: charge.id, amountCents: 9000 } })
 
     const rows = await billing.getCurrentMonth(new Date('2026-03-18T00:00:00Z'))
 
@@ -139,7 +139,7 @@ describe('BillingService#getClientLedger', () => {
       data: { id: uuidv7(), clientId, kind: 'EXTRA', description: 'Consultoria', amountCents: 10000, issuedOn: new Date('2026-01-01T00:00:00Z'), dueOn: new Date('2026-01-15T00:00:00Z') },
     })
     const payment = await prisma.payment.create({ data: { id: uuidv7(), clientId, amountCents: 4000, receivedOn: new Date('2026-01-10T00:00:00Z'), method: 'TRANSFER' } })
-    await prisma.paymentAllocation.create({ data: { paymentId: payment.id, chargeId: charge.id, amountCents: 4000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId: payment.id, chargeId: charge.id, amountCents: 4000 } })
 
     const ledger = await billing.getClientLedger(clientId)
 
@@ -486,7 +486,7 @@ describe('getAvailableCredit', () => {
     await prisma.payment.create({
       data: { id: paymentId, clientId, amountCents: 9000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
     })
-    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 9000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId, chargeId, amountCents: 9000 } })
 
     const credit = await billing.getAvailableCredit(clientId)
 
@@ -560,7 +560,10 @@ describe('POST /billing/clients/:clientId/apply-credit', () => {
     expect(response.status).toBe(201)
     expect(response.body.allocated).toBe(1)
     const written = await prisma.paymentAllocation.findMany()
-    expect(written).toEqual([{ paymentId, chargeId, amountCents: 9000 }])
+    // Append-only (fix round 2): the row also carries its own id and
+    // createdAt now, so only the three fields this test cares about are
+    // pinned exactly.
+    expect(written).toEqual([expect.objectContaining({ paymentId, chargeId, amountCents: 9000 })])
     // The credit is spent: a second run has nothing to propose.
     const second = await post(`/api/v1/billing/clients/${clientId}/apply-credit?dryRun=true`)
     expect(second.body.proposed).toEqual([])
@@ -845,7 +848,7 @@ describe('getClientLedger and client credit', () => {
     await prisma.payment.create({
       data: { id: paymentId, clientId, amountCents: 9000, receivedOn: new Date('2026-02-01T00:00:00Z'), method: 'TRANSFER' },
     })
-    await prisma.paymentAllocation.create({ data: { paymentId, chargeId, amountCents: 9000 } })
+    await prisma.paymentAllocation.create({ data: { id: uuidv7(), paymentId, chargeId, amountCents: 9000 } })
 
     expect((await billing.getClientLedger(clientId)).availableCreditCents).toBe(0)
   })
