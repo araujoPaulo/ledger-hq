@@ -67,6 +67,12 @@ generated or on demand from the client ledger. The receivables views net it
 notionally so the debt is no longer overstated. The `::int` discipline
 below applies unchanged to the new view.
 
+Charge creation and credit application inside `generateCharges` are two
+separate transactions, deliberately, not one: charges are the statement of
+debt and must be committed even if spending credit against them fails, so a
+credit-side failure is caught per client and logged rather than rolling the
+already-created charges back.
+
 The `::int` discipline is a convention, not a constraint the database
 enforces: a new raw-SQL aggregate that forgets the cast fails at
 serialization time, in the response, not at migration time. The

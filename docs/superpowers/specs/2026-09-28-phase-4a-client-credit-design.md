@@ -129,7 +129,7 @@ credit. So credit is consumable at two moments:
 POST /billing/generate-charges?dryRun=true
   -> { toCreate: [...], creditToAllocate: ProposedAllocation[] }
 POST /billing/generate-charges?dryRun=false
-  -> { created: number, allocated: number }     // charges and allocations in one transaction
+  -> { created: number, allocated: number }     // charges committed, then allocations spent, in two separate transactions — see below
 
 POST /billing/clients/:clientId/apply-credit?dryRun=true|false
   -> { proposed: ProposedAllocationRow[], remainingCreditCents: number }   (dryRun=true)
@@ -145,6 +145,21 @@ payment.
 
 `apply-credit` proposes against that one client's open charges only. Credit is
 per client; nothing in this design moves money between clients.
+
+**The transaction boundary is two transactions, by design, not one.** An
+earlier draft of this section put charge creation and credit application in
+one transaction. The implementation deliberately does not: charges are
+committed in their own transaction first, and credit is spent against them
+afterward, outside it. Charges are the statement of debt and must land even
+if spending credit against them fails for any reason; the credit application
+is a convenience that can always be retried later from the ledger (via
+`apply-credit`) or on the next `generate-charges` run. A client whose credit
+cannot be spent this run must still get its charges — rolling both back
+together would instead let a credit-side failure erase debt that is real and
+already earned. See also `billing.service.ts`'s own comment at the
+transaction boundary, and the per-client `try`/`catch` around the credit
+sweep loop, which exists for the same reason: one client's credit failure
+must not stop every other client's sweep in the same run.
 
 ### 4.4 Receivables net credit, and show both parts
 
@@ -233,8 +248,14 @@ apps/web/src/billing/
 - `billing.service` integration tests (Testcontainers): `payment_credits`
   reports zero for a fully allocated payment and the remainder for a partial
   one; `apply-credit` is idempotent (a second run with no new credit proposes
-  nothing); generating charges applies credit in the same transaction, and a
-  failure in either half rolls back both.
+  nothing); generating charges applies credit to the charges it creates when
+  they are already due, and separately sweeps a client's credit once an
+  already-created charge falls due even when nothing new needs creating that
+  run; the dry-run preview and the confirmed run agree on what would be
+  spent, including when a newly generated charge is not yet due. Per the
+  ruling in §4.3, there is no rollback-both test: charge creation and credit
+  application are two transactions by design, and a failure spending credit
+  must leave the already-committed charges in place.
 - Receivables: a client whose credit exceeds its debt reports zero, never a
   negative; a client whose credit covers its oldest charges reports the ageing
   bucket of the charges that remain.
