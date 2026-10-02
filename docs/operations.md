@@ -99,12 +99,22 @@ Database migrations run automatically at API container startup
 (`prisma migrate deploy`, wired into `docker/Dockerfile.api`'s `CMD`) — no
 separate migration step is needed.
 
-The Phase 4b migration (`20260929171716_search_vectors`) rewrites five
-tables — `Client`, `Platform`, `ObligationDefinition`, `ObligationInstance`
-and `Charge` — to add a generated, stored `searchVector` column and its own
-GIN index to each. That is a full table rewrite under an exclusive lock, not
-the quick, additive migrations this update step is usually run with mid-day;
-schedule this particular update for the maintenance window.
+Three Phase 4a/4b migrations take an ACCESS EXCLUSIVE lock through a
+backfill or a non-concurrent index build, not the quick, additive migrations
+this update step is usually run with mid-day; schedule an update that
+includes any of them for the maintenance window:
+
+- `20260929171716_search_vectors` rewrites five tables — `Client`,
+  `Platform`, `ObligationDefinition`, `ObligationInstance` and `Charge` — to
+  add a generated, stored `searchVector` column and its own GIN index to
+  each.
+- `20260929200000_payment_allocation_created_at` adds `PaymentAllocation`'s
+  `createdAt` column and backfills every existing row from its payment's
+  `receivedOn`.
+- `20260929210000_payment_allocation_append_only` replaces
+  `PaymentAllocation`'s composite primary key with a surrogate `id`
+  (backfilled for every existing row) and builds two new, non-concurrent
+  indexes.
 
 ## Rollback
 

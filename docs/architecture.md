@@ -1,7 +1,7 @@
 # Architecture
 
-This describes the system as it is built at the end of Phase 0, not the
-full system envisioned in the
+This describes the system as it is currently built — Phase 0 through the
+branch in progress — not the full system envisioned in the
 [design specification](superpowers/specs/2026-09-04-ledger-hq-design.md).
 Where the two differ, this document says so explicitly.
 
