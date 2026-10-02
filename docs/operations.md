@@ -138,23 +138,31 @@ docker compose exec -T postgres pg_restore -U "${POSTGRES_USER}" \
 #     same one as the dump above: a dump and a file archive from different
 #     nights leave rows whose files are missing, and files no row knows
 #     about.
-age --decrypt -i /path/to/age-private-key.txt \
-  -o /tmp/rollback-files.tar \
-  "${BACKUP_LOCAL_DIR}/ledger-hq-<timestamp>.files.tar.age"
-docker compose up -d api
-docker cp /tmp/rollback-files.tar "$(docker compose ps -q api)":/tmp/rollback-files.tar
+#
+# This must not contradict step 2's own rule — only `postgres` runs during a
+# restore. `docker compose up -d api` would start the real application
+# against a database mid-restore, and if the regression this rollback exists
+# to undo is what stops `api` staying up, that command leaves a crashed
+# container behind, the following `docker compose exec` fails with
+# "service … is not running", and the operator is stranded mid-restore with
+# nothing documented past that point. `docker compose run --rm --no-deps`
+# instead starts a throwaway container from the same image and the same
+# `attachments-data` volume mount, overriding the image's own (possibly
+# broken) CMD with a plain shell — nothing it runs depends on the
+# application staying up, or on postgres being reachable. Streaming the
+# decrypted bytes straight into its stdin also means the plaintext archive
+# never touches this host's disk or any container's filesystem at all.
+#
 # `/var/lib/ledger-hq/attachments` is the volume's own mount point, not an
 # ordinary directory: removing it (`rm -rf` on the path itself) fails with
 # "Resource busy" after it has already deleted everything *inside* it —
 # `tar -xf` then never runs because of the `&&`, leaving the volume empty
 # and nothing restored. Clear its contents instead, with the mount point
 # left standing.
-docker compose exec -T api sh -c 'find /var/lib/ledger-hq/attachments -mindepth 1 -delete && tar -xf /tmp/rollback-files.tar -C /var/lib/ledger-hq'
-
-# Clean up the decrypted archive on both the host and inside the container —
-# it is plaintext and must not linger in either place.
-rm -f /tmp/rollback-files.tar
-docker compose exec -T api rm -f /tmp/rollback-files.tar
+age --decrypt -i /path/to/age-private-key.txt \
+  "${BACKUP_LOCAL_DIR}/ledger-hq-<timestamp>.files.tar.age" \
+  | docker compose run --rm --no-deps -T api \
+      sh -c 'find /var/lib/ledger-hq/attachments -mindepth 1 -delete && tar -xf - -C /var/lib/ledger-hq'
 
 # 4. Clean up the decrypted dump on both the host and inside the container —
 #    it is plaintext and must not linger in either place.
@@ -196,16 +204,25 @@ docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d restore_drill \
 docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
   -c 'SELECT count(*) FROM "Client";'
 
-# 3b. Reconcile the attachment rows against the files on disk, in both
-#     directions. Neither list should surprise you.
+# 3b. Reconcile the attachment rows against the files in the matching
+#     archive, in both directions. Neither list should surprise you.
+#
+#     The file list MUST come from `ledger-hq-<timestamp>.files.tar.age` —
+#     the SAME `<timestamp>` as step 1's dump — decrypted here on the host,
+#     never from the live volume via the running `api` container. The live
+#     volume reflects whatever has been uploaded or deleted on production
+#     since the dump was taken, which proves nothing about the archive: an
+#     archive that is empty, truncated or unreadable would still pass this
+#     drill if the file list came from the live volume instead, which is
+#     exactly the failure this drill exists to catch (design §4.3). It also
+#     raises false alarms in both directions for anything uploaded or
+#     deleted since the dump.
 docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d restore_drill -At \
   -c 'SELECT "obligationId" || $$/$$ || id FROM "ObligationAttachment"' | sort > /tmp/rows.txt
-# `-printf` is GNU find; the `api` image's BusyBox `find` doesn't have it and
-# exits with "unrecognized: -printf", silently leaving `/tmp/files.txt`
-# empty — which then makes the `comm -23` below report every attachment row
-# as missing from disk. Plain `find` plus `sed` works on both.
-docker compose exec -T api sh -c "cd /var/lib/ledger-hq/attachments && find . -type f | sed 's|^\./||'" \
-  | sort > /tmp/files.txt
+
+age --decrypt -i /path/to/age-private-key.txt \
+  "${BACKUP_LOCAL_DIR}/ledger-hq-<timestamp>.files.tar.age" \
+  | tar -tf - | grep -v '/$' | sed 's|^attachments/||' | sort > /tmp/files.txt
 
 # On disk, not in the database: a failed upload or a stale restore. Harmless
 # — every read starts from a row — and safe to delete.
