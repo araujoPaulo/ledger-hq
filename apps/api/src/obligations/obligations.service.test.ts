@@ -101,26 +101,59 @@ describe('ObligationsService#generate', () => {
     expect(second.toCreate).toEqual([])
   })
 
-  it('never proposes an instance whose period ends more than 3 months before asOf', async () => {
+  it('proposes every period of asOf\'s calendar year, already-ended ones included, and none from another year', async () => {
     const prisma = fakePrisma({
       client: { findMany: vi.fn().mockResolvedValue([client]) },
       fiscalProfile: { findUnique: vi.fn().mockResolvedValue(COMPANY_PROFILE) },
     })
     const service = new ObligationsService(prisma, fakeClientsService(client))
 
-    const result = await service.generate({ asOf: new Date('2026-03-18T00:00:00Z'), clientId: 'c1' }, true)
+    const result = await service.generate({ asOf: new Date('2026-10-04T00:00:00Z'), clientId: 'c1' }, true)
 
+    const vatLabels = result.toCreate.filter((item) => item.definitionCode === 'VAT_MONTHLY_RETURN').map((item) => item.periodLabel)
+    expect(vatLabels).toEqual(Array.from({ length: 12 }, (_, index) => `2026-${String(index + 1).padStart(2, '0')}`))
+    expect(result.toCreate.filter((item) => item.definitionCode === 'MODEL_22_CIT_RETURN').map((item) => item.periodLabel)).toEqual(['2026'])
     for (const item of result.toCreate) {
-      // Every MONTHLY/QUARTERLY period label in the result must be no
-      // earlier than December 2025 (3 months before March 2026). ANNUAL
-      // periods use a bare "YYYY" label (e.g. "2025"), which is not
-      // comparable the same way — a still-open 2025 annual filing (due
-      // mid-2026) is correctly proposed even though "2025" < "2025-12"
-      // as a string, so this check is scoped to "YYYY-MM"/"YYYY-QN" labels.
-      if (/^\d{4}-/.test(item.periodLabel)) {
-        expect(item.periodLabel >= '2025-12').toBe(true)
-      }
+      expect(item.periodLabel.startsWith('2026')).toBe(true)
     }
+  })
+
+  it('moves on to the new calendar year once asOf crosses 1 January', async () => {
+    const prisma = fakePrisma({
+      client: { findMany: vi.fn().mockResolvedValue([client]) },
+      fiscalProfile: { findUnique: vi.fn().mockResolvedValue(COMPANY_PROFILE) },
+    })
+    const service = new ObligationsService(prisma, fakeClientsService(client))
+
+    const result = await service.generate({ asOf: new Date('2027-01-01T03:00:00Z'), clientId: 'c1' }, true)
+
+    expect(result.toCreate.length).toBeGreaterThan(0)
+    for (const item of result.toCreate) {
+      expect(item.periodLabel.startsWith('2027')).toBe(true)
+    }
+  })
+
+  it('never retracts a PENDING instance from a later year just because it falls outside the current year', async () => {
+    const prisma = fakePrisma({
+      client: { findMany: vi.fn().mockResolvedValue([client]) },
+      fiscalProfile: { findUnique: vi.fn().mockResolvedValue(COMPANY_PROFILE) },
+      obligationInstance: {
+        findMany: vi.fn().mockResolvedValue([
+          // Left behind by the old rolling 12-month horizon, possibly with
+          // attachments (which cascade on delete). The rule still applies;
+          // these are simply next year's, and 1 January re-evaluates them.
+          { id: 'next-1', clientId: 'c1', definitionCode: 'VAT_MONTHLY_RETURN', periodStart: new Date('2027-02-01T00:00:00Z'), periodEnd: new Date('2027-02-28T00:00:00Z'), periodLabel: '2027-02', status: 'PENDING' },
+          { id: 'next-2', clientId: 'c1', definitionCode: 'VAT_MONTHLY_RETURN', periodStart: new Date('2027-11-01T00:00:00Z'), periodEnd: new Date('2027-11-30T00:00:00Z'), periodLabel: '2027-11', status: 'PENDING' },
+        ]),
+        create: vi.fn().mockResolvedValue({}),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+    })
+    const service = new ObligationsService(prisma, fakeClientsService(client))
+
+    const result = await service.generate({ asOf: new Date('2026-10-04T00:00:00Z'), clientId: 'c1' }, true)
+
+    expect(result.toRetract).toEqual([])
   })
 
   it('retracts a future PENDING instance whose rule no longer applies, once the profile changes', async () => {
@@ -159,8 +192,8 @@ describe('ObligationsService#generate', () => {
       obligationInstance: {
         findMany: vi.fn().mockResolvedValue([
           // Genuine long-standing arrears: this period ended almost two
-          // years before asOf, well outside the generator's [floor,
-          // horizonEnd] window, so it isn't in `periodKeys` even though the
+          // years before asOf, well outside the generator's calendar-year
+          // window, so it isn't in `periodKeys` even though the
           // rule (VAT_MONTHLY_RETURN, COMPANY_PROFILE) still applies
           // unchanged. Master spec §7.3, invariant 4: "retracts forward
           // only ... past and already-handled ones remain." Falling outside
