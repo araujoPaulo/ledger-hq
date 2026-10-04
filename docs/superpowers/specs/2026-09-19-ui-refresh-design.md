@@ -24,6 +24,19 @@ that follows: the client detail page is tabbed, the Vault page is
 called Vault, and the credentials unlock gate belongs to Stage 3, not
 Stage 4.
 
+## Revision note — 2026-10-04
+
+Stages 2-5 now have their own specs, which supersede this document's
+"Later-stage components" list and rollout lines where they differ:
+[Stage 2](./2026-10-04-ui-refresh-stage-2-design.md) ·
+[Stage 3](./2026-10-04-ui-refresh-stage-3-design.md) ·
+[Stage 4](./2026-10-04-ui-refresh-stage-4-design.md) ·
+[Stage 5](./2026-10-04-ui-refresh-stage-5-design.md). The changes, with
+reasons, are summarised in the roadmap's 2026-10-04 revision: native
+`Select`/`Checkbox` instead of Radix, client edit in Stage 2, `Callout`
+and `MoneyInput` in Stage 3, vault recovery moved to Stage 5 with the
+rest of the signed-out screens, which leave the shell.
+
 ## Visual reference
 
 The screens: <https://claude.ai/artifact/EYxudatoGJWQ4W7kf8iV92>
@@ -191,13 +204,14 @@ New dependencies in Stage 1: `@radix-ui/react-dropdown-menu`,
 
 ### Later-stage components
 
-- **Stage 2**: `Input`, `Select`, `Checkbox` — the clients filter bar
-  and the client form are the first places the system needs real form
-  controls with label and error states. Adds
-  `@radix-ui/react-select`, `@radix-ui/react-checkbox`.
+- **Stage 2**: `Input`, `Textarea`, `Select`, `Checkbox` — the clients
+  filter bar and the client form are the first places the system needs
+  real form controls with label and error states. Native elements,
+  styled; adds only `@radix-ui/react-slot` (for `Button asChild`).
 - **Stage 3**: `Tabs` (the client detail page's five sections),
-  `Dialog` (the write-off reason prompt, the add-credential form),
-  `Toast` (copy-to-clipboard confirmation). Adds
+  `Dialog` (every form on the page), `Toast` (copy-to-clipboard
+  confirmation), `Callout` (section-state messages), `MoneyInput`
+  (amounts in euros). Adds
   `@radix-ui/react-tabs`, `@radix-ui/react-dialog`,
   `@radix-ui/react-toast`.
 - **Stages 4-5**: no new components.
@@ -352,9 +366,10 @@ those phases. Full detail, including why this order, in
    credentials, the last of which brings `VaultUnlockGate` with it) —
    introduces `Tabs`, `Dialog` and `Toast`.
 4. **Stage 4**: Vault standalone screens — the vault page (the
-   platform list and its create form) and setup/recovery.
-5. **Stage 5**: Auth (login, first-run setup) — last because it is the
-   least-frequently-seen screen and blocks nothing.
+   platform list and its create form) and vault setup.
+5. **Stage 5**: Auth (login, vault recovery, first-run setup), moved
+   out of the shell — last because it is the least-frequently-seen
+   screen and blocks nothing.
 
 Stages 2-5 each get their own brainstorming pass and their own spec.
 This document commits to Stage 1's design in detail; the later stages
