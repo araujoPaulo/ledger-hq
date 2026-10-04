@@ -22,8 +22,6 @@ import { PrismaService } from '../common/prisma.service.js'
 import { ClientsService } from '../clients/clients.service.js'
 import type { Client, FiscalProfile, ObligationDefinition, ObligationInstance } from '../generated/prisma/client.js'
 
-const HORIZON_MONTHS = 12
-
 export type GenerateResult = {
   toCreate: Array<{ clientId: string; definitionCode: string; periodLabel: string; dueDate: string }>
   toRetract: Array<{ clientId: string; definitionCode: string; periodLabel: string }>
@@ -77,8 +75,13 @@ export class ObligationsService {
       ? [await this.clients.findOne(input.clientId)]
       : await this.prisma.client.findMany({ where: { archivedAt: null } })
 
-    const horizonEnd = addMonths(input.asOf, HORIZON_MONTHS)
-    const floor = addMonths(input.asOf, -3)
+    // The calendar year asOf falls in, whole: already-ended periods are
+    // generated too, and the daily cron moves on to the next year by itself
+    // on 1 January. No lookahead is needed — no deadline falls before
+    // 1 January of its own period's year.
+    const year = input.asOf.getUTCFullYear()
+    const yearStart = new Date(Date.UTC(year, 0, 1))
+    const yearEnd = new Date(Date.UTC(year, 11, 31))
 
     const toCreate: Array<{ clientId: string; definitionCode: string; period: { start: Date; end: Date; label: string }; dueDate: Date }> = []
     const toRetract: Array<{ id: string; clientId: string; definitionCode: string; periodLabel: string }> = []
@@ -92,7 +95,7 @@ export class ObligationsService {
 
       for (const entry of FISCAL_CATALOG) {
         const applies = appliesTo(entry, subject) && withinValidity(entry, input.asOf)
-        const periods = applies ? generatePeriods(entry.periodicity, floor, horizonEnd) : []
+        const periods = applies ? generatePeriods(entry.periodicity, yearStart, yearEnd) : []
         const periodKeys = new Set(periods.map((period) => isoKey(period.start)))
 
         const existingForCode = existingInstances.filter((instance) => instance.definitionCode === entry.code)
@@ -105,15 +108,17 @@ export class ObligationsService {
         }
 
         for (const instance of existingForCode) {
-          // periodKeys only spans [floor, horizonEnd] — an old PENDING
-          // instance whose period already ended (genuine arrears, rule
-          // unchanged) falls outside that window and would otherwise look
-          // indistinguishable from "the rule stopped applying." Retraction
-          // must stay forward-only (master spec §7.3, invariant 4): only an
-          // instance whose period hasn't ended yet can be retracted.
+          // periodKeys only spans asOf's calendar year — an instance outside
+          // it (a past year's arrears, or a later year's left behind by the
+          // old rolling horizon) would otherwise look indistinguishable from
+          // "the rule stopped applying." Retraction must stay forward-only
+          // (master spec §7.3, invariant 4) and within the window: only an
+          // instance of this year whose period hasn't ended yet can be
+          // retracted.
           if (
             instance.status === 'PENDING' &&
             instance.periodEnd >= input.asOf &&
+            instance.periodStart <= yearEnd &&
             !periodKeys.has(isoKey(instance.periodStart))
           ) {
             toRetract.push({
@@ -273,10 +278,6 @@ function toSubject(kind: ClientKind, profile: FiscalProfile): ObligationSubject 
 
 function isoKey(date: Date): string {
   return date.toISOString().slice(0, 10)
-}
-
-function addMonths(date: Date, months: number): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate()))
 }
 
 function withinValidity(entry: CatalogEntry, asOf: Date): boolean {

@@ -547,21 +547,29 @@ always a parameter. This is what makes the engine genuinely testable.
 ### 7.3 Generator
 
 ```ts
-generate({ asOf, horizonMonths: 12 })
+generate({ asOf })
 ```
 
 For each active client, it combines the fiscal profile with the catalog,
-produces periods up to the horizon and upserts instances. Four invariants:
+produces every period of `asOf`'s calendar year (1 January to 31 December)
+and upserts instances. The year is the period's, not the deadline's: December's
+VAT return and the year's Modelo 22 belong to that year even though they fall
+due in the next. On 1 January the daily cron moves on to the new year by
+itself; no lookahead is needed, since no deadline falls before 1 January of its
+own period's year. Four invariants:
 
 1. **Idempotent.** Ten runs produce one result, enforced by the unique
    constraint.
 2. **Never touches your work.** Instances with a status other than `PENDING` are
    left alone even if the rule changes.
-3. **Never rewrites the past.** Only creates instances with
-   `periodEnd >= asOf - 3 months`, so a newly onboarded client with arrears is
-   captured without flooding the database with a decade of fiction.
+3. **Never rewrites the past.** Only creates instances for the current
+   calendar year. Its already-ended periods are created as `PENDING` (a client
+   onboarded in October gets January to September as overdue, for the operator
+   to mark done or waived); earlier years are never generated.
 4. **Retracts forward only.** If a client stops having employees, future
-   `PENDING` payroll instances disappear; past and already-handled ones remain.
+   `PENDING` payroll instances of the current year disappear; past and
+   already-handled ones remain, and so do a later year's, which 1 January
+   re-evaluates.
 
 It runs on a daily cron inside the backend and on demand, including
 automatically after a fiscal profile is saved, with a preview of the changes
