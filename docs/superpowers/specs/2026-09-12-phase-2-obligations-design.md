@@ -272,7 +272,8 @@ initial 14 rules uses them. Add a sibling to `tax.ts` when a rule needs one
   loses a condition → future `PENDING` instances for that rule disappear,
   past ones don't), never-rewrites-the-past (a client onboarded today with
   three years of theoretical arrears gets only the last 3 months, per master
-  spec 7.3's third invariant), and the dry-run/apply pair returning the same
+  spec 7.3's third invariant — since superseded by the calendar-year window,
+  see master spec 7.3), and the dry-run/apply pair returning the same
   diff dry-run computed.
 - **API:** integration tests for the manual-adjustment endpoints (waived
   requires a reason; ad-hoc creation upserts the `CUSTOM` definition
