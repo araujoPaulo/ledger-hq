@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ErrorMessage } from '../shell/ErrorMessage'
-import { Button, Card, DataList, Money } from '../ui'
+import { Button, Card, DataList, Input, Money } from '../ui'
 import { formatDate } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
 import { getPeriodSummary } from './api'
@@ -65,27 +65,21 @@ export function PeriodSummaryReport() {
     <section className="flex flex-col gap-4">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <h2 className="text-lg font-semibold">{t('periodSummary.title')}</h2>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-sm text-subtle">
-            {t('periodSummary.from')}
-            <input
-              type="date"
-              value={window.from}
-              max={window.to}
-              onChange={(event) => setWindow((current) => ({ ...current, from: event.target.value }))}
-              className="rounded-control border border-line bg-ground px-2 py-1 text-ink"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-subtle">
-            {t('periodSummary.to')}
-            <input
-              type="date"
-              value={window.to}
-              min={window.from}
-              onChange={(event) => setWindow((current) => ({ ...current, to: event.target.value }))}
-              className="rounded-control border border-line bg-ground px-2 py-1 text-ink"
-            />
-          </label>
+        <div className="flex flex-wrap items-end gap-4">
+          <Input
+            type="date"
+            label={t('periodSummary.from')}
+            value={window.from}
+            max={window.to}
+            onChange={(event) => setWindow((current) => ({ ...current, from: event.target.value }))}
+          />
+          <Input
+            type="date"
+            label={t('periodSummary.to')}
+            value={window.to}
+            min={window.from}
+            onChange={(event) => setWindow((current) => ({ ...current, to: event.target.value }))}
+          />
           {summary.data !== undefined && (
             <Button variant="secondary" onClick={download}>
               {t('download')}
