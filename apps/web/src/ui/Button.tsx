@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef } from 'react'
 import { cva } from 'class-variance-authority'
 import type { VariantProps } from 'class-variance-authority'
+import { Slot } from '@radix-ui/react-slot'
 import { Loader2 } from 'lucide-react'
 
 const button = cva(
@@ -25,9 +26,8 @@ const button = cva(
   },
 )
 
-type ButtonBaseProps = ComponentPropsWithoutRef<'button'> & {
+type ButtonOwnProps = Omit<ComponentPropsWithoutRef<'button'>, 'type' | 'disabled'> & {
   variant?: NonNullable<VariantProps<typeof button>['variant']>
-  isLoading?: boolean
 }
 
 /**
@@ -35,12 +35,29 @@ type ButtonBaseProps = ComponentPropsWithoutRef<'button'> & {
  * button has no text for a screen reader to fall back on, and the type is the
  * only thing that catches the omission before it ships.
  */
-type ButtonProps = ButtonBaseProps &
-  ({ size?: 'sm' | 'md' } | { size: 'icon'; 'aria-label': string })
+type SizeProps = { size?: 'sm' | 'md' } | { size: 'icon'; 'aria-label': string }
+
+/**
+ * `asChild` renders the single child — a router `Link` — with the button's
+ * classes instead of a `<button>`. An anchor has no `type`, a link does not
+ * load, and a link that cannot be followed should not be rendered at all, so
+ * the type forbids all three in that mode.
+ */
+type ModeProps =
+  | {
+      asChild?: false | undefined
+      type?: 'button' | 'submit' | 'reset' | undefined
+      disabled?: boolean | undefined
+      isLoading?: boolean | undefined
+    }
+  | { asChild: true; type?: never; disabled?: never; isLoading?: never }
+
+type ButtonProps = ButtonOwnProps & SizeProps & ModeProps
 
 export function Button({
   variant,
   size,
+  asChild = false,
   isLoading = false,
   disabled,
   className,
@@ -48,13 +65,23 @@ export function Button({
   type = 'button',
   ...rest
 }: ButtonProps) {
+  const classes = `${button({ variant, size })}${className === undefined ? '' : ` ${className}`}`
+
+  if (asChild) {
+    return (
+      <Slot {...rest} className={classes}>
+        {children}
+      </Slot>
+    )
+  }
+
   return (
     <button
       {...rest}
       type={type}
       disabled={disabled === true || isLoading}
       aria-busy={isLoading || undefined}
-      className={`${button({ variant, size })}${className === undefined ? '' : ` ${className}`}`}
+      className={classes}
     >
       {isLoading && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}
       {children}

@@ -41,4 +41,30 @@ describe('Button', () => {
     )
     expect(screen.getByTestId('submit')).toHaveAttribute('type', 'submit')
   })
+
+  // Spec §5.6: a router Link that looks like a button, without nesting a
+  // <button> inside an <a> (invalid, and two tab stops).
+  it('renders its child link with the button classes under asChild', () => {
+    render(
+      <Button asChild variant="primary">
+        <a href="/clients/new">Criar</a>
+      </Button>,
+    )
+
+    const link = screen.getByRole('link', { name: 'Criar' })
+    expect(link).toHaveAttribute('href', '/clients/new')
+    expect(link).toHaveClass('bg-accent-600')
+    expect(link).not.toHaveAttribute('type')
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('will not compile asChild with a type, a loading state or disabled', () => {
+    // @ts-expect-error type="button" on an anchor is invalid
+    render(<Button asChild type="button"><a href="/">Um</a></Button>)
+    // @ts-expect-error a link does not load
+    render(<Button asChild isLoading><a href="/">Dois</a></Button>)
+    // @ts-expect-error a link that cannot be followed should not be rendered
+    render(<Button asChild disabled><a href="/">Três</a></Button>)
+    expect(screen.getAllByRole('link')).toHaveLength(3)
+  })
 })
