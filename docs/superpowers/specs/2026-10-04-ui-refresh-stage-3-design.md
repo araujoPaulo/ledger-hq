@@ -1,7 +1,14 @@
 # UI refresh, Stage 3 — design specification
 
 **Date:** 2026-10-04
-**Status:** proposed
+**Status:** approved
+**Revised:** 2026-10-11 — folds in what writing the implementation plan
+found: the `pt-PT` register and vocabulary (§9), the tab search param is
+optional (§6.2), Stage 2's tone map is `KIND_TONE` (§6.3), `parseAmount`
+validates grouping and accepts a pasted `€` (§5.5), `formatAmount` and
+the `Euro` adornment (§5.5), `Callout` carries a `role` (§5.4), the
+dialog's focus order and footer gap (§5.2), the toast region's label
+(§5.3, §9), and Edit on an obligation row stays actionable-only (§7.2.1).
 **Parent:** [UI refresh design](./2026-09-19-ui-refresh-design.md) ·
 [roadmap](../../design/roadmap.md) ·
 [Stage 1](./2026-09-24-ui-refresh-stage-1-design.md) ·
@@ -158,9 +165,12 @@ Dialog.Close      // asChild-friendly
   name and description; making `title` a required string prop means it
   cannot be forgotten.
 - A close icon button (`X`, `aria-label` from `common:actions.close`)
-  sits top-right.
-- `Footer`: `flex justify-end gap-3 pt-2`; on mobile the buttons stretch
-  full width and stack, primary first.
+  sits top-right. It is positioned absolutely but comes **after** the
+  children in the DOM, so Radix's open autofocus lands on the first
+  field, not on Close.
+- `Footer`: `flex justify-end gap-4 pt-2` (the guidelines' control-group
+  gap); on mobile the buttons stretch full width and stack, primary
+  first.
 - **Forms inside a dialog** render their own `<form>` wrapping the
   fields and a `Dialog.Footer` with Cancel (`Dialog.Close asChild` +
   `Button variant="ghost"`) and the submit. The form's former `<h3>`
@@ -178,7 +188,11 @@ toast({ title: string; tone?: 'neutral' | 'success' })   // default 'neutral'
 ```
 
 - One Radix `Toast.Provider` and `Toast.Viewport` in `AppLayout`;
-  `useToast` reads a context that holds a short queue.
+  `useToast` reads a context that holds a short queue, and throws when
+  called outside the provider (a missing provider is a wiring bug, not a
+  silent no-op). The provider passes `label={t('common:notifications')}`
+  so the viewport's landmark name is translated rather than Radix's
+  English default.
 - Viewport bottom-right on desktop; bottom-centre on mobile, lifted
   above the tab bar (`bottom-[calc(5rem+env(safe-area-inset-bottom))]`).
 - `bg-ink text-white rounded-surface shadow-overlay px-4 py-3 text-sm`,
@@ -198,6 +212,7 @@ type CalloutProps = {
   title?: string
   children: ReactNode
   action?: ReactNode
+  role?: 'status' | 'alert'                 // e.g. the gate's offline message keeps role="status"
 }
 ```
 
@@ -218,7 +233,9 @@ type MoneyInputProps = Omit<InputProps, 'type' | 'value' | 'defaultValue' | 'onC
 }
 ```
 
-- An `Input` with `inputMode="decimal"` and a leading `€` adornment.
+- An `Input` with `inputMode="decimal"` and `leadingIcon={Euro}` — the
+  `lucide-react` euro sign, which fits Stage 2's
+  `leadingIcon?: LucideIcon` without widening that API.
 - The text is the component's own state; the parent receives cents on
   every change, or `null` when the text is empty or not a valid amount.
   A form resets it after success by changing its `key`.
@@ -231,18 +248,29 @@ type MoneyInputProps = Omit<InputProps, 'type' | 'value' | 'defaultValue' | 'onC
   ```
 
   - The locale's decimal separator is the only decimal mark (`,` for
-    `pt-PT`, `.` for `en-GB`); the other separator and spaces are
-    grouping and are stripped.
+    `pt-PT`, `.` for `en-GB`). Whitespace (including the narrow no-break
+    space `Intl` groups with) and a leading or trailing `€` are
+    stripped, so an amount copied from the app's own display parses.
+  - The other separator (`.` for `pt-PT`, `,` for `en-GB`) is accepted
+    only as a thousands separator between groups of exactly three
+    digits. `"2.150"` is 215000 in `pt-PT`, but `"2150.50"` is `null`,
+    not 21,505,000 cents: a decimal typed with the wrong mark is
+    refused rather than read as a hundredfold amount.
   - At most two decimal places; no sign; no letters. `"2150"`,
     `"2150,5"`, `"2.150,00"` → 215000, 215050, 215000 in `pt-PT`;
     `"2,150.00"` → 215000 in `en-GB`. `"2.150"` in `en-GB` is three
     decimals and therefore `null`.
   - Returns integer cents computed without floating-point arithmetic
-    (split on the decimal mark, pad, join, `parseInt`).
-- On blur, a valid value is rewritten in the locale's grouped form
-  without the symbol (`2.150,00` / `2,150.00`); an invalid one shows
+    (split on the decimal mark, pad, join, `parseInt`), or `null` past
+    `Number.MAX_SAFE_INTEGER`.
+- `formatAmount(cents, locale)` sits beside it: the locale's own grouped
+  form, two decimals, no symbol.
+- On blur, a valid value is rewritten through `formatAmount` — `2 150,00`
+  in `pt-PT` (Intl groups with a narrow space there, not a dot) and
+  `2,150.00` in `en-GB`; an invalid one shows
   `error={t('common:money.invalid')}` — until then, typing is never
-  interrupted.
+  interrupted. Blur does not call `onValueChange` (the cents have not
+  changed), so it never retracts a payment proposal.
 - Whether an amount must be positive is the form's rule, not the
   component's; the four forms below all require `> 0` and disable submit
   otherwise.
@@ -280,14 +308,16 @@ Each other tab renders the feature's existing section component —
 `/clients/$clientId` gains `validateSearch`:
 
 ```ts
-validateSearch: (search: Record<string, unknown>) => ({
-  tab: isClientTab(search.tab) ? search.tab : 'overview',
-})
+validateSearch: (search: Record<string, unknown>): { tab?: ClientTab } =>
+  isClientTab(search.tab) ? { tab: search.tab } : {}
 ```
 
 `CLIENT_TABS = ['overview', 'obligations', 'billing', 'people',
-'credentials'] as const`. Every `Link` to a client that does not care
-about the tab passes nothing; TanStack fills the default. Stage 2's
+'credentials'] as const`. The key is optional and an absent or unknown
+value means Overview — a required key would make every typed `Link` to a
+client pass `search`. Every `Link` that does not care about the tab
+passes nothing. Choosing Overview navigates with `search: {}`, so the
+default tab keeps a clean URL. Stage 2's
 edit page links back with no tab (lands on Overview).
 `ReceivablesSection`'s client link adds `search={{ tab: 'billing' }}` —
 the one link that knows where its reader wants to go.
@@ -300,7 +330,7 @@ the one link that knows where its reader wants to go.
   the meta line is richer than a description string. It still owns the
   page's only `<h1>`.
 - Meta line, `text-xs text-muted`, wrapping: kind `Badge` (Stage 2's
-  `CLIENT_KIND_TONE`), tax number `tabular-nums`, then legal form and
+  `KIND_TONE`, `clients/kindTone.ts`), tax number `tabular-nums`, then legal form and
   accounting joined by " · ". An archived client adds
   `<Badge tone="neutral">{t('clients:archived')}</Badge>`.
 - Actions, `hidden md:flex`: Archive/Restore and Edit (from Stage 2),
@@ -433,8 +463,9 @@ say.
   new `obligations/statusTone.ts` (`IN_PROGRESS` accent, `DONE`
   success, `WAIVED` neutral).
 - Actions: `secondary sm` "Mark as done" (when actionable), `ghost sm`
-  "Edit" (when `onEdit`), `ghost sm` with `Paperclip` "Receipts" (when
-  `onManageAttachments`). Today's underlined text buttons go away.
+  "Edit" (when actionable and `onEdit` — as today, a done or waived
+  obligation is not adjusted from its row), `ghost sm` with `Paperclip`
+  "Receipts" (when `onManageAttachments`). Today's underlined text buttons go away.
 - On the dashboard, the actions group is just Mark as done, as now.
 
 ### 7.3 Billing — `ClientLedgerSection.tsx`
@@ -516,8 +547,8 @@ and the cards below.
   variant="primary" type="submit" isLoading={pending}` Unlock.
 - Not set up: `Callout tone="neutral" icon={ShieldAlert}` with
   `unlock.notSetUp` and a `Button asChild` link to `/vault/setup`.
-- Unknown offline: `Callout tone="warning" icon={WifiOff}` with
-  `unlock.offlineUnknown`, keeping `role="status"`.
+- Unknown offline: `Callout tone="warning" icon={WifiOff}
+  role="status"` with `unlock.offlineUnknown`.
 - The three error branches and their comments are unchanged.
 
 **Unlocked.** Header: `<h2>` `vault:credentials.title`, then a `ghost
@@ -596,7 +627,8 @@ New keys, both locales:
 | Key | `pt-PT` | `en-GB` |
 |---|---|---|
 | `common:actions.close` | Fechar | Close |
-| `common:money.invalid` | Indique um valor como 2150,00. | Enter an amount such as 2,150.00. |
+| `common:money.invalid` | Indica um valor como 2150,00. | Enter an amount such as 2,150.00. |
+| `common:notifications` | Notificações | Notifications |
 | `clients:actions` | Ações do cliente | Client actions |
 | `clients:details` | Dados | Details |
 | `clients:tabs.overview` | Resumo | Overview |
@@ -609,7 +641,7 @@ New keys, both locales:
 | `clients:profile.empty` | Ainda não há perfil fiscal. Sem ele, o gerador não propõe obrigações. | No fiscal profile yet. Without one, the generator proposes no obligations. |
 | `clients:profile.setUp` | Preencher | Set up |
 | `clients:profile.openActivityCompany` | Uma empresa tem sempre atividade aberta. | A company always has open activity. |
-| `obligations:section.emptyHint` | Preencha o perfil fiscal e o gerador propõe as obrigações deste cliente. | Fill in the fiscal profile and the generator proposes this client's obligations. |
+| `obligations:section.emptyHint` | Preenche o perfil fiscal e o gerador propõe as obrigações deste cliente. | Fill in the fiscal profile and the generator proposes this client's obligations. |
 | `obligations:row.overridden` | Data alterada manualmente | Date changed by hand |
 | `obligations:attachments.confirmDeleteAction` | Apagar definitivamente | Delete for good |
 | `billing:ledger.emptyHint` | As avenças e cobranças aparecem aqui quando são emitidas. | Fees and charges appear here once they are issued. |
@@ -619,9 +651,9 @@ New keys, both locales:
 | `billing:retainerPlan.none` | Sem avença em vigor. | No retainer plan in force. |
 | `billing:ageing.title` | Antiguidade | Ageing |
 | `billing:ageing.oldest` | Cobrança por pagar mais antiga vence a {{date}}. | Oldest unpaid charge fell due on {{date}}. |
-| `employments:emptyHint` | Registe quem trabalha para quem, para as obrigações de pessoal. | Record who works for whom, for the payroll obligations. |
-| `vault:unlock.lockedTitle` | O cofre está trancado | This vault is locked |
-| `vault:unlock.lockedHint` | As credenciais são decifradas apenas neste dispositivo. O cofre volta a trancar após {{minutes}} minutos de inatividade. | Credentials are decrypted on this device only. The vault locks again after {{minutes}} minutes of inactivity. |
+| `employments:emptyHint` | Regista quem trabalha para quem, para as obrigações de pessoal. | Record who works for whom, for the payroll obligations. |
+| `vault:unlock.lockedTitle` | O cofre está bloqueado | This vault is locked |
+| `vault:unlock.lockedHint` | As credenciais só são decifradas neste dispositivo. O cofre volta a bloquear após {{minutes}} minutos de inatividade. | Credentials are decrypted on this device only. The vault locks again after {{minutes}} minutes of inactivity. |
 | `vault:credentials.changed` | Alterada a {{date}} | Changed {{date}} |
 | `vault:credentials.copyUsername` | Copiar utilizador | Copy username |
 | `vault:credentials.usernameCopied` | Utilizador copiado. | Username copied. |
@@ -629,9 +661,15 @@ New keys, both locales:
 | `vault:credentials.clipboardClears` | Limpa ao fim de 30 s | Clears after 30 s |
 | `vault:credentials.secondsLeft` | {{seconds}} s restantes | {{seconds}} s left |
 
+`pt-PT` copy follows the bundle: *tu*, never the formal register, and
+*bloquear/desbloquear* for the vault (the bundle's "Bloquear cofre",
+"Desbloquear"), never *trancar*.
+
 Copy changes, both locales: `billing:retainerPlan.amountCents.label`,
 `newAmountCents.label`, `payment.amountCents.label` and
-`adHocCharge.amountCents.label` drop "(cents)"/"(cêntimos)". Keys
+`adHocCharge.amountCents.label` drop "(cents)"/"(cêntimos)" — "Valor
+mensal" / "Monthly amount", "Novo valor" / "New amount", "Valor" /
+"Amount", "Valor" / "Amount". Keys
 removed with their last reference: `obligations:attachments.confirmDelete`,
 `obligations:attachments.close` (the dialog's close replaces it).
 Run `i18n:check`.
@@ -662,9 +700,10 @@ Added to the checklist:
 **New:**
 
 - `i18n/format.test.ts` — `parseAmount` for both locales: integers,
-  one and two decimals, grouped, too many decimals, letters, signs,
-  empty, whitespace; and a round trip with `formatCurrency` for a
-  spread of amounts.
+  one and two decimals, grouped, a misplaced grouping separator, too
+  many decimals, letters, signs, empty, whitespace; and a round trip
+  with `formatCurrency` and with `formatAmount` for a spread of
+  amounts.
 - `ui/MoneyInput.test.tsx` — emits cents while typing, `null` for
   invalid; error only after blur; reformats on blur; `defaultCents`
   pre-fills in the active locale.

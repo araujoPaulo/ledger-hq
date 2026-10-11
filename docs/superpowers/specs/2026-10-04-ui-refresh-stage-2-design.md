@@ -1,7 +1,13 @@
 # UI refresh, Stage 2 — design specification
 
 **Date:** 2026-10-04
-**Status:** proposed
+**Status:** approved
+**Revised:** 2026-10-11 — folds in what writing the implementation plan
+found: the `pt-PT` register (§2.4, §8), `FieldProps` admitting
+`undefined` (§5.1), the `ref` and `className` contract (§5.2), the
+edit diff's baseline (§6.2), the form's `noValidate` (§6.2), the
+edit page's skeleton file (§7) and the e2e specs the new submit label
+touches (§10).
 **Parent:** [UI refresh design](./2026-09-19-ui-refresh-design.md) ·
 [roadmap](../../design/roadmap.md) ·
 [Stage 1](./2026-09-24-ui-refresh-stage-1-design.md) ·
@@ -63,6 +69,10 @@ from the roadmap, §2 says so and why.
    (`docs/superpowers/plans/2026-09-29-phase-4b-search-and-reporting.md`,
    Task 5). Leaving them would make Stage 2 finish with two unstyled
    inputs in the shell.
+4. **`pt-PT` copy uses *tu*, as the bundle does.** Every existing
+   `clients` string is informal ("Indica um nome válido.", "Escolhe uma
+   forma jurídica válida."). The new strings follow it; §8 is written
+   that way.
 
 ## 3. Visual reference
 
@@ -120,11 +130,14 @@ through it so that label, hint and error behave identically everywhere.
 ```ts
 type FieldProps = {
   label: string
-  hideLabel?: boolean   // visually hidden, still the accessible name
-  hint?: string
-  error?: string
+  hideLabel?: boolean | undefined   // visually hidden, still the accessible name
+  hint?: string | undefined
+  error?: string | undefined
 }
 ```
+
+Optional members admit `undefined` explicitly, so a caller under
+`exactOptionalPropertyTypes` can pass `error={errors.get('name')}`.
 
 - One `useId()` per field; the control gets `id`, the label `htmlFor`.
 - `aria-describedby` lists the hint's id and the error's id, in that
@@ -143,10 +156,19 @@ type FieldProps = {
 ### 5.2 `Input`
 
 ```ts
-type InputProps = ComponentPropsWithoutRef<'input'> & FieldProps & {
-  leadingIcon?: LucideIcon
+type InputProps = ComponentProps<'input'> & FieldProps & {
+  leadingIcon?: LucideIcon | undefined
 }
 ```
+
+- `className` and `ref` land on the `<input>`, never on a wrapper
+  (React 19: `ref` is an ordinary prop, typed through
+  `ComponentProps<'input'>`). `InputProps` is exported — Stage 3's
+  `MoneyInput` derives from it. The same holds for `Textarea`, `Select`
+  and `Checkbox` on their own elements.
+- Tailwind does not resolve two utilities for one property by their
+  order in the class string, so a control never emits two, and a caller
+  overriding the 40px height uses the important modifier (`h-9!`).
 
 - 40px tall (`h-10`), `px-3`, `text-sm`, `bg-surface`,
   `border-line-strong`, `rounded-surface`. Focus:
@@ -162,7 +184,7 @@ type InputProps = ComponentPropsWithoutRef<'input'> & FieldProps & {
 ### 5.3 `Textarea`
 
 ```ts
-type TextareaProps = ComponentPropsWithoutRef<'textarea'> & FieldProps
+type TextareaProps = ComponentProps<'textarea'> & FieldProps
 ```
 
 The `Input` treatment, `min-h-24`, `resize-y`, `py-2.5`. Weight 400 —
@@ -171,9 +193,10 @@ it holds prose (Stage 1's rule for the 400 weight).
 ### 5.4 `Select`
 
 ```ts
-type SelectProps = ComponentPropsWithoutRef<'select'> & FieldProps & {
-  layout?: 'stacked' | 'inline'   // default 'stacked'
-}
+type SelectProps = ComponentProps<'select'> & Pick<FieldProps, 'label' | 'hideLabel'> & (
+  | { layout?: 'stacked'; hint?: string | undefined; error?: string | undefined }   // default
+  | { layout: 'inline'; hint?: never; error?: never }
+)
 ```
 
 - A native `<select>` with `appearance-none`, the `Input` box, and a
@@ -189,10 +212,10 @@ type SelectProps = ComponentPropsWithoutRef<'select'> & FieldProps & {
 ### 5.5 `Checkbox`
 
 ```ts
-type CheckboxProps = Omit<ComponentPropsWithoutRef<'input'>, 'type'> & {
+type CheckboxProps = Omit<ComponentProps<'input'>, 'type'> & {
   label: string
-  description?: string
-  boxed?: boolean
+  description?: string | undefined
+  boxed?: boolean | undefined
 }
 ```
 
@@ -339,13 +362,16 @@ The pages own their mutation and navigation; the form owns state,
   hint tells the reader where it went.
 - The form-level `common.validation_failed` alert and `ErrorMessage`
   stay, above the footer.
+- The form sets `noValidate`: the field errors are its one validation
+  voice, and the browser's bubble on `type="email"` would pre-empt them.
 
 **Edit mode specifics:**
 
 - `ClientEditPage` reads the client through the existing
   `['client', clientId]` query (the detail page's key, so arriving from
   the detail page is instant). While pending it renders a form-shaped
-  skeleton; on error, `ErrorMessage`.
+  skeleton (`ClientFormSkeleton.tsx`); on error, `ErrorMessage` — a
+  missing client reads "not found", never an empty form.
 - **The kind is read-only.** `PATCH` refuses a kind change with
   `clients.kind_mismatch`. The kind renders as a disabled `Select`
   with `hint={t('clients:form.kind.immutable')}`. Disabled is right
@@ -365,7 +391,11 @@ The pages own their mutation and navigation; the form owns state,
   Recorded as a known limitation; clearing needs a contract change
   (accepting `null`) that is out of scope.
 - What is sent: the candidate built by today's `toCandidate`, minus every
-  field equal to its `initial` value, plus `kind`. Validation runs on the
+  field equal to its `initial` value, plus `kind`. `initial` means the
+  client **as loaded when the form opened**: a background refetch while
+  the form is open must not change what counts as changed, or a field
+  the user never touched would be sent back stale over a fresh value.
+  Saving with nothing changed sends `{ kind }` alone and succeeds. Validation runs on the
   full candidate through `createClientSchema` — the same rules as create
   — before the diff is taken.
 - On success: invalidate `['client', clientId]` and `['clients']`, then
@@ -431,6 +461,7 @@ apps/web/src/
     ClientForm.tsx         extracted form (new)
     ClientFormPage.tsx     create page, now thin
     ClientEditPage.tsx     edit page (new)
+    ClientFormSkeleton.tsx the edit page's pending state (new)
     ClientDetailPage.tsx   header buttons only
   search/SearchBox.tsx     adopts Input
   reporting/PeriodSummaryReport.tsx   adopts Input
@@ -445,13 +476,13 @@ apps/web/src/
 | `clients:count_one` | {{count}} cliente | {{count}} client |
 | `clients:count_other` | {{count}} clientes | {{count}} clients |
 | `clients:archived` | Arquivado | Archived |
-| `clients:emptyHint` | Crie o primeiro cliente para começar a acompanhar prazos e avenças. | Create the first client to start tracking deadlines and fees. |
+| `clients:emptyHint` | Cria o primeiro cliente para começares a acompanhar prazos e avenças. | Create the first client to start tracking deadlines and fees. |
 | `clients:noMatches` | Nenhum cliente corresponde aos filtros. | No clients match these filters. |
-| `clients:noMatchesHint` | Tente outro nome, o NIF, ou retire o filtro de tipo. | Try another name, the tax number, or clear the kind filter. |
+| `clients:noMatchesHint` | Tenta outro nome, o NIF, ou retira o filtro de tipo. | Try another name, the tax number, or clear the kind filter. |
 | `clients:form.section.identification` | Identificação | Identification |
 | `clients:form.section.contact` | Contacto | Contact |
 | `clients:form.kind.immutable` | O tipo de cliente não pode ser alterado depois de criado. | A client's kind cannot change after it is created. |
-| `clients:form.cannotClear` | Este campo ainda não pode ficar vazio. Indique um novo valor ou mantenha o atual. | This field can't be emptied yet. Enter a new value or keep the current one. |
+| `clients:form.cannotClear` | Este campo ainda não pode ficar vazio. Indica um novo valor ou mantém o atual. | This field can't be emptied yet. Enter a new value or keep the current one. |
 | `clients:form.profileLater` | O perfil fiscal preenche-se depois de criar o cliente. | The fiscal profile is filled in after the client is created. |
 
 `clients:empty` changes copy in both locales from "No clients yet." to
@@ -511,7 +542,11 @@ carried into the guidelines:
   — query by role and label already; they should pass unchanged, and
   any change is a semantic regression to look at, not to paper over.
 
-**End-to-end:** `e2e/setup-and-clients.spec.ts` gains an edit journey —
+**End-to-end:** the create form's submit now reads "Criar", and an
+empty list has two Create links, so every spec that registers a client
+through the UI (`setup-and-clients`, `obligations`, `billing`,
+`search-and-reporting`, `vault-offline`) targets `/^criar$/i`, the
+first link. `e2e/setup-and-clients.spec.ts` gains an edit journey —
 create a client, open it, Edit, change the phone, save, see the new
 phone on the detail page. At 390×844, the client list's rows show the
 tax number under the name.
