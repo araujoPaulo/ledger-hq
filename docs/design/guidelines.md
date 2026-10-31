@@ -77,8 +77,10 @@ Map the domain value to a tone in the feature's own folder
 (`obligations/urgencyTone.ts`, `billing/ageingTone.ts`), never inside
 `ui/`.
 
-**Status about the app** — a `Badge` with `shape="pill"`. Only the
-connection indicator, so far.
+**Status about the app** — a `Badge` with `shape="pill"`. The connection
+indicator and the Vault page's lock state (`Desbloqueado · bloqueia após 5
+min` / `Bloqueado`, driven by the vault store). A pill is not a live
+region: it states, it does not announce.
 
 **A container** — a `Card`. `padding="none"` when its children own their
 own padding, which is what a full-width row separator needs. Do not wrap
@@ -194,7 +196,22 @@ validates only on the server may keep the browser's `required` and
 `type="url"` checks.
 `noValidate` is for forms whose own checks cover every constraint; a form may leave constraints it does not check itself (required, min/max) to the browser.
 
-## 4. Accessibility checklist
+## 4. Secrets on screen
+
+- **Never render a password.** Show a mask plus a Copy button.
+- **A copied secret clears after 30 seconds**, through `copyAndClear`
+  (`vault/clipboard.ts`) — passwords and the vault recovery code alike —
+  and the screen says so where it happens, in the toast or beside the
+  button.
+- **`copyAndClear` rejects when it could not copy** (no clipboard API on
+  plain HTTP, or a denied write). Catch it and say nothing: a "copied"
+  toast for a copy that did not happen is worse than no toast.
+- **Recovery material is displayed for transcription**: one monospace
+  cell per group, in a labelled list, selectable as text. Copy is a
+  convenience, never the only way out.
+- **Usernames are not secrets** — copy them plainly, without the clear.
+
+## 5. Accessibility checklist
 
 Run before opening a PR.
 
@@ -235,7 +252,7 @@ Run before opening a PR.
 18. An amount's format error is announced like any field error, and only
     once the field is left.
 
-## 5. i18n
+## 6. i18n
 
 No hardcoded user-visible string, and that includes every `aria-label`.
 Every key exists in both `pt-PT` and `en-GB`;
@@ -254,7 +271,7 @@ Test files are exempt from `i18next/no-literal-string`
 (`packages/config/eslint.config.mjs`): a component test has to render
 literal children to have anything to assert on, and none of it ships.
 
-## 6. The rule about `ui/`
+## 7. The rule about `ui/`
 
 Nothing in `apps/web/src/ui/` imports from a feature folder —
 `obligations/`, `billing/`, `clients/`, `vault/`. It may import from

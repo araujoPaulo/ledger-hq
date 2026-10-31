@@ -53,7 +53,10 @@ test('sets up the vault, adds a credential, and reads it back with the network d
   await page.getByRole('link', { name: /configurar agora/i }).click()
   await page.getByLabel(/confirma a tua palavra-passe/i).fill(MASTER_PASSWORD)
   await page.getByRole('button', { name: /continuar/i }).click()
-  await expect(page.getByText(/-.*-.*-.*-.*-/)).toBeVisible() // the recovery code, dash-grouped
+  // The recovery code, one cell per five-character group.
+  const recoveryCode = page.getByRole('list', { name: /código de recuperação/i })
+  await expect(recoveryCode).toBeVisible()
+  await expect(recoveryCode.getByRole('listitem')).toHaveCount(6)
   await page.getByLabel(/anotei o código/i).check()
   await page.getByRole('button', { name: /continuar/i }).click()
 
@@ -64,9 +67,23 @@ test('sets up the vault, adds a credential, and reads it back with the network d
   // create attempt 409s on the name and the list keeps showing the one
   // already there; the credential step below still exercises a real,
   // attached platform either way.
-  await page.getByRole('link', { name: /cofre/i }).click()
-  await page.getByLabel(/^nome$/i).fill('Portal das Finanças')
-  await page.getByRole('button', { name: /criar/i }).click()
+  await page.getByRole('navigation').getByRole('link', { name: /cofre/i }).click()
+  await page.getByRole('button', { name: /nova plataforma/i }).click()
+  const platformDialog = page.getByRole('dialog', { name: /nova plataforma/i })
+  await platformDialog.getByLabel(/^nome$/i).fill('Portal das Finanças')
+  const createResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/api/v1/platforms' && response.request().method() === 'POST',
+  )
+  await platformDialog.getByRole('button', { name: /^criar$/i }).click()
+  // The seeded row makes this create 409 on the name, which keeps the dialog
+  // open with the error; close it. Branching on the response rather than on
+  // the dialog's visibility: the dialog is also visible while a successful
+  // create is still refetching, and a database without the seed must pass too.
+  if ((await createResponse).status() === 409) {
+    await expect(platformDialog.getByRole('alert')).toBeVisible()
+    await platformDialog.getByRole('button', { name: /cancelar/i }).click()
+  }
+  await expect(platformDialog).toBeHidden()
   await expect(page.getByText('Portal das Finanças')).toBeVisible()
 
   // Add a credential on the client's page. The vault is already unlocked

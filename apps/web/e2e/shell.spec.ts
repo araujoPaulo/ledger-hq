@@ -63,4 +63,13 @@ test.describe('app shell', () => {
     await vaultTab.click()
     await expect(page).toHaveURL(/\/vault\/platforms$/)
   })
+
+  test('opens the new platform dialog on a phone viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await signIn(page)
+
+    await page.getByRole('link', { name: /cofre/i }).click()
+    await page.getByRole('button', { name: /nova plataforma/i }).click()
+    await expect(page.getByRole('dialog', { name: /nova plataforma/i })).toBeVisible()
+  })
 })
