@@ -32,4 +32,33 @@ describe('DataList', () => {
     const total = screen.getByText('Total')
     expect(total.className).toContain('font-semibold')
   })
+
+  // Spec §5.6: genuine name/value descriptions read as a description list.
+  it('renders term and definition pairs as a dl', () => {
+    const { container } = render(
+      <DataList as="dl">
+        <DataList.Row label="NIF" value="501442600" />
+        <DataList.Row label="Contabilidade" value="Organizada" />
+      </DataList>,
+    )
+
+    const list = container.querySelector('dl')
+    expect(list).not.toBeNull()
+    expect(list?.querySelectorAll(':scope > div > dt')).toHaveLength(2)
+    expect(list?.querySelectorAll(':scope > div > dd')).toHaveLength(2)
+    expect(screen.getByText('NIF').tagName).toBe('DT')
+    expect(screen.getByText('NIF')).toHaveClass('text-muted')
+    expect(screen.getByText('501442600').tagName).toBe('DD')
+  })
+
+  it('stays a plain div list by default', () => {
+    const { container } = render(
+      <DataList>
+        <DataList.Row label="Uma linha" value="1,00 €" />
+      </DataList>,
+    )
+
+    expect(container.querySelector('dl')).toBeNull()
+    expect(container.querySelector('dt')).toBeNull()
+  })
 })

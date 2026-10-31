@@ -1,6 +1,8 @@
 export { Badge } from './Badge'
 export type { BadgeTone } from './Badge'
 export { Button } from './Button'
+export { Callout } from './Callout'
+export type { CalloutProps } from './Callout'
 export { Card } from './Card'
 export { Checkbox } from './Checkbox'
 export type { CheckboxProps } from './Checkbox'
