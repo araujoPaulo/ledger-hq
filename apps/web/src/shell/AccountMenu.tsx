@@ -2,18 +2,17 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Languages, Lock, LogOut } from 'lucide-react'
 import { DropdownMenu } from '../ui'
-import { SUPPORTED_LOCALES, setLocale } from '../i18n'
-import type { SupportedLocale } from '../i18n'
 import { signOut } from '../auth/credentials'
 import { SESSION_QUERY_KEY, useSession } from '../auth/session'
 import { lockVault, useVaultState } from '../vault/vault-session'
+import { LanguageRadioItems } from './LanguageMenu'
 
 function initialsOf(email: string): string {
   return email.slice(0, 2).toUpperCase()
 }
 
 export function AccountMenu() {
-  const { t, i18n } = useTranslation('common')
+  const { t } = useTranslation('common')
   const queryClient = useQueryClient()
   const session = useSession()
   const vaultState = useVaultState()
@@ -53,16 +52,7 @@ export function AccountMenu() {
 
       <DropdownMenu.Content>
         <DropdownMenu.Label>{t('language.label')}</DropdownMenu.Label>
-        <DropdownMenu.RadioGroup
-          value={i18n.language}
-          onValueChange={(value) => void setLocale(value as SupportedLocale)}
-        >
-          {SUPPORTED_LOCALES.map((locale) => (
-            <DropdownMenu.RadioItem key={locale} value={locale}>
-              {t(`language.${locale}`)}
-            </DropdownMenu.RadioItem>
-          ))}
-        </DropdownMenu.RadioGroup>
+        <LanguageRadioItems />
 
         {signedIn && <DropdownMenu.Separator />}
 
