@@ -180,4 +180,55 @@ describe('ObligationAttachments', () => {
 
     expect(await screen.findByText(/não está no servidor/i)).toBeVisible()
   })
+
+  it('keeps the inline confirmation and shows the server message when a delete fails', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+    deleteAttachmentMock.mockRejectedValue(new ApiError('common.internal_error', {}, 500))
+
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    await userEvent.click(screen.getByRole('button', { name: /apagar definitivamente/i }))
+
+    expect(await screen.findByText(/ocorreu um erro no servidor/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: /apagar definitivamente/i })).toBeInTheDocument()
+  })
+
+  it('moves focus to Cancel when the confirmation appears, and back to Delete on Cancel', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    expect(screen.getByRole('button', { name: /^cancelar$/i })).toHaveFocus()
+
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }))
+    expect(screen.getByRole('button', { name: /eliminar declaração periódica\.pdf/i })).toHaveFocus()
+  })
+
+  it('moves focus to the upload control after a successful delete', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+    deleteAttachmentMock.mockResolvedValue(undefined)
+
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    await userEvent.click(screen.getByRole('button', { name: /apagar definitivamente/i }))
+
+    await waitFor(() => expect(screen.getByLabelText(/anexar ficheiro/i)).toHaveFocus())
+  })
+
+  it('clears a stale delete error when the confirmation is cancelled', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+    deleteAttachmentMock.mockRejectedValue(new ApiError('common.internal_error', {}, 500))
+
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    await userEvent.click(screen.getByRole('button', { name: /apagar definitivamente/i }))
+    await screen.findByText(/ocorreu um erro no servidor/i)
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }))
+
+    expect(screen.queryByText(/ocorreu um erro no servidor/i)).not.toBeInTheDocument()
+  })
 })

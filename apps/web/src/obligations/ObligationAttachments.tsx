@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2, Paperclip } from 'lucide-react'
@@ -28,6 +28,27 @@ export function ObligationAttachments({ obligation }: Props) {
   // The one irreversible action here, with no undo behind it: Delete asks
   // again in place rather than through window.confirm or a second dialog.
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  // The Delete button unmounts when the question appears and Cancel unmounts
+  // when it is taken back, so focus is moved by hand after each swap.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [pendingFocus, setPendingFocus] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (pendingFocus === null) return
+    rootRef.current?.querySelector<HTMLElement>(`[data-focus-id="${pendingFocus}"]`)?.focus()
+    setPendingFocus(null)
+  }, [pendingFocus])
+
+  const askToDelete = (id: string) => {
+    remove.reset()
+    setConfirmingId(id)
+    setPendingFocus(`cancel-${id}`)
+  }
+  const cancelDelete = (id: string) => {
+    remove.reset()
+    setConfirmingId(null)
+    setPendingFocus(`delete-${id}`)
+  }
 
   const queryKey = ['obligation-attachments', obligation.id]
   const attachments = useQuery({ queryKey, queryFn: () => listAttachments(obligation.id) })
@@ -48,12 +69,14 @@ export function ObligationAttachments({ obligation }: Props) {
     mutationFn: (id: string) => deleteAttachment(obligation.id, id),
     onSuccess: () => {
       setConfirmingId(null)
+      // The row is gone; the upload control is the next thing to do here.
+      inputRef.current?.focus()
       void invalidate()
     },
   })
 
   return (
-    <div className="flex flex-col gap-4">
+    <div ref={rootRef} className="flex flex-col gap-4">
       <ErrorMessage error={attachments.error} />
       <ErrorMessage error={upload.error} />
       <ErrorMessage error={remove.error} />
@@ -82,10 +105,16 @@ export function ObligationAttachments({ obligation }: Props) {
               value={
                 confirmingId === file.id ? (
                   <>
-                    <Button variant="danger" size="sm" isLoading={remove.isPending} onClick={() => remove.mutate(file.id)}>
+                    <Button key="confirm" variant="danger" size="sm" isLoading={remove.isPending} onClick={() => remove.mutate(file.id)}>
                       {t('obligations:attachments.confirmDeleteAction')}
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setConfirmingId(null)}>
+                    <Button
+                      key="cancel"
+                      variant="ghost"
+                      size="sm"
+                      data-focus-id={`cancel-${file.id}`}
+                      onClick={() => cancelDelete(file.id)}
+                    >
                       {t('common:actions.cancel')}
                     </Button>
                   </>
@@ -95,10 +124,12 @@ export function ObligationAttachments({ obligation }: Props) {
                       {formatSize(file.sizeBytes)} · {formatDate(file.uploadedAt.slice(0, 10), locale)}
                     </span>
                     <Button
+                      key="delete"
                       variant="ghost"
                       size="sm"
+                      data-focus-id={`delete-${file.id}`}
                       aria-label={t('obligations:attachments.delete', { filename: file.filename })}
-                      onClick={() => setConfirmingId(file.id)}
+                      onClick={() => askToDelete(file.id)}
                     >
                       {t('common:actions.delete')}
                     </Button>
