@@ -52,6 +52,8 @@
     "newMasterPasswordLabel": "Nova palavra-passe mestra",
     "confirmNewMasterPasswordLabel": "Confirma a nova palavra-passe mestra",
     "backToLogin": "Voltar a entrar",
-    "recoverButton": "Recuperar acesso"
+    "recoverButton": "Recuperar acesso",
+    "recoverIntro": "Usa o código de recuperação que anotaste ao configurar o cofre e escolhe a seguir uma nova palavra-passe mestra.",
+    "recoveryCodeHint": "Seis grupos de letras e números, por exemplo ABCDE-FGHIJ-…"
   }
 }

@@ -52,6 +52,8 @@
     "newMasterPasswordLabel": "New master password",
     "confirmNewMasterPasswordLabel": "Confirm the new master password",
     "backToLogin": "Back to sign in",
-    "recoverButton": "Regain access"
+    "recoverButton": "Regain access",
+    "recoverIntro": "Use the recovery code you wrote down when you set up the vault, then choose a new master password.",
+    "recoveryCodeHint": "Six groups of letters and digits, such as ABCDE-FGHIJ-…"
   }
 }

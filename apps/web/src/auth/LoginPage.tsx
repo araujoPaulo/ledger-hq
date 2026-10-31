@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { MIN_MASTER_PASSWORD_LENGTH } from '@ledger-hq/crypto'
 import { ErrorMessage } from '../shell/ErrorMessage'
+import { Button, Input } from '../ui'
 import { recoverVault } from '../vault/recover'
+import { caretInFormatted, formatRecoveryCode, significantBefore } from '../vault/recoveryCode'
+import { CardHeading } from './CardHeading'
 import { signIn } from './credentials'
 import { SESSION_QUERY_KEY } from './session'
 
@@ -16,6 +19,19 @@ export function LoginPage() {
   const [recoveryCode, setRecoveryCode] = useState('')
   const [newMasterPassword, setNewMasterPassword] = useState('')
   const [confirmNewMasterPassword, setConfirmNewMasterPassword] = useState('')
+
+  // Formatting the code re-groups it, which moves characters across hyphens.
+  // The caret index computed in onChange is applied after React writes the
+  // new value, so the next keystroke lands where the reader is typing.
+  const recoveryCodeRef = useRef<HTMLInputElement>(null)
+  const pendingCaret = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    if (pendingCaret.current === null) return
+    recoveryCodeRef.current?.setSelectionRange(pendingCaret.current, pendingCaret.current)
+    pendingCaret.current = null
+  })
+
+  const tooShort = t('auth.passwordTooShort', { min: MIN_MASTER_PASSWORD_LENGTH })
 
   const passwordTooShort = masterPassword.length > 0 && masterPassword.length < MIN_MASTER_PASSWORD_LENGTH
 
@@ -46,131 +62,121 @@ export function LoginPage() {
   if (mode === 'recover') {
     return (
       <form
-        className="mx-auto flex max-w-sm flex-col gap-4"
+        className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault()
           if (newPasswordTooShort || newPasswordsMismatch) return
           recoverMutation.mutate()
         }}
       >
-        <h1 className="text-lg font-semibold">{t('auth.recoverTitle')}</h1>
+        <CardHeading title={t('auth.recoverTitle')} intro={t('auth.recoverIntro')} />
 
-        <label className="flex flex-col gap-1 text-sm">
-          {t('auth.recoveryCodeLabel')}
-          <input
-            required
-            value={recoveryCode}
-            onChange={(event) => setRecoveryCode(event.target.value)}
-            className="rounded border border-slate-300 px-2 py-1 font-mono"
-          />
-        </label>
+        {/*
+         * No maxLength: it would cut a pasted code with extra spacing before
+         * formatRecoveryCode could normalise it. The formatter caps the code.
+         */}
+        <Input
+          ref={recoveryCodeRef}
+          label={t('auth.recoveryCodeLabel')}
+          hint={t('auth.recoveryCodeHint')}
+          required
+          autoComplete="off"
+          spellCheck={false}
+          autoCapitalize="characters"
+          className="font-mono tracking-wider"
+          value={recoveryCode}
+          onChange={(event) => {
+            const { value, selectionStart } = event.target
+            const formatted = formatRecoveryCode(value)
+            pendingCaret.current = caretInFormatted(formatted, significantBefore(value, selectionStart ?? value.length))
+            setRecoveryCode(formatted)
+          }}
+        />
 
-        <label className="flex flex-col gap-1 text-sm">
-          {t('auth.newMasterPasswordLabel')}
-          <input
-            type="password"
-            autoComplete="new-password"
-            required
-            value={newMasterPassword}
-            onChange={(event) => setNewMasterPassword(event.target.value)}
-            className="rounded border border-slate-300 px-2 py-1"
-          />
-        </label>
+        <Input
+          type="password"
+          autoComplete="new-password"
+          required
+          label={t('auth.newMasterPasswordLabel')}
+          value={newMasterPassword}
+          onChange={(event) => setNewMasterPassword(event.target.value)}
+          error={newPasswordTooShort ? tooShort : undefined}
+        />
 
-        <label className="flex flex-col gap-1 text-sm">
-          {t('auth.confirmNewMasterPasswordLabel')}
-          <input
-            type="password"
-            autoComplete="new-password"
-            required
-            value={confirmNewMasterPassword}
-            onChange={(event) => setConfirmNewMasterPassword(event.target.value)}
-            className="rounded border border-slate-300 px-2 py-1"
-          />
-        </label>
-
-        {newPasswordTooShort && (
-          <p role="alert" className="text-sm text-red-700">
-            {t('auth.passwordTooShort', { min: MIN_MASTER_PASSWORD_LENGTH })}
-          </p>
-        )}
-        {newPasswordsMismatch && (
-          <p role="alert" className="text-sm text-red-700">
-            {t('auth.passwordMismatch')}
-          </p>
-        )}
+        <Input
+          type="password"
+          autoComplete="new-password"
+          required
+          label={t('auth.confirmNewMasterPasswordLabel')}
+          value={confirmNewMasterPassword}
+          onChange={(event) => setConfirmNewMasterPassword(event.target.value)}
+          error={newPasswordsMismatch ? t('auth.passwordMismatch') : undefined}
+        />
 
         <ErrorMessage error={recoverMutation.error} />
 
-        <button
+        <Button
           type="submit"
-          disabled={recoverMutation.isPending || newPasswordTooShort || newPasswordsMismatch}
-          className="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+          variant="primary"
+          className="w-full"
+          isLoading={recoverMutation.isPending}
+          disabled={newPasswordTooShort || newPasswordsMismatch}
         >
           {t('auth.recoverButton')}
-        </button>
+        </Button>
 
-        <button type="button" onClick={() => setMode('login')} className="text-sm underline">
+        <Button variant="ghost" size="sm" className="self-center" onClick={() => setMode('login')}>
           {t('auth.backToLogin')}
-        </button>
+        </Button>
       </form>
     )
   }
 
   return (
     <form
-      className="mx-auto flex max-w-sm flex-col gap-4"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
         if (passwordTooShort) return
         loginMutation.mutate()
       }}
     >
-      <h1 className="text-lg font-semibold">{t('auth.loginTitle')}</h1>
+      <CardHeading title={t('auth.loginTitle')} />
 
-      <label className="flex flex-col gap-1 text-sm">
-        {t('auth.emailLabel')}
-        <input
-          type="email"
-          autoComplete="username"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        />
-      </label>
+      <Input
+        type="email"
+        autoComplete="username"
+        required
+        label={t('auth.emailLabel')}
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+      />
 
-      <label className="flex flex-col gap-1 text-sm">
-        {t('auth.masterPasswordLabel')}
-        <input
-          type="password"
-          autoComplete="current-password"
-          required
-          value={masterPassword}
-          onChange={(event) => setMasterPassword(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        />
-      </label>
-
-      {passwordTooShort && (
-        <p role="alert" className="text-sm text-red-700">
-          {t('auth.passwordTooShort', { min: MIN_MASTER_PASSWORD_LENGTH })}
-        </p>
-      )}
+      <Input
+        type="password"
+        autoComplete="current-password"
+        required
+        label={t('auth.masterPasswordLabel')}
+        value={masterPassword}
+        onChange={(event) => setMasterPassword(event.target.value)}
+        error={passwordTooShort ? tooShort : undefined}
+      />
 
       <ErrorMessage error={loginMutation.error} />
 
-      <button
+      <Button
         type="submit"
-        disabled={loginMutation.isPending || passwordTooShort}
-        className="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+        variant="primary"
+        className="w-full"
+        isLoading={loginMutation.isPending}
+        disabled={passwordTooShort}
       >
         {t('actions.signIn')}
-      </button>
+      </Button>
 
-      <button type="button" onClick={() => setMode('recover')} className="text-sm underline">
+      <Button variant="ghost" size="sm" className="self-center" onClick={() => setMode('recover')}>
         {t('auth.forgotPassword')}
-      </button>
+      </Button>
     </form>
   )
 }
