@@ -110,6 +110,22 @@ describe('ClientLedgerSection', () => {
     expect(description.closest('div')?.className).not.toContain('truncate')
   })
 
+  // V2: at phone width the description takes the whole row and the amount and
+  // actions drop to their own line, instead of squeezing the text to ~110px.
+  it('gives a ledger description the full row width on a phone', async () => {
+    getClientLedgerMock.mockResolvedValue({
+      entries: [{ type: 'CHARGE', date: '2026-01-01', description: 'Monthly retainer 2026-01 long description', amountCents: 9000, runningBalanceCents: 9000, chargeId: 'charge-1', writtenOff: false }],
+      balanceCents: 9000,
+      availableCreditCents: 0,
+    })
+    renderSection()
+
+    const description = await screen.findByText(/monthly retainer 2026-01/i)
+    const label = description.closest('div')?.firstElementChild
+    expect(label).toHaveClass('basis-full', 'sm:basis-0')
+    expect(label?.parentElement).toHaveClass('flex-wrap')
+  })
+
   // Spec §2.5: only "written off" gets a badge — the ledger carries no paid state.
   it('badges a written-off charge and offers no write-off on it', async () => {
     getClientLedgerMock.mockResolvedValue({

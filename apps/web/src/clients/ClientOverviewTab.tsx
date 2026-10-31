@@ -88,7 +88,7 @@ function GlanceTile({
       to="/clients/$clientId"
       params={{ clientId }}
       search={{ tab }}
-      className="flex min-h-[44px] flex-col gap-1.5 rounded-surface border border-line p-4 hover:bg-ground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600"
+      className="flex min-h-[44px] min-w-0 flex-col gap-1.5 rounded-surface border border-line p-4 hover:bg-ground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600"
     >
       <span className="text-sm font-medium text-muted">{label}</span>
       {children}
@@ -111,7 +111,7 @@ function AtAGlance({ clientId }: { clientId: string }) {
   return (
     <Card className="flex flex-col gap-4 self-start">
       <h2 className="text-base font-semibold">{t('glance.title')}</h2>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1">
         <GlanceTile clientId={clientId} tab="obligations" label={t('glance.due')}>
           {obligations.isPending ? (
             <Skeleton width="2.5rem" height="2rem" />

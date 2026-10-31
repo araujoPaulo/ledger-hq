@@ -67,7 +67,7 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
             {ledger.data.entries.map((entry, index) => (
               <DataList.Row
                 key={index}
-                wrapLabel
+                wrap
                 label={
                   <span className="flex min-w-0 flex-col md:flex-row md:items-baseline md:gap-4">
                     <span className="text-xs text-muted tabular-nums md:w-24 md:shrink-0">{formatDate(entry.date, locale)}</span>

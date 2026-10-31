@@ -20,6 +20,14 @@ describe('PageHeader', () => {
     expect(screen.getByRole('button', { name: 'Criar' })).toBeInTheDocument()
   })
 
+  // F1: from sm up the actions must not shrink, or a wide button wraps under
+  // a pill at desktop widths; on a phone the row still wraps.
+  it('lets the actions wrap on a phone but never shrink from sm up', () => {
+    render(<PageHeader title="Resumo" actions={<button type="button">Criar</button>} />)
+    const actions = screen.getByRole('button', { name: 'Criar' }).parentElement
+    expect(actions).toHaveClass('flex-wrap', 'sm:shrink-0')
+  })
+
   it('renders no description element when none is given', () => {
     render(<PageHeader title="Resumo" />)
     expect(screen.queryByRole('paragraph')).not.toBeInTheDocument()

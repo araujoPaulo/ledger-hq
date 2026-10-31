@@ -137,14 +137,18 @@ describe('ClientOverviewTab', () => {
     expect(tile).toHaveAttribute('href', '/clients/1?tab=billing')
   })
 
-  // The glance tiles sit side by side (two columns) in the card; they never stack at lg.
-  it('lays the glance tiles out in two columns at every width', async () => {
+  // V1: a balance like 123 456,78 € at text-2xl is ~160px wide, which a half-width
+  // tile (~100-115px inside its padding) cannot hold on a phone or in the
+  // 320px desktop card. The tiles stack there, and sit side by side only where
+  // the card is full width (sm up to lg), and the tile may shrink below its content.
+  it('stacks the glance tiles where the card is narrow, so a large balance fits', async () => {
     renderTab()
 
     const tile = await screen.findByRole('link', { name: /saldo/i })
     const grid = tile.parentElement
-    expect(grid).toHaveClass('grid-cols-2')
-    expect(grid?.className).not.toContain('lg:grid-cols-1')
+    expect(grid).toHaveClass('grid-cols-1', 'sm:grid-cols-2', 'lg:grid-cols-1')
+    expect(grid?.className).not.toMatch(/(^|\s)grid-cols-2/)
+    expect(tile).toHaveClass('min-w-0')
   })
 
   it('renders the fiscal profile card', async () => {
