@@ -12,7 +12,7 @@ export function AuthSplash() {
   return (
     <AuthFrame busy>
       <AuthMark />
-      <span className="sr-only">{t('loading')}</span>
+      <span role="status" className="sr-only">{t('loading')}</span>
     </AuthFrame>
   )
 }

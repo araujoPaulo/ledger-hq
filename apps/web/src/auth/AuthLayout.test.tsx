@@ -33,7 +33,7 @@ describe('AuthLayout', () => {
     const heading = screen.getByRole('heading', { level: 1, name: 'Entrar' })
     expect(heading).toBeInTheDocument()
     expect(within(screen.getByRole('main')).getByText('Entrar')).toBe(heading)
-    expect(heading.parentElement).toHaveClass('w-full')
+    expect(heading.parentElement).toHaveClass('border', 'bg-surface')
     expect(screen.getByText('Ledger HQ')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Idioma' })).toBeInTheDocument()
   })
@@ -55,7 +55,7 @@ describe('AuthSplash', () => {
     const { container } = renderWithProviders(<AuthSplash />)
 
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull()
-    expect(screen.getByText('A carregar')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('A carregar')
     expect(screen.getByText('Ledger HQ')).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading')).not.toBeInTheDocument()
