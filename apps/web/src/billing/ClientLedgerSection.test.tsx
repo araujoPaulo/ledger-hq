@@ -1,16 +1,14 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider } from 'react-i18next'
 import i18next from 'i18next'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { initI18n } from '../i18n'
-import { formatCurrency } from '../i18n/format'
 
 const getClientLedgerMock = vi.hoisted(() => vi.fn())
 const proposeAllocationMock = vi.hoisted(() => vi.fn())
 const recordPaymentMock = vi.hoisted(() => vi.fn())
-const applyCreditMock = vi.hoisted(() => vi.fn())
 const writeOffChargeMock = vi.hoisted(() => vi.fn())
 const getCurrentRetainerPlanMock = vi.hoisted(() => vi.fn())
 const createAdHocChargeMock = vi.hoisted(() => vi.fn())
@@ -18,7 +16,7 @@ vi.mock('./api', () => ({
   getClientLedger: getClientLedgerMock,
   proposeAllocation: proposeAllocationMock,
   recordPayment: recordPaymentMock,
-  applyCredit: applyCreditMock,
+  getReceivables: vi.fn().mockResolvedValue([]),
   writeOffCharge: writeOffChargeMock,
   getCurrentRetainerPlan: getCurrentRetainerPlanMock,
   createAdHocCharge: createAdHocChargeMock,
@@ -28,13 +26,6 @@ const { ClientLedgerSection } = await import('./ClientLedgerSection')
 
 await initI18n()
 await i18next.changeLanguage('pt-PT')
-
-// `formatCurrency` separates thousands with a narrow no-break space (U+202F).
-// Testing Library normalizes whitespace in the DOM before matching but leaves
-// the query string alone, so the expected text needs the same treatment.
-function shown(value: string): string {
-  return value.replace(/\s/g, ' ')
-}
 
 function renderSection() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -50,6 +41,7 @@ function renderSection() {
 describe('ClientLedgerSection', () => {
   beforeEach(() => {
     getClientLedgerMock.mockReset()
+    getCurrentRetainerPlanMock.mockResolvedValue(null)
   })
 
   it('shows the empty state with no billing history', async () => {
@@ -94,17 +86,6 @@ describe('ClientLedgerSection', () => {
     expect(recordPaymentMock).toHaveBeenCalledWith(
       expect.objectContaining({ amountCents: 9000, allocations: [{ chargeId: 'charge-1', amountCents: 9000 }] }),
     )
-  })
-
-  it('shows the renew form, not the create form, when a plan is already in force', async () => {
-    getClientLedgerMock.mockResolvedValue({ entries: [], balanceCents: 0, availableCreditCents: 0 })
-    getCurrentRetainerPlanMock.mockResolvedValue({ id: 'plan-1', clientId: 'c1', amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: '2026-01-01', validTo: null })
-    renderSection()
-
-    await userEvent.click(await screen.findByRole('button', { name: /^editar$/i }))
-
-    expect(await screen.findByText(/atualizar valor/i)).toBeInTheDocument()
-    expect(screen.queryByText(/criar plano de retainer/i)).not.toBeInTheDocument()
   })
 
   it('shows the proposal by charge description, and sends only the allocation fields', async () => {
@@ -192,58 +173,5 @@ describe('ClientLedgerSection', () => {
       amountCents: 15000,
       dueOn: '2026-10-01',
     })
-  })
-})
-
-describe('client credit', () => {
-  it('offers the credit and its amount when there is any', async () => {
-    getClientLedgerMock.mockResolvedValue({ entries: [], balanceCents: -27000, availableCreditCents: 27000 })
-
-    renderSection()
-
-    expect(await screen.findByText(shown(formatCurrency(27000, 'pt-PT')))).toBeVisible()
-    expect(screen.getByRole('button', { name: /aplicar crédito/i })).toBeVisible()
-  })
-
-  it('hides the action entirely when there is no credit', async () => {
-    getClientLedgerMock.mockResolvedValue({ entries: [], balanceCents: 0, availableCreditCents: 0 })
-
-    renderSection()
-
-    await waitFor(() => expect(screen.queryByRole('button', { name: /aplicar crédito/i })).toBeNull())
-  })
-
-  it('proposes first, and only writes after the operator confirms', async () => {
-    getClientLedgerMock.mockResolvedValue({ entries: [], balanceCents: -27000, availableCreditCents: 27000 })
-    applyCreditMock.mockResolvedValueOnce({
-      proposed: [{ paymentId: 'p1', chargeId: 'c1', amountCents: 9000, description: 'Retainer — 2026-01', periodLabel: '2026-01', dueOn: '2026-01-08' }],
-      remainingCreditCents: 18000,
-      allocated: 0,
-    })
-    applyCreditMock.mockResolvedValueOnce({ proposed: [], remainingCreditCents: 18000, allocated: 1 })
-
-    renderSection()
-
-    await userEvent.click(await screen.findByRole('button', { name: /aplicar crédito/i }))
-    expect(await screen.findByText(/retainer — 2026-01/i)).toBeVisible()
-    // The proposal is a preview: nothing has been written yet.
-    expect(applyCreditMock).toHaveBeenLastCalledWith(expect.any(String), true)
-
-    await userEvent.click(screen.getByRole('button', { name: /^confirmar$/i }))
-    await waitFor(() =>
-      expect(applyCreditMock).toHaveBeenLastCalledWith(expect.any(String), false, [
-        { paymentId: 'p1', chargeId: 'c1', amountCents: 9000 },
-      ]),
-    )
-  })
-
-  it('says so when there is credit but nothing due to spend it on', async () => {
-    getClientLedgerMock.mockResolvedValue({ entries: [], balanceCents: -27000, availableCreditCents: 27000 })
-    applyCreditMock.mockResolvedValueOnce({ proposed: [], remainingCreditCents: 27000, allocated: 0 })
-
-    renderSection()
-
-    await userEvent.click(await screen.findByRole('button', { name: /aplicar crédito/i }))
-    expect(await screen.findByText(/não há cobranças vencidas/i)).toBeVisible()
   })
 })

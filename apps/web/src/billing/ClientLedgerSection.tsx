@@ -4,22 +4,20 @@ import { useTranslation } from 'react-i18next'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { formatCurrency } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
-import { getClientLedger, getCurrentRetainerPlan, writeOffCharge } from './api'
+import { getClientLedger, writeOffCharge } from './api'
 import { AddAdHocChargeForm } from './AddAdHocChargeForm'
-import { ApplyCreditForm } from './ApplyCreditForm'
+import { CreditCard } from './CreditCard'
 import { RecordPaymentForm } from './RecordPaymentForm'
-import { RetainerPlanForm } from './RetainerPlanForm'
+import { RetainerPlanCard } from './RetainerPlanCard'
 
 export function ClientLedgerSection({ clientId }: { clientId: string }) {
   const { t, i18n } = useTranslation(['billing', 'common'])
   const queryClient = useQueryClient()
   const titleId = useId()
-  const [showPlanForm, setShowPlanForm] = useState(false)
   const [writingOffChargeId, setWritingOffChargeId] = useState<string | null>(null)
   const [writeOffReason, setWriteOffReason] = useState('')
 
   const ledger = useQuery({ queryKey: ['client-ledger', clientId], queryFn: () => getClientLedger(clientId) })
-  const currentPlan = useQuery({ queryKey: ['current-retainer-plan', clientId], queryFn: () => getCurrentRetainerPlan(clientId) })
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['client-ledger', clientId] })
@@ -43,26 +41,7 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
         <h2 id={titleId} className="text-base font-semibold">
           {t('billing:ledger.title')}
         </h2>
-        <button
-          type="button"
-          onClick={() => setShowPlanForm((value) => !value)}
-          className="rounded border border-slate-300 px-2 py-1 text-xs"
-        >
-          {t('common:actions.edit')}
-        </button>
       </div>
-
-      {showPlanForm && currentPlan.data !== undefined && (
-        <RetainerPlanForm
-          clientId={clientId}
-          currentPlan={currentPlan.data}
-          onSaved={() => {
-            setShowPlanForm(false)
-            invalidate()
-            queryClient.invalidateQueries({ queryKey: ['current-retainer-plan', clientId] })
-          }}
-        />
-      )}
 
       {ledger.isPending ? null : ledger.isError ? (
         <ErrorMessage error={ledger.error} />
@@ -119,8 +98,9 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
 
       <ErrorMessage error={writeOff.error} />
 
+      <RetainerPlanCard clientId={clientId} onSaved={invalidate} />
       {ledger.data !== undefined && (
-        <ApplyCreditForm clientId={clientId} availableCreditCents={ledger.data.availableCreditCents} onApplied={invalidate} />
+        <CreditCard clientId={clientId} availableCreditCents={ledger.data.availableCreditCents} onApplied={invalidate} />
       )}
 
       <RecordPaymentForm clientId={clientId} onRecorded={invalidate} />

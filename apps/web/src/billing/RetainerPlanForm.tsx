@@ -4,106 +4,97 @@ import { useTranslation } from 'react-i18next'
 import { PERIODICITY_VALUES } from '@ledger-hq/domain'
 import type { Periodicity } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
+import { Button, Dialog, Input, MoneyInput, Select } from '../ui'
 import { createRetainerPlan, renewRetainerPlan } from './api'
 import type { RetainerPlan } from './api'
 
 type Props = { clientId: string; currentPlan: RetainerPlan | null; onSaved: () => void }
 
+/** Renders inside `Dialog.Content`. Creates a plan, or renews the one in force. */
 export function RetainerPlanForm({ clientId, currentPlan, onSaved }: Props) {
   const { t } = useTranslation(['billing', 'domain', 'common'])
   const isRenewal = currentPlan !== null
 
-  const [amountCents, setAmountCents] = useState('')
+  const [amountCents, setAmountCents] = useState<number | null>(null)
   const [periodicity, setPeriodicity] = useState<Periodicity>((currentPlan?.periodicity as Periodicity | undefined) ?? 'MONTHLY')
   const [dueDayOfMonth, setDueDayOfMonth] = useState(String(currentPlan?.dueDayOfMonth ?? 8))
   const [effectiveDate, setEffectiveDate] = useState('')
 
   const mutation = useMutation({
-    mutationFn: (): Promise<RetainerPlan | { closedPlanId: string | null; newPlanId: string }> =>
+    mutationFn: (cents: number): Promise<RetainerPlan | { closedPlanId: string | null; newPlanId: string }> =>
       isRenewal
-        ? renewRetainerPlan(clientId, { newAmountCents: Number(amountCents), effectiveFrom: effectiveDate })
-        : createRetainerPlan(clientId, { amountCents: Number(amountCents), periodicity, dueDayOfMonth: Number(dueDayOfMonth), validFrom: effectiveDate }),
-    onSuccess: () => {
-      setAmountCents('')
-      setEffectiveDate('')
-      onSaved()
-    },
+        ? renewRetainerPlan(clientId, { newAmountCents: cents, effectiveFrom: effectiveDate })
+        : createRetainerPlan(clientId, {
+            amountCents: cents,
+            periodicity,
+            dueDayOfMonth: Number(dueDayOfMonth),
+            validFrom: effectiveDate,
+          }),
+    onSuccess: onSaved,
   })
+
+  // A fee is a positive amount; the form's rule, not MoneyInput's.
+  const canSubmit = amountCents !== null && amountCents > 0 && effectiveDate !== ''
 
   return (
     <form
-      className="flex max-w-sm flex-col gap-3"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
-        mutation.mutate()
+        if (!canSubmit || amountCents === null) return
+        mutation.mutate(amountCents)
       }}
     >
-      <h3 className="font-medium">{t(isRenewal ? 'billing:retainerPlan.renewTitle' : 'billing:retainerPlan.createTitle')}</h3>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t(isRenewal ? 'billing:retainerPlan.newAmountCents.label' : 'billing:retainerPlan.amountCents.label')}
-        <input
-          type="number"
-          required
-          min={1}
-          value={amountCents}
-          onChange={(event) => setAmountCents(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        />
-      </label>
+      <MoneyInput
+        required
+        label={t(isRenewal ? 'billing:retainerPlan.newAmountCents.label' : 'billing:retainerPlan.amountCents.label')}
+        onValueChange={setAmountCents}
+      />
 
       {!isRenewal && (
-        <>
-          <label className="flex flex-col gap-1 text-sm">
-            {t('billing:retainerPlan.periodicity.label')}
-            <select
-              value={periodicity}
-              onChange={(event) => setPeriodicity(event.target.value as Periodicity)}
-              className="rounded border border-slate-300 px-2 py-1"
-            >
-              {PERIODICITY_VALUES.filter((value) => value !== 'ONE_OFF').map((value) => (
-                <option key={value} value={value}>
-                  {t(`domain:periodicity.${value}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm">
-            {t('billing:retainerPlan.dueDayOfMonth.label')}
-            <input
-              type="number"
-              required
-              min={1}
-              max={28}
-              value={dueDayOfMonth}
-              onChange={(event) => setDueDayOfMonth(event.target.value)}
-              className="rounded border border-slate-300 px-2 py-1"
-            />
-          </label>
-        </>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Select
+            label={t('billing:retainerPlan.periodicity.label')}
+            value={periodicity}
+            onChange={(event) => setPeriodicity(event.target.value as Periodicity)}
+          >
+            {PERIODICITY_VALUES.filter((value) => value !== 'ONE_OFF').map((value) => (
+              <option key={value} value={value}>
+                {t(`domain:periodicity.${value}`)}
+              </option>
+            ))}
+          </Select>
+          <Input
+            type="number"
+            required
+            min={1}
+            max={28}
+            inputMode="numeric"
+            label={t('billing:retainerPlan.dueDayOfMonth.label')}
+            value={dueDayOfMonth}
+            onChange={(event) => setDueDayOfMonth(event.target.value)}
+          />
+        </div>
       )}
 
-      <label className="flex flex-col gap-1 text-sm">
-        {t(isRenewal ? 'billing:retainerPlan.effectiveFrom.label' : 'billing:retainerPlan.validFrom.label')}
-        <input
-          type="date"
-          required
-          value={effectiveDate}
-          onChange={(event) => setEffectiveDate(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        />
-      </label>
+      <Input
+        type="date"
+        required
+        label={t(isRenewal ? 'billing:retainerPlan.effectiveFrom.label' : 'billing:retainerPlan.validFrom.label')}
+        value={effectiveDate}
+        onChange={(event) => setEffectiveDate(event.target.value)}
+      />
 
       <ErrorMessage error={mutation.error} />
 
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="self-start rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
-      >
-        {t('common:actions.save')}
-      </button>
+      <Dialog.Footer>
+        <Dialog.Close asChild>
+          <Button variant="ghost">{t('common:actions.cancel')}</Button>
+        </Dialog.Close>
+        <Button variant="primary" type="submit" isLoading={mutation.isPending} disabled={!canSubmit}>
+          {t('common:actions.save')}
+        </Button>
+      </Dialog.Footer>
     </form>
   )
 }
