@@ -179,17 +179,17 @@ describe('PlatformsPage', () => {
   })
 
   it('omits the host line for a platform with no URL', async () => {
-    // One platform with a URL, one without: the assertion can fail if the
-    // URL-less row grows a host line.
     listPlatformsMock.mockResolvedValue([
       PORTAL,
       { id: 'p2', name: 'Segurança Social Direta', url: 'https://app.seg-social.pt/login', authKind: 'PASSWORD' },
     ])
     renderPage()
 
-    await screen.findByText('Portal das Finanças')
-    expect(screen.getAllByText(/\.pt$/)).toHaveLength(1)
-    expect(screen.getByText('app.seg-social.pt')).toBeInTheDocument()
+    // The name's parent holds the name and, when there is a URL, the host line.
+    const withoutUrl = (await screen.findByText('Portal das Finanças')).parentElement!
+    const withUrl = screen.getByText('Segurança Social Direta').parentElement!
+    expect(withUrl.children).toHaveLength(2)
+    expect(withoutUrl.children).toHaveLength(1)
   })
 
   // Review Focus 5: a URL stored without a scheme does not parse; show it as
@@ -201,5 +201,14 @@ describe('PlatformsPage', () => {
     renderPage()
 
     expect(await screen.findByText('seg-social.pt')).toBeInTheDocument()
+  })
+
+  it('shows a scheme-less host:port exactly as stored', async () => {
+    listPlatformsMock.mockResolvedValue([
+      { id: 'p1', name: 'Servidor local', url: 'localhost:8080', authKind: 'PASSWORD' },
+    ])
+    renderPage()
+
+    expect(await screen.findByText('localhost:8080')).toBeInTheDocument()
   })
 })

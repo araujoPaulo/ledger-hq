@@ -15,7 +15,9 @@ import { PlatformsPageSkeleton } from './PlatformsPageSkeleton'
  */
 function hostOf(url: string): string {
   try {
-    return new URL(url).host
+    const parsed = new URL(url)
+    // `localhost:8080` parses as scheme `localhost:` with no host.
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.host !== '' ? parsed.host : url
   } catch {
     return url
   }
