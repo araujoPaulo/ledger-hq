@@ -1,4 +1,5 @@
 import type { ComponentPropsWithoutRef } from 'react'
+import { Check } from 'lucide-react'
 import * as RadixDropdownMenu from '@radix-ui/react-dropdown-menu'
 
 const ITEM_CLASS =
@@ -27,12 +28,17 @@ function Item({ className, ...rest }: ComponentPropsWithoutRef<typeof RadixDropd
   )
 }
 
-function RadioItem({ className, ...rest }: ComponentPropsWithoutRef<typeof RadixDropdownMenu.RadioItem>) {
+function RadioItem({ className, children, ...rest }: ComponentPropsWithoutRef<typeof RadixDropdownMenu.RadioItem>) {
   return (
     <RadixDropdownMenu.RadioItem
       {...rest}
       className={`${ITEM_CLASS} data-[state=checked]:font-semibold${className === undefined ? '' : ` ${className}`}`}
-    />
+    >
+      {children}
+      <RadixDropdownMenu.ItemIndicator className="ml-auto">
+        <Check aria-hidden="true" className="h-4 w-4" />
+      </RadixDropdownMenu.ItemIndicator>
+    </RadixDropdownMenu.RadioItem>
   )
 }
 

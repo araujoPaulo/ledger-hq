@@ -38,6 +38,17 @@ describe('LanguageMenu', () => {
     expect(screen.getByRole('menuitemradio', { name: 'English' })).toHaveAttribute('aria-checked', 'false')
   })
 
+  it('shows a visible indicator on the checked language only', async () => {
+    renderMenu()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Idioma' }))
+
+    const checked = await screen.findByRole('menuitemradio', { name: 'Português' })
+    const unchecked = screen.getByRole('menuitemradio', { name: 'English' })
+    expect(checked.querySelector('svg[aria-hidden="true"]')).not.toBeNull()
+    expect(unchecked.querySelector('svg')).toBeNull()
+  })
+
   it('switches the locale', async () => {
     renderMenu()
 
