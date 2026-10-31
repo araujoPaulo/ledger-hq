@@ -50,6 +50,22 @@ describe('RequireSession', () => {
     expect(screen.queryByRole('heading')).not.toBeInTheDocument()
   })
 
+  it('keeps the splash while the session is still pending after bootstrap resolved', () => {
+    apiFetch.mockImplementation((path: string) =>
+      path === '/auth/bootstrap-required' ? Promise.resolve({ required: false }) : new Promise(() => {}),
+    )
+    renderGate()
+
+    return vi.waitFor(() => {
+      // bootstrap has resolved; the session never does
+      expect(apiFetch).toHaveBeenCalledWith('/auth/session')
+    }).then(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(screen.getByText('A carregar')).toBeInTheDocument()
+      expect(screen.queryByText('o shell')).not.toBeInTheDocument()
+    })
+  })
+
   it('shows account setup in the auth layout on a fresh install', async () => {
     apiFetch.mockImplementation(async (path: string) => {
       if (path === '/auth/bootstrap-required') return { required: true }
