@@ -10,6 +10,9 @@ import { Button, DataList, Dialog, Input, Money, MoneyInput, Select } from '../u
 import { proposeAllocation, recordPayment } from './api'
 import type { ProposedAllocationRow } from './api'
 
+/** A proposal, with the amount and date it was built for. */
+type Built = { cents: number; date: string; proposed: ProposedAllocationRow[]; excessCents: number }
+
 type Props = { clientId: string; onRecorded: () => void }
 
 /**
@@ -23,17 +26,26 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
   const [amountCents, setAmountCents] = useState<number | null>(null)
   const [receivedOn, setReceivedOn] = useState('')
   const [method, setMethod] = useState<PaymentMethod>('TRANSFER')
-  const [proposal, setProposal] = useState<{ proposed: ProposedAllocationRow[]; excessCents: number } | null>(null)
+  const [built, setBuilt] = useState<Built | null>(null)
 
   // A proposal is only valid for the amount it was built from. Editing the
   // amount (or the date) after proposing must retract it, or Confirmar would
   // post the new amount against the old allocations — recording, say, a
   // 150,00 € payment with 15,00 € allocated, silently.
-  const resetProposal = () => setProposal(null)
+  const resetProposal = () => {
+    setBuilt(null)
+    confirm.reset()
+  }
 
+  // Each proposal remembers the amount and date it was built for. A response
+  // that lands after either changed is for a payment that no longer exists,
+  // so it is treated as absent below rather than shown.
   const propose = useMutation({
-    mutationFn: (cents: number) => proposeAllocation(clientId, cents),
-    onSuccess: (result) => setProposal(result),
+    mutationFn: async (input: { cents: number; date: string }) => ({
+      ...input,
+      ...(await proposeAllocation(clientId, input.cents)),
+    }),
+    onSuccess: (result) => setBuilt(result),
   })
 
   const confirm = useMutation({
@@ -51,6 +63,8 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
     onSuccess: onRecorded,
   })
 
+  const proposal = built !== null && built.cents === amountCents && built.date === receivedOn ? built : null
+
   const canPropose = amountCents !== null && amountCents > 0 && receivedOn !== ''
 
   return (
@@ -59,7 +73,7 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
       onSubmit={(event) => {
         event.preventDefault()
         if (!canPropose || amountCents === null) return
-        if (proposal === null) propose.mutate(amountCents)
+        if (proposal === null) propose.mutate({ cents: amountCents, date: receivedOn })
         else confirm.mutate(amountCents)
       }}
     >

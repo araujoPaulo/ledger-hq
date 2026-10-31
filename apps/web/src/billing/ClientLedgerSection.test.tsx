@@ -186,6 +186,29 @@ describe('ClientLedgerSection', () => {
     expect(within(dialog).getByRole('button', { name: /propor alocação/i })).toBeInTheDocument()
   })
 
+  // A response that arrives after the amount changed belongs to the old amount.
+  it('ignores a proposal that arrives after the amount was changed', async () => {
+    let resolveProposal: (value: typeof PROPOSAL) => void = () => {}
+    proposeAllocationMock.mockReturnValue(new Promise((resolve) => (resolveProposal = resolve)))
+    renderSection()
+
+    const dialog = await openPaymentDialog()
+    const amount = within(dialog).getByLabelText(/^valor$/i)
+    await userEvent.type(amount, '15')
+    await userEvent.type(within(dialog).getByLabelText(/data de receção/i), '2026-01-10')
+    await userEvent.click(within(dialog).getByRole('button', { name: /propor alocação/i }))
+    await waitFor(() => expect(proposeAllocationMock).toHaveBeenCalledWith('c1', 1500))
+
+    await userEvent.clear(amount)
+    await userEvent.type(amount, '150')
+    resolveProposal(PROPOSAL)
+
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: /propor alocação/i })).toBeInTheDocument())
+    expect(within(dialog).queryByRole('button', { name: /^confirmar$/i })).not.toBeInTheDocument()
+    expect(within(dialog).queryByText(/retainer — 2026-01/i)).not.toBeInTheDocument()
+    expect(recordPaymentMock).not.toHaveBeenCalled()
+  })
+
   // Review Focus 3: leaving the field reformats it, which is not an edit.
   it('keeps the proposal when the amount field is merely left', async () => {
     proposeAllocationMock.mockResolvedValue(PROPOSAL)
