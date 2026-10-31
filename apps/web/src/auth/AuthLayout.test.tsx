@@ -48,6 +48,21 @@ describe('AuthLayout', () => {
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
     expect(screen.getAllByRole('main')).toHaveLength(1)
   })
+
+  // The mark must sit at the same y on the splash and on every card, so the
+  // column is top-anchored at every width (never vertically centred).
+  it('top-anchors the column at every width, in the layout and the splash', () => {
+    const { unmount } = renderWithProviders(
+      <AuthLayout>
+        <p>conteúdo</p>
+      </AuthLayout>,
+    )
+    expect(screen.getByRole('main').className).not.toMatch(/items-center/)
+    unmount()
+
+    renderWithProviders(<AuthSplash />)
+    expect(screen.getByRole('main').className).not.toMatch(/items-center/)
+  })
 })
 
 describe('AuthSplash', () => {
