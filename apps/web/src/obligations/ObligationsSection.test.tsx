@@ -142,6 +142,24 @@ describe('ObligationsSection', () => {
     expect(patchObligationMock).not.toHaveBeenCalled()
   })
 
+  // Review Focus 5, for this tab's adjust dialog.
+  it('keeps the adjust dialog open, with what was typed, when saving fails', async () => {
+    listObligationsMock.mockResolvedValue([obligation])
+    patchObligationMock.mockRejectedValue(new ApiError('common.internal_error', {}, 500))
+    renderSection()
+
+    await userEvent.click(await screen.findByRole('button', { name: /^editar$/i }))
+    const dialog = await screen.findByRole('dialog')
+    const dueDate = within(dialog).getByLabelText(/prazo/i)
+    await userEvent.clear(dueDate)
+    await userEvent.type(dueDate, '2026-04-01')
+    await userEvent.click(within(dialog).getByRole('button', { name: /^guardar$/i }))
+
+    expect(await within(dialog).findByText(/ocorreu um erro no servidor/i)).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(/prazo/i)).toHaveValue('2026-04-01')
+  })
+
   it('creates an ad-hoc obligation from the New obligation dialog', async () => {
     listObligationsMock.mockResolvedValue([])
     createAdHocObligationMock.mockResolvedValue({ ...obligation, id: 'o2', definitionCode: 'BACKUP_RESTORE_DRILL' })
