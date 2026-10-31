@@ -2,7 +2,8 @@ import { useSyncExternalStore } from 'react'
 
 export type VaultState = { status: 'locked' } | { status: 'unlocked'; key: CryptoKey; unlockedAt: number }
 
-const INACTIVITY_LOCK_MS = 5 * 60 * 1000
+/** Exported so the screens that mention the timeout state the real one. */
+export const INACTIVITY_LOCK_MS = 5 * 60 * 1000
 
 let state: VaultState = { status: 'locked' }
 const listeners = new Set<() => void>()
