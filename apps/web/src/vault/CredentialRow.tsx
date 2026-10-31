@@ -11,22 +11,14 @@ import { Button, DataList, Dialog, Input, useToast } from '../ui'
 import { rotateCredential } from './api'
 import type { CredentialResponse } from './api'
 import { recordReveal } from './outbox'
+import { copyAndClear } from './clipboard'
 import { PlatformAvatar } from './PlatformAvatar'
 import { useVaultState } from './vault-session'
 
 type Props = { credential: CredentialResponse; platformName: string; onRotated: () => void }
 
-const CLIPBOARD_CLEAR_MS = 30_000
 const PASSWORD_MASK = '••••••••'
 const TOTP_STEP_SECONDS = 30
-
-/** Clears the clipboard 30 seconds after copying a secret — "to the extent the browser permits" (spec 9.4). */
-async function copyAndClear(value: string): Promise<void> {
-  await navigator.clipboard.writeText(value)
-  setTimeout(() => {
-    navigator.clipboard.writeText('').catch(() => {})
-  }, CLIPBOARD_CLEAR_MS)
-}
 
 /**
  * A plain copy, for a username: not a secret, so no clear. Async so a missing
