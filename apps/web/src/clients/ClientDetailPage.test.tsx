@@ -88,4 +88,23 @@ describe('ClientDetailPage', () => {
     expect(screen.getByRole('button', { name: /guardar/i })).toBeInTheDocument()
     expect(screen.queryByText(/ocorreu um erro no servidor/i)).not.toBeInTheDocument()
   })
+
+  it('links to the edit page', async () => {
+    getClient.mockResolvedValue(company)
+    getFiscalProfile.mockRejectedValue(new ApiError('common.not_found', {}, 404))
+    renderPage('1')
+
+    expect(await screen.findByRole('link', { name: /^editar$/i })).toHaveAttribute('href', '/clients/1/edit')
+    expect(screen.getByRole('button', { name: /^arquivar$/i })).toBeInTheDocument()
+  })
+
+  // The server refuses to edit an archived client; the button is not offered.
+  it('offers no Edit for an archived client, only Restore', async () => {
+    getClient.mockResolvedValue({ ...company, archivedAt: '2026-09-01T10:00:00.000Z' })
+    getFiscalProfile.mockRejectedValue(new ApiError('common.not_found', {}, 404))
+    renderPage('1')
+
+    expect(await screen.findByRole('button', { name: /^restaurar$/i })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^editar$/i })).not.toBeInTheDocument()
+  })
 })

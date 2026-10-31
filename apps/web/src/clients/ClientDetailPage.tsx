@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from '@tanstack/react-router'
+import { Link, useParams } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { LegalForm } from '@ledger-hq/domain'
 import { ApiError } from '../api/client'
+import { Button } from '../ui'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { formatDate } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
@@ -61,31 +62,30 @@ export function ClientDetailPage() {
 
   return (
     <section className="flex flex-col gap-6">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold">{record.name}</h1>
           <p className="text-sm text-slate-500">{t(`domain:clientKind.${record.kind}`)}</p>
         </div>
 
-        {record.archivedAt === null ? (
-          <button
-            type="button"
-            onClick={() => archiveMutation.mutate()}
-            disabled={archiveMutation.isPending}
-            className="rounded border border-slate-300 px-3 py-2 text-sm disabled:opacity-50"
-          >
-            {t('common:actions.archive')}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => restoreMutation.mutate()}
-            disabled={restoreMutation.isPending}
-            className="rounded border border-slate-300 px-3 py-2 text-sm disabled:opacity-50"
-          >
-            {t('common:actions.restore')}
-          </button>
-        )}
+        <div className="flex items-center gap-4">
+          {record.archivedAt === null ? (
+            <>
+              <Button asChild variant="secondary">
+                <Link to="/clients/$clientId/edit" params={{ clientId }}>
+                  {t('common:actions.edit')}
+                </Link>
+              </Button>
+              <Button variant="secondary" onClick={() => archiveMutation.mutate()} isLoading={archiveMutation.isPending}>
+                {t('common:actions.archive')}
+              </Button>
+            </>
+          ) : (
+            <Button variant="secondary" onClick={() => restoreMutation.mutate()} isLoading={restoreMutation.isPending}>
+              {t('common:actions.restore')}
+            </Button>
+          )}
+        </div>
       </header>
 
       <ErrorMessage error={archiveMutation.error} />
