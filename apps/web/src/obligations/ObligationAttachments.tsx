@@ -105,7 +105,14 @@ export function ObligationAttachments({ obligation }: Props) {
               value={
                 confirmingId === file.id ? (
                   <>
-                    <Button key="confirm" variant="danger" size="sm" isLoading={remove.isPending} onClick={() => remove.mutate(file.id)}>
+                    <Button
+                      key="confirm"
+                      variant="danger"
+                      size="sm"
+                      aria-label={t('obligations:attachments.confirmDeleteNamed', { filename: file.filename })}
+                      isLoading={remove.isPending}
+                      onClick={() => remove.mutate(file.id)}
+                    >
                       {t('obligations:attachments.confirmDeleteAction')}
                     </Button>
                     <Button

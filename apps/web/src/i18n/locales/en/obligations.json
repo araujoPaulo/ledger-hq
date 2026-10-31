@@ -23,6 +23,7 @@
   },
   "attachments": {
     "confirmDeleteAction": "Delete for good",
+    "confirmDeleteNamed": "Delete {{filename}} for good",
     "title": "Receipts",
     "manage": "Receipts",
     "add": "Attach a file",

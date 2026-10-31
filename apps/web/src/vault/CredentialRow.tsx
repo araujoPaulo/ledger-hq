@@ -204,7 +204,10 @@ export function CredentialRow({ credential, platformName, onRotated }: Props) {
         open={rotating}
         onOpenChange={(open) => {
           setRotating(open)
-          if (!open) setNewPassword('')
+          if (!open) {
+            setNewPassword('')
+            rotateMutation.reset()
+          }
         }}
       >
         <Dialog.Content title={t('vault:credentials.rotate')} size="sm">

@@ -23,6 +23,7 @@
   },
   "attachments": {
     "confirmDeleteAction": "Apagar definitivamente",
+    "confirmDeleteNamed": "Apagar definitivamente {{filename}}",
     "title": "Comprovativos",
     "manage": "Comprovativos",
     "add": "Anexar ficheiro",

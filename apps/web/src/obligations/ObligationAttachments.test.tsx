@@ -137,6 +137,14 @@ describe('ObligationAttachments', () => {
     expect(confirm).not.toHaveBeenCalled()
   })
 
+  it('names the file on the inline confirm button', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    expect(screen.getByRole('button', { name: 'Apagar definitivamente Declaração periódica.pdf' })).toBeInTheDocument()
+  })
+
   it('deletes once the operator confirms in place', async () => {
     listAttachmentsMock.mockResolvedValue([attachment])
     deleteAttachmentMock.mockResolvedValue(undefined)

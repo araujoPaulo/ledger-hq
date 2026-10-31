@@ -278,6 +278,25 @@ describe('CredentialsSection', () => {
     expect(within(dialog).getByLabelText(/^palavra-passe$/i)).toHaveValue('new secret')
   })
 
+  it('does not show a stale change-password error when the dialog is reopened', async () => {
+    listCredentialsForClientMock.mockResolvedValue([await credentialFor({ username: 'user1', password: 'hunter2' })])
+    rotateCredentialMock.mockRejectedValue(new ApiError('common.not_found', {}, 404))
+    renderSection()
+
+    await userEvent.click(await screen.findByRole('button', { name: /^ver$/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /mudar palavra-passe/i }))
+    let dialog = await screen.findByRole('dialog', { name: /mudar palavra-passe/i })
+    await userEvent.type(within(dialog).getByLabelText(/^palavra-passe$/i), 'new secret')
+    await userEvent.click(within(dialog).getByRole('button', { name: /^confirmar$/i }))
+    expect(await within(dialog).findByText(/registo não encontrado/i)).toBeInTheDocument()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /^cancelar$/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /mudar palavra-passe/i }))
+    dialog = await screen.findByRole('dialog', { name: /mudar palavra-passe/i })
+    expect(within(dialog).queryByText(/registo não encontrado/i)).not.toBeInTheDocument()
+  })
+
   it('keeps the new-credential dialog open, with its values and the error, when creating fails', async () => {
     listCredentialsForClientMock.mockResolvedValue([])
     createCredentialMock.mockRejectedValue(new ApiError('common.not_found', {}, 404))
