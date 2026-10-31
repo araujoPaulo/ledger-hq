@@ -54,8 +54,9 @@ async function openPaymentDialog() {
   return screen.findByRole('dialog', { name: /registar pagamento/i })
 }
 
-/** The payment form ignores Confirmar for a moment after the proposal appears. */
-const afterConfirmGuard = () => new Promise((resolve) => setTimeout(resolve, 450))
+/** Confirmar is disabled for a moment after the proposal appears; wait for it to enable. */
+const confirmEnabled = (dialog: HTMLElement) =>
+  waitFor(() => expect(within(dialog).getByRole('button', { name: /^confirmar$/i })).toBeEnabled())
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -163,7 +164,7 @@ describe('ClientLedgerSection', () => {
     expect(await within(dialog).findByText(/retainer — 2026-01/i)).toBeInTheDocument()
     expect(within(dialog).queryByText('charge-1')).not.toBeInTheDocument()
 
-    await afterConfirmGuard()
+    await confirmEnabled(dialog)
     await userEvent.click(within(dialog).getByRole('button', { name: /^confirmar$/i }))
 
     await waitFor(() =>
@@ -311,7 +312,7 @@ describe('ClientLedgerSection', () => {
     await userEvent.type(within(dialog).getByLabelText(/data de receção/i), '2026-09-03')
     await userEvent.click(within(dialog).getByRole('button', { name: /propor alocação/i }))
     const confirmButton = await within(dialog).findByRole('button', { name: /^confirmar$/i })
-    await afterConfirmGuard()
+    await confirmEnabled(dialog)
     await userEvent.click(confirmButton)
 
     expect(await within(dialog).findByText(/ocorreu um erro no servidor/i)).toBeInTheDocument()
@@ -329,11 +330,13 @@ describe('ClientLedgerSection', () => {
     await userEvent.type(within(dialog).getByLabelText(/data de receção/i), '2026-09-03')
     const submit = within(dialog).getByRole('button', { name: /propor alocação/i })
     await userEvent.click(submit)
-    // The double-click's second press lands on the same slot, now Confirmar.
-    await userEvent.click(await within(dialog).findByRole('button', { name: /^confirmar$/i }))
+    // The double-click's second press lands on the same slot, now a disabled Confirmar.
+    const confirmButton = await within(dialog).findByRole('button', { name: /^confirmar$/i })
+    expect(confirmButton).toBeDisabled()
+    await userEvent.dblClick(confirmButton)
     expect(recordPaymentMock).not.toHaveBeenCalled()
 
-    await afterConfirmGuard()
+    await confirmEnabled(dialog)
     await userEvent.click(within(dialog).getByRole('button', { name: /^confirmar$/i }))
     await waitFor(() => expect(recordPaymentMock).toHaveBeenCalledTimes(1))
   })

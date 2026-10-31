@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { PAYMENT_METHOD_VALUES } from '@ledger-hq/domain'
@@ -13,7 +13,7 @@ import type { ProposedAllocationRow } from './api'
 /** A proposal, with the amount and date it was built for. */
 type Built = { cents: number; date: string; proposed: ProposedAllocationRow[]; excessCents: number }
 
-/** Confirmar ignores activations this long after the proposal appears (a double-click). */
+/** Confirmar stays disabled this long after the proposal appears, so a double-click cannot confirm it. */
 const CONFIRM_GUARD_MS = 400
 
 type Props = { clientId: string; onRecorded: () => void }
@@ -30,7 +30,13 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
   const [receivedOn, setReceivedOn] = useState('')
   const [method, setMethod] = useState<PaymentMethod>('TRANSFER')
   const [built, setBuilt] = useState<Built | null>(null)
-  const proposedAt = useRef(0)
+  const [settling, setSettling] = useState(false)
+
+  useEffect(() => {
+    if (!settling) return
+    const timer = setTimeout(() => setSettling(false), CONFIRM_GUARD_MS)
+    return () => clearTimeout(timer)
+  }, [settling])
 
   // A proposal is only valid for the amount it was built from. Editing the
   // amount (or the date) after proposing must retract it, or Confirmar would
@@ -38,6 +44,7 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
   // 150,00 € payment with 15,00 € allocated, silently.
   const resetProposal = () => {
     setBuilt(null)
+    setSettling(false)
     propose.reset()
     confirm.reset()
   }
@@ -51,7 +58,7 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
       ...(await proposeAllocation(clientId, input.cents)),
     }),
     onSuccess: (result) => {
-      proposedAt.current = Date.now()
+      setSettling(true)
       setBuilt(result)
     },
   })
@@ -82,7 +89,7 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
         event.preventDefault()
         if (!canPropose || amountCents === null) return
         if (proposal === null) propose.mutate({ cents: amountCents, date: receivedOn })
-        else if (Date.now() - proposedAt.current >= CONFIRM_GUARD_MS) confirm.mutate(amountCents)
+        else if (!settling) confirm.mutate(amountCents)
       }}
     >
       <MoneyInput
@@ -152,7 +159,7 @@ export function RecordPaymentForm({ clientId, onRecorded }: Props) {
             {t('billing:payment.propose')}
           </Button>
         ) : (
-          <Button key="confirm" variant="primary" type="submit" isLoading={confirm.isPending}>
+          <Button key="confirm" variant="primary" type="submit" isLoading={confirm.isPending} disabled={settling}>
             {t('billing:payment.confirm')}
           </Button>
         )}
