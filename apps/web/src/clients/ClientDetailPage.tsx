@@ -2,13 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import type { LegalForm } from '@ledger-hq/domain'
-import { ApiError } from '../api/client'
 import { Button } from '../ui'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { formatDate } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
-import { archiveClient, getClient, getFiscalProfile, restoreClient } from './api'
-import { FiscalProfileForm } from './FiscalProfileForm'
+import { archiveClient, getClient, restoreClient } from './api'
+import { FiscalProfileCard } from './FiscalProfileCard'
 import { EmploymentSection } from '../employments/EmploymentSection'
 import { CredentialsSection } from '../vault/CredentialsSection'
 import { ObligationsSection } from '../obligations/ObligationsSection'
@@ -22,16 +21,6 @@ export function ClientDetailPage() {
   const client = useQuery({
     queryKey: ['client', clientId],
     queryFn: () => getClient(clientId),
-  })
-
-  // A brand-new client has no fiscal profile row yet: GET returns
-  // common.not_found in that case, which is an expected state here, not a
-  // failure to retry.
-  const fiscalProfile = useQuery({
-    queryKey: ['fiscal-profile', clientId],
-    queryFn: () => getFiscalProfile(clientId),
-    retry: false,
-    enabled: client.data !== undefined,
   })
 
   const archiveMutation = useMutation({
@@ -52,14 +41,6 @@ export function ClientDetailPage() {
   if (client.isError) return <ErrorMessage error={client.error} />
 
   const record = client.data
-  const profileMissing =
-    fiscalProfile.error instanceof ApiError && fiscalProfile.error.code === 'common.not_found'
-  // A genuine fetch failure (a real 500, or the browser going offline) must
-  // not be indistinguishable from "no profile exists yet": rendering the
-  // form with defaults in that case would let a submit silently overwrite a
-  // profile that merely failed to load, with no ErrorMessage in sight.
-  const profileFailed = fiscalProfile.isError && !profileMissing
-
   return (
     <section className="flex flex-col gap-6">
       <header className="flex items-center justify-between gap-4">
@@ -142,11 +123,7 @@ export function ClientDetailPage() {
         )}
       </dl>
 
-      {fiscalProfile.isPending ? null : profileFailed ? (
-        <ErrorMessage error={fiscalProfile.error} />
-      ) : (
-        <FiscalProfileForm clientId={clientId} kind={record.kind} initial={fiscalProfile.data ?? null} />
-      )}
+      <FiscalProfileCard clientId={clientId} kind={record.kind} />
 
       <ObligationsSection clientId={clientId} />
       <ClientLedgerSection clientId={clientId} />

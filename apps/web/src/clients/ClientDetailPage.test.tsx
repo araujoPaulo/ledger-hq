@@ -17,7 +17,7 @@ const getClient = vi.hoisted(() => vi.fn())
 const getFiscalProfile = vi.hoisted(() => vi.fn())
 const archiveClient = vi.hoisted(() => vi.fn())
 const restoreClient = vi.hoisted(() => vi.fn())
-vi.mock('./api', () => ({ getClient, getFiscalProfile, archiveClient, restoreClient }))
+vi.mock('./api', () => ({ getClient, getFiscalProfile, putFiscalProfile: vi.fn(), archiveClient, restoreClient }))
 
 const { ClientDetailPage } = await import('./ClientDetailPage')
 
@@ -69,26 +69,6 @@ function renderPage(clientId: string) {
 }
 
 describe('ClientDetailPage', () => {
-  it('shows an error message, not the fiscal profile form, when the fetch genuinely fails', async () => {
-    getClient.mockResolvedValue(company)
-    getFiscalProfile.mockRejectedValue(new ApiError('common.internal_error', {}, 500))
-    renderPage('1')
-
-    expect(await screen.findByText(/ocorreu um erro no servidor/i)).toBeInTheDocument()
-    expect(screen.queryByText(/perfil fiscal/i)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /guardar/i })).not.toBeInTheDocument()
-  })
-
-  it('renders the fiscal profile form with defaults when no profile exists yet', async () => {
-    getClient.mockResolvedValue(company)
-    getFiscalProfile.mockRejectedValue(new ApiError('common.not_found', {}, 404))
-    renderPage('1')
-
-    expect(await screen.findByText(/perfil fiscal/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeInTheDocument()
-    expect(screen.queryByText(/ocorreu um erro no servidor/i)).not.toBeInTheDocument()
-  })
-
   it('links to the edit page', async () => {
     getClient.mockResolvedValue(company)
     getFiscalProfile.mockRejectedValue(new ApiError('common.not_found', {}, 404))
