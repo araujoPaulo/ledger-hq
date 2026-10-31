@@ -123,7 +123,7 @@ export function CredentialRow({ credential, platformName, onRotated }: Props) {
         <PlatformAvatar name={platformName} />
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-sm font-medium">{platformName}</span>
-          <span className="truncate text-xs text-muted">
+          <span className="break-words text-xs text-muted">
             {credential.label} ·{' '}
             {t('vault:credentials.changed', {
               date: formatDate(credential.updatedAt.slice(0, 10), i18n.language as SupportedLocale),
@@ -146,6 +146,7 @@ export function CredentialRow({ credential, platformName, onRotated }: Props) {
           <DataList as="dl">
             {item.username !== undefined && (
               <DataList.Row
+                wrap
                 label={t('vault:credentials.form.username.label')}
                 value={
                   <>
@@ -165,6 +166,7 @@ export function CredentialRow({ credential, platformName, onRotated }: Props) {
             {item.password !== undefined && (
               // Never rendered in clear: a mask, Copy, and the clear stated where it happens.
               <DataList.Row
+                wrap
                 label={t('vault:credentials.form.password.label')}
                 value={
                   <>
@@ -172,7 +174,7 @@ export function CredentialRow({ credential, platformName, onRotated }: Props) {
                     <Button variant="secondary" size="sm" onClick={() => copyPassword(item.password ?? '')}>
                       {t('vault:credentials.copy')}
                     </Button>
-                    <span className="text-xs text-muted">{t('vault:credentials.clipboardClears')}</span>
+                    <span className="whitespace-nowrap text-xs text-muted">{t('vault:credentials.clipboardClears')}</span>
                   </>
                 }
               />
@@ -181,6 +183,7 @@ export function CredentialRow({ credential, platformName, onRotated }: Props) {
               // Not a live region: announcing every second would make the page
               // unusable with a screen reader (spec §10.4).
               <DataList.Row
+                wrap
                 label={t('vault:credentials.totp')}
                 value={
                   <>

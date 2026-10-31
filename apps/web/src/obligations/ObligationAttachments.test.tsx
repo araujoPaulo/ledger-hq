@@ -121,6 +121,21 @@ describe('ObligationAttachments', () => {
 
   // Spec §2.6: no window.confirm, and no dialog on top of a dialog — the
   // row's Delete becomes "Delete for good" plus Cancel, in place.
+  // V4: the whole file name stays readable, above all while confirming its deletion.
+  it('wraps the file name instead of ellipsising it, also while confirming the delete', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+    renderPanel()
+
+    const link = await screen.findByRole('link', { name: /transferir declaração periódica\.pdf/i })
+    expect(link).toHaveClass('break-words')
+    expect(link.closest('div')?.className).not.toContain('truncate')
+
+    await userEvent.click(screen.getByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    const confirmLink = screen.getByRole('link', { name: /transferir declaração periódica\.pdf/i })
+    expect(confirmLink.className).not.toContain('truncate')
+    expect(confirmLink.closest('div')).toHaveClass('flex-wrap')
+  })
+
   it('asks again in place before deleting, and Cancel takes the question back', async () => {
     listAttachmentsMock.mockResolvedValue([attachment])
     const confirm = vi.spyOn(window, 'confirm')

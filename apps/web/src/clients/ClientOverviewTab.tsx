@@ -111,7 +111,7 @@ function AtAGlance({ clientId }: { clientId: string }) {
   return (
     <Card className="flex flex-col gap-4 self-start">
       <h2 className="text-base font-semibold">{t('glance.title')}</h2>
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
+      <div className="grid grid-cols-2 gap-4">
         <GlanceTile clientId={clientId} tab="obligations" label={t('glance.due')}>
           {obligations.isPending ? (
             <Skeleton width="2.5rem" height="2rem" />

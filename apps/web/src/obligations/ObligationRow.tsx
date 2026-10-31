@@ -35,7 +35,7 @@ export function ObligationRow({ obligation, showClient, onMarkDone, onEdit, onMa
 
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-surface border border-line bg-surface px-4 py-3">
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 grow basis-full flex-col sm:basis-0">
         <span className="text-sm font-medium">
           {showClient ? `${obligation.clientName} — ` : ''}
           {obligation.definitionName}

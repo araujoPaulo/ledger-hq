@@ -81,6 +81,28 @@ describe('EmploymentSection', () => {
     expect(screen.getByRole('heading', { name: /empregados|employees/i })).toBeInTheDocument()
   })
 
+  // V8: the name is a link and looks like one.
+  it('styles the counterparty name as an in-content link', async () => {
+    listEmployments.mockResolvedValue([spell])
+    listClients.mockResolvedValue([])
+    renderSection('COMPANY', 'c1')
+
+    const link = await screen.findByRole('link', { name: 'Maria Santos' })
+    expect(link).toHaveClass('text-accent-700', 'hover:underline')
+  })
+
+  // V1: the open row's actions wrap beneath the name instead of crushing it.
+  it('lets the name wrap and the actions drop below at phone width', async () => {
+    listEmployments.mockResolvedValue([spell])
+    listClients.mockResolvedValue([])
+    renderSection('COMPANY', 'c1')
+
+    const link = await screen.findByRole('link', { name: 'Maria Santos' })
+    expect(link.className).not.toContain('truncate')
+    const row = link.closest('div')
+    expect(row).toHaveClass('flex-wrap')
+  })
+
   it('shows the counterparty name from a person page', async () => {
     listEmployments.mockResolvedValue([spell])
     listClients.mockResolvedValue([])

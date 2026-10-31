@@ -80,9 +80,14 @@ export function EmploymentSection({ client }: Props) {
               return (
                 <DataList.Row
                   key={spell.id}
+                  wrap
                   label={
                     <span className="flex min-w-0 flex-col">
-                      <Link to="/clients/$clientId" params={{ clientId: counterpartyId }} className="truncate font-medium">
+                      <Link
+                        to="/clients/$clientId"
+                        params={{ clientId: counterpartyId }}
+                        className="break-words font-medium text-accent-700 hover:underline"
+                      >
                         {counterpartyName}
                       </Link>
                       {spell.jobTitle !== null && <span className="text-xs text-muted">{spell.jobTitle}</span>}

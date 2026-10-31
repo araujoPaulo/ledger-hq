@@ -92,12 +92,13 @@ export function ObligationAttachments({ obligation }: Props) {
           {attachments.data?.map((file) => (
             <DataList.Row
               key={file.id}
+              wrap
               label={
                 <a
                   href={attachmentDownloadUrl(obligation.id, file.id)}
                   download={file.filename}
                   aria-label={t('obligations:attachments.download', { filename: file.filename })}
-                  className="font-medium text-accent-700 hover:underline"
+                  className="break-words font-medium text-accent-700 hover:underline"
                 >
                   {file.filename}
                 </a>

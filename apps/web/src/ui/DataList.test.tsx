@@ -22,6 +22,21 @@ describe('DataList', () => {
     expect(screen.getByRole('link', { name: 'Padaria Manso' })).toHaveAttribute('href', '/clients/c1')
   })
 
+  it('truncates a label by default, and wraps it with wrapLabel or wrap', () => {
+    render(
+      <DataList>
+        <DataList.Row label="plain" value="1" />
+        <DataList.Row label="wrapLabel" value="2" wrapLabel />
+        <DataList.Row label="wrap" value="3" wrap />
+      </DataList>,
+    )
+    expect(screen.getByText('plain')).toHaveClass('truncate')
+    expect(screen.getByText('wrapLabel')).toHaveClass('break-words')
+    expect(screen.getByText('wrapLabel').className).not.toContain('truncate')
+    expect(screen.getByText('wrap')).toHaveClass('break-words', 'basis-full', 'sm:basis-0')
+    expect(screen.getByText('wrap').parentElement).toHaveClass('flex-wrap')
+  })
+
   it('marks the total apart from an ordinary row', () => {
     render(
       <DataList>

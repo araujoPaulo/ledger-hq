@@ -94,6 +94,21 @@ describe('ClientLedgerSection', () => {
     expect(screen.getByText('Saldo')).toBeInTheDocument()
   })
 
+  // V5: a long description wraps at phone width instead of being ellipsised.
+  it('lets a ledger description wrap', async () => {
+    getClientLedgerMock.mockResolvedValue({
+      entries: [{ type: 'CHARGE', date: '2026-01-01', description: 'Monthly retainer 2026-01 long description', amountCents: 9000, runningBalanceCents: 9000, chargeId: 'charge-1', writtenOff: false }],
+      balanceCents: 9000,
+      availableCreditCents: 0,
+    })
+    renderSection()
+
+    const description = await screen.findByText(/monthly retainer 2026-01/i)
+    expect(description.className).not.toContain('truncate')
+    expect(description).toHaveClass('break-words')
+    expect(description.closest('div')?.className).not.toContain('truncate')
+  })
+
   // Spec §2.5: only "written off" gets a badge — the ledger carries no paid state.
   it('badges a written-off charge and offers no write-off on it', async () => {
     getClientLedgerMock.mockResolvedValue({

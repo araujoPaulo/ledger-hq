@@ -196,6 +196,20 @@ describe('CredentialsSection', () => {
     expect(await within(region).findByText(/palavra-passe copiada/i)).toBeInTheDocument()
   })
 
+  // V3: label over value at phone width; the caption never breaks mid-phrase.
+  it('stacks the label over the value on a phone and keeps the caption on one line', async () => {
+    listCredentialsForClientMock.mockResolvedValue([await credentialFor({ username: 'user1', password: 'hunter2' })])
+    renderSection()
+
+    await userEvent.click(await screen.findByRole('button', { name: /^ver$/i }))
+    const caption = await screen.findByText('Limpa ao fim de 30 s')
+    expect(caption).toHaveClass('whitespace-nowrap')
+    const row = caption.closest('dd')?.parentElement
+    expect(row).toHaveClass('flex-wrap')
+    expect(row?.querySelector('dt')).toHaveClass('basis-full', 'sm:basis-auto')
+    expect(screen.getByText(/alterada a /i).className).not.toContain('truncate')
+  })
+
   it('copies the username plainly, with its own toast', async () => {
     listCredentialsForClientMock.mockResolvedValue([await credentialFor({ username: 'user1', password: 'hunter2' })])
     renderSection()

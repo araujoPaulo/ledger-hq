@@ -137,6 +137,16 @@ describe('ClientOverviewTab', () => {
     expect(tile).toHaveAttribute('href', '/clients/1?tab=billing')
   })
 
+  // The glance tiles sit side by side (two columns) in the card; they never stack at lg.
+  it('lays the glance tiles out in two columns at every width', async () => {
+    renderTab()
+
+    const tile = await screen.findByRole('link', { name: /saldo/i })
+    const grid = tile.parentElement
+    expect(grid).toHaveClass('grid-cols-2')
+    expect(grid?.className).not.toContain('lg:grid-cols-1')
+  })
+
   it('renders the fiscal profile card', async () => {
     renderTab()
 

@@ -50,6 +50,13 @@ describe('ObligationRow', () => {
     expect(screen.getByText('20/03/2026')).toBeInTheDocument()
   })
 
+  // V2: at phone width the title takes the full row and the badge/actions wrap beneath it.
+  it('gives the title the full row on a phone and shares it from sm up', () => {
+    renderRow()
+    const column = screen.getByText(/declaração periódica de iva/i).parentElement
+    expect(column).toHaveClass('basis-full', 'sm:basis-0', 'min-w-0')
+  })
+
   it('shows the client name only when showClient is true', () => {
     renderRow({}, { showClient: false })
     expect(screen.queryByText(/padaria central/i)).not.toBeInTheDocument()
