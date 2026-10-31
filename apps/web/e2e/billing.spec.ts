@@ -30,11 +30,11 @@ test('creates a retainer plan, charges a client, records a payment, and sees the
   // 409 on `clients.tax_id_taken` when the full suite runs together against
   // the one shared backend.
   await page.getByRole('link', { name: /clientes/i }).click()
-  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Padaria Central Faturação, Lda.')
   await page.getByLabel(/^nif$/i).fill('501442634')
-  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByRole('button', { name: /^criar$/i }).click()
   await expect(page.getByText('Padaria Central Faturação, Lda.')).toBeVisible()
   await page.getByRole('button', { name: /guardar/i }).click() // fiscal profile defaults
 
@@ -118,13 +118,13 @@ test('records an advance payment, sees it as credit, and spends it on a later ch
   await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
 
   await page.getByRole('link', { name: /clientes/i }).click()
-  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Talho do Bairro Crédito, Lda.')
   // Checksum-valid and unused by any other spec in apps/web/e2e (the others
   // take 123456789 and 5014426xx).
   await page.getByLabel(/^nif$/i).fill('507555554')
-  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByRole('button', { name: /^criar$/i }).click()
   await page.getByRole('button', { name: /guardar/i }).click() // fiscal profile defaults
 
   const ledger = page.getByRole('region', { name: /^faturação$/i })

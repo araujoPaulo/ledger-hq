@@ -30,11 +30,11 @@ test('sets up a company, generates obligations, sees them on the dashboard, and 
   // `clients.tax_id_taken` (same reasoning `vault-offline.spec.ts` documents
   // for its own client).
   await page.getByRole('link', { name: /clientes/i }).click()
-  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Padaria Central Obrigações, Lda.')
   await page.getByLabel(/^nif$/i).fill('501442626')
-  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByRole('button', { name: /^criar$/i }).click()
   await expect(page.getByText('Padaria Central Obrigações, Lda.')).toBeVisible()
 
   await page.getByRole('button', { name: /guardar/i }).click() // saves the fiscal profile's own defaults, which already imply COMPANY/MONTHLY
@@ -98,11 +98,11 @@ test('attaches a receipt to an obligation, downloads it, and keeps it out of the
   await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
 
   await page.getByRole('link', { name: /clientes/i }).click()
-  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Padaria Central Anexos, Lda.')
-  await page.getByLabel(/^nif$/i).fill('507555554')
-  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByLabel(/^nif$/i).fill('507555570')
+  await page.getByRole('button', { name: /^criar$/i }).click()
   await page.getByRole('button', { name: /guardar/i }).click() // fiscal profile defaults
 
   const obligations = page.getByRole('region', { name: /obrigações fiscais/i })

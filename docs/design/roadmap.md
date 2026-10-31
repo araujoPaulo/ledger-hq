@@ -99,7 +99,7 @@ Tokens, the `apps/web/src/ui/` library (`Button`, `Badge`, `Card`,
 
 ## Stage 2 — Clients list & form
 
-**Status:** specced.
+**Status:** shipped.
 
 Form controls `Input`, `Textarea`, `Select`, `Checkbox` (native,
 styled) on one internal `Field`; `Button asChild`. Applied to
@@ -110,6 +110,7 @@ in `SearchBox` and `PeriodSummaryReport`.
 - **New dependency**: `@radix-ui/react-slot`.
 - **Depends on**: Stage 1.
 - [Spec](../superpowers/specs/2026-10-04-ui-refresh-stage-2-design.md).
+- [Plan](../superpowers/plans/2026-10-04-ui-refresh-stage-2.md).
 
 ## Stage 3 — Client detail page
 

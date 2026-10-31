@@ -18,11 +18,11 @@ test('finds a client by a three-letter prefix and opens it', async ({ page }) =>
   await signIn(page)
 
   await page.getByRole('link', { name: /clientes/i }).click()
-  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Mercearia Pesquisável, Lda.')
   await page.getByLabel(/^nif$/i).fill('507666666')
-  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByRole('button', { name: /^criar$/i }).click()
   await expect(page.getByText('Mercearia Pesquisável, Lda.')).toBeVisible()
 
   // The shell's box, not the clients page's own filter.
@@ -37,11 +37,11 @@ test('lists a client that is both overdue and in arrears on the reporting page',
   await signIn(page)
 
   await page.getByRole('link', { name: /clientes/i }).click()
-  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Talho em Risco, Lda.')
   await page.getByLabel(/^nif$/i).fill('507777778')
-  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByRole('button', { name: /^criar$/i }).click()
   await page.getByRole('button', { name: /guardar/i }).click() // fiscal profile defaults, which already imply COMPANY/MONTHLY
 
   // Saving the profile only proposes a regeneration; it does not create

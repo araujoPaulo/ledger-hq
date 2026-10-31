@@ -26,7 +26,7 @@ test('sets up the vault, adds a credential, and reads it back with the network d
 
   // Register a client to attach a credential to.
   await page.getByRole('link', { name: /clientes/i }).click()
-  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   // Distinct name and NIF from `setup-and-clients.spec.ts`'s own company:
   // when the full suite runs all spec files together (Step 4), both specs'
@@ -36,7 +36,7 @@ test('sets up the vault, adds a credential, and reads it back with the network d
   // accessible name) under Playwright's strict mode.
   await page.getByLabel(/^nome$/i).fill('Padaria Central Vault, Lda.')
   await page.getByLabel(/^nif$/i).fill('501442618')
-  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByRole('button', { name: /^criar$/i }).click()
   await expect(page.getByText('Padaria Central Vault, Lda.')).toBeVisible()
 
   // Set up the vault (re-enters the master password by design — see Task 12).
@@ -62,7 +62,7 @@ test('sets up the vault, adds a credential, and reads it back with the network d
   // create attempt 409s on the name and the list keeps showing the one
   // already there; the credential step below still exercises a real,
   // attached platform either way.
-  await page.getByRole('link', { name: /plataformas/i }).click()
+  await page.getByRole('link', { name: /cofre/i }).click()
   await page.getByLabel(/^nome$/i).fill('Portal das Finanças')
   await page.getByRole('button', { name: /criar/i }).click()
   await expect(page.getByText('Portal das Finanças')).toBeVisible()

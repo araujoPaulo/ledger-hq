@@ -30,21 +30,22 @@ test('sets up the account, registers a company and a person, and links them', as
 
   // A company.
   await page.getByRole('link', { name: /clientes/i }).click()
-  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Padaria Central, Lda.')
   await page.getByLabel(/^nif$/i).fill('501442600')
-  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByRole('button', { name: /^criar$/i }).click()
 
   await expect(page.getByText('Padaria Central, Lda.')).toBeVisible()
 
   // A person.
   await page.getByRole('link', { name: /clientes/i }).click()
-  await page.getByRole('link', { name: /criar/i }).click()
+  await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('INDIVIDUAL')
   await page.getByLabel(/^nome$/i).fill('Maria Santos')
   await page.getByLabel(/^nif$/i).fill('123456789')
-  await page.getByRole('button', { name: /guardar/i }).click()
+  await page.getByRole('button', { name: /^criar$/i }).click()
+  await expect(page.getByRole('heading', { name: 'Maria Santos' })).toBeVisible()
 
   // Link them from the company page.
   await page.getByRole('link', { name: /clientes/i }).click()
@@ -60,6 +61,26 @@ test('sets up the account, registers a company and a person, and links them', as
   // (EmploymentSection.tsx), which is what actually proves the row appeared.
   await expect(page.getByRole('link', { name: 'Maria Santos' })).toBeVisible()
   await expect(page.getByText(/em vigor/i)).toBeVisible()
+
+  // Edit the company: change its phone, save, and see it on the client page.
+  await page.getByRole('link', { name: /^editar$/i }).click()
+  await page.getByLabel(/^telefone$/i).fill('912 345 678')
+  await page.getByRole('button', { name: /^guardar$/i }).click()
+  await expect(page).toHaveURL(/\/clients\/[^/]+$/)
+  await expect(page.getByText('912 345 678')).toBeVisible()
+
+  // At phone width a list row shows the tax number under the name (the desktop
+  // column is display:none, so only the caption is visible).
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/clients')
+  const nameLink = page.getByRole('link', { name: 'Padaria Central, Lda.' })
+  const taxIdCaption = page.getByText('501442600').filter({ visible: true })
+  await expect(taxIdCaption).toBeVisible()
+  const nameBox = await nameLink.boundingBox()
+  const taxIdBox = await taxIdCaption.boundingBox()
+  expect(nameBox).not.toBeNull()
+  expect(taxIdBox).not.toBeNull()
+  expect(taxIdBox?.y ?? 0).toBeGreaterThan(nameBox?.y ?? 0)
 })
 
 test('switches language without losing the page', async ({ page }) => {

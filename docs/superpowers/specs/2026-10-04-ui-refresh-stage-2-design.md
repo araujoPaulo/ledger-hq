@@ -431,7 +431,7 @@ the static `edit` segment correctly; no existing path changes.
 
 The plain `<input>` becomes `<Input type="search" leadingIcon={Search}
 hideLabel label={t('search.label')} placeholder={…} />`, at 36px rather
-than 40 (`className="h-9"`) to sit in the sidebar. The `/` shortcut, the
+than 40 (`className="h-9!"`) to sit in the sidebar. The `/` shortcut, the
 debounce, `replace: true` and Escape-to-clear are unchanged; `Input`
 forwards its ref, which the shortcut needs. The component's comment
 explaining why it was a plain input is deleted.

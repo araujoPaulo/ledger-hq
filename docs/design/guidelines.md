@@ -58,6 +58,10 @@ Three gaps: `gap-4` inside a control group, `gap-6` between elements in a
 section, `gap-8` between sections. A layout that wants a fourth value
 usually wants a different structure.
 
+Inside a single control — label to box, icon to text — `gap-1.5` or
+`gap-2` is the control's own business; the three gaps are between
+elements.
+
 `rounded-surface` (8px) on cards and normal buttons; `rounded-control`
 (6px) on small and icon-only buttons and on badges.
 
@@ -103,7 +107,53 @@ layout that replaces it is the screen's knowledge, not the library's.
 **A page title** — exactly one `PageHeader` per page, which owns the page's
 only `<h1>`. Sections below it start at `<h2>`.
 
-## 3. Accessibility checklist
+## 3. Forms
+
+Four controls, all in `apps/web/src/ui/`:
+
+| Control | For |
+|---|---|
+| `Input` | one line of text, a number, a date (the browser's own picker), an email, a search |
+| `Textarea` | prose — notes, reasons. Regular weight, grows downwards |
+| `Select` | a choice among a handful of options, as `<option>` children built from a `*_VALUES` constant. Native, so the phone shows its own picker |
+| `Checkbox` | a yes/no. `boxed` in a filter bar, so it sits level with the other controls |
+
+**The `Field` contract.** `Input`, `Textarea` and `Select` render through
+one internal `Field`, so label, hint and error behave identically
+everywhere:
+
+- `label` is required and is the accessible name. `hideLabel` hides it
+  visually and keeps the name — for a search box whose icon and
+  placeholder say what it is. A placeholder is never the label.
+- `hint` sits under the control; `error` under the hint, with an icon and
+  `role="alert"`. Both are joined to the control by `aria-describedby`,
+  hint first; a caller's own `aria-describedby` is appended. `error` also
+  sets `aria-invalid` and the danger border — the border is never the only
+  signal.
+- `className` and `ref` land on the native control, never on a wrapper.
+  To override a control's 40px height use the important modifier
+  (`className="h-9!"`); two height utilities on one element are not
+  resolved by their order.
+
+**Disabled means "cannot change"**, never "does not apply". A client's
+kind on the edit form is disabled, with a hint saying why. Fields that do
+not apply to the record are not rendered.
+
+**`Select layout="inline"`** — label beside the control — is for filter
+bars only. It takes no hint and no error; the type forbids them.
+
+**A link that looks like a button** is `<Button asChild>` around a `Link`.
+It takes no `type`, no `isLoading` and no `disabled` — the type forbids
+all three: a link does not load, and one that cannot be followed is not
+rendered.
+
+**Field errors are the form's one validation voice.** A form that runs
+its own validation and shows field errors sets `noValidate`, so the
+browser's bubble never pre-empts the field's own message. A form that
+validates only on the server may keep the browser's `required` and
+`type="url"` checks.
+
+## 4. Accessibility checklist
 
 Run before opening a PR.
 
@@ -127,8 +177,17 @@ Run before opening a PR.
    once in `styles.css`, not per component.
 9. Real elements: `<button>` for actions, `<a>`/`Link` for navigation.
    Never `onClick` on a `div`.
+10. Every form control has a programmatic label — visible, or hidden with
+    `hideLabel`. A placeholder is never the label.
+11. A field error is announced (`role="alert"`), tied to its control by
+    `aria-describedby`, and marked with `aria-invalid`.
+12. Disabled means "cannot change"; a field that does not apply is not
+    rendered.
+13. Controls are 40px tall; a filter bar's boxed checkbox matches, and the
+    whole box is the touch target.
+14. Focus order in a form follows reading order, section by section.
 
-## 4. i18n
+## 5. i18n
 
 No hardcoded user-visible string, and that includes every `aria-label`.
 Every key exists in both `pt-PT` and `en-GB`;
@@ -147,7 +206,7 @@ Test files are exempt from `i18next/no-literal-string`
 (`packages/config/eslint.config.mjs`): a component test has to render
 literal children to have anything to assert on, and none of it ships.
 
-## 5. The rule about `ui/`
+## 6. The rule about `ui/`
 
 Nothing in `apps/web/src/ui/` imports from a feature folder —
 `obligations/`, `billing/`, `clients/`, `vault/`. It may import from
