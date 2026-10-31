@@ -1,8 +1,14 @@
 {
   "setup": {
     "title": "Configura o cofre",
+    "step": "Passo {{current}} de {{total}}",
+    "intro": "O cofre cifra as credenciais dos clientes com uma chave que só a tua palavra-passe mestra abre. Confirma-a para continuar.",
     "confirmPasswordLabel": "Confirma a tua palavra-passe mestra",
     "recoveryCodeIntro": "Este é o teu código de recuperação. É a única forma de recuperares o acesso se perderes a palavra-passe mestra.",
+    "recoveryCodeTitle": "Anota isto agora",
+    "recoveryCodeLabel": "Código de recuperação",
+    "copyCode": "Copiar código",
+    "codeCopied": "Código copiado. A área de transferência limpa-se em 30 segundos.",
     "acknowledgeLabel": "Anotei o código de recuperação e guardei-o em local seguro.",
     "continueButton": "Continuar"
   },
@@ -16,10 +22,16 @@
     "wrongPassword": "Palavra-passe incorreta.",
     "unlockButton": "Desbloquear"
   },
+  "status": {
+    "unlocked": "Desbloqueado · bloqueia após {{minutes}} min",
+    "locked": "Bloqueado"
+  },
   "platforms": {
     "title": "Plataformas",
+    "description": "As plataformas onde o gabinete entra. As credenciais ficam em cada cliente, cifradas neste dispositivo.",
     "newTitle": "Nova plataforma",
-    "empty": "Ainda não há plataformas.",
+    "empty": "Ainda não há plataformas",
+    "emptyHint": "Adiciona as plataformas — Portal das Finanças, Segurança Social Direta — antes de guardares credenciais de clientes.",
     "form": {
       "name": { "label": "Nome", "invalid": "Indica um nome válido." },
       "url": { "label": "URL", "invalid": "Indica um URL válido." },
