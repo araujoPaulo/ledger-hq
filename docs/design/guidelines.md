@@ -107,6 +107,46 @@ layout that replaces it is the screen's knowledge, not the library's.
 **A page title** — exactly one `PageHeader` per page, which owns the page's
 only `<h1>`. Sections below it start at `<h2>`.
 
+**A form** — in a `Dialog` when it is launched from a row, has more than
+one step, or creates something; on the client page, that is every form.
+No form is permanently rendered under a list. The section that owns the
+button owns the dialog's `open` state; a successful submit closes it, a
+failed one keeps it open with the `ErrorMessage` inside. The form renders
+its own `<form>` and ends in a `Dialog.Footer` — Cancel
+(`Dialog.Close asChild` + a ghost `Button`) first, the primary action last.
+The dialog's `title` replaces the form's own heading. **One dialog at a
+time**: a dialog never opens another; confirm in place instead (the
+receipts dialog's "Delete for good").
+
+**Tabs** — `Tabs`, always controlled, with the value in the URL
+(`?tab=`, validated by the route, absent means the first tab) and changed
+with `replace: true`, so Back leaves the page rather than walking the
+tabs. An inactive panel is unmounted, so its queries do not run; a
+summary that needs another tab's data fetches it under that tab's own
+query key.
+
+**A confirmation with no other visible result** — a toast, through
+`useToast()`; in practice, a copy to the clipboard. A dialog that closes
+and a list that updates is its own confirmation. A toast never carries the
+only copy of anything, and a copy that failed gets no toast.
+
+**A message about a section's state** — `Callout`, when it is neither an
+error nor empty and there may be content below it: the generator preview,
+the vault not set up, the vault unknown offline. `EmptyState` is for a list
+with nothing in it; `ErrorMessage` is for a request that failed. `role` on
+a `Callout` only when the message must be announced as it appears.
+
+**An amount typed by a person** — `MoneyInput`, which shows euros in the
+locale's notation and hands the form integer cents. `parseAmount` (text to
+cents) and `formatCurrency`/`formatAmount` (cents to text) in
+`i18n/format.ts` are the only conversions. A grouping separator is
+accepted only between groups of three digits, so a decimal typed with the
+wrong mark is refused rather than read as a hundredfold amount. Whether an
+amount must be positive is the form's rule.
+
+**Name/value descriptions** — `DataList as="dl"`. Lists of records stay
+`div`.
+
 ## 3. Forms
 
 Four controls, all in `apps/web/src/ui/`:
@@ -152,6 +192,7 @@ its own validation and shows field errors sets `noValidate`, so the
 browser's bubble never pre-empts the field's own message. A form that
 validates only on the server may keep the browser's `required` and
 `type="url"` checks.
+`noValidate` is for forms whose own checks cover every constraint; a form may leave constraints it does not check itself (required, min/max) to the browser.
 
 ## 4. Accessibility checklist
 
@@ -186,6 +227,13 @@ Run before opening a PR.
 13. Controls are 40px tall; a filter bar's boxed checkbox matches, and the
     whole box is the touch target.
 14. Focus order in a form follows reading order, section by section.
+15. Tabs move with the arrow keys and Home/End; a badge inside a tab is
+    part of its name.
+16. A dialog has a title, takes focus to its first field on open, traps
+    it, and returns it to what opened it on close; Escape closes it.
+17. A countdown (the TOTP's seconds left) is never a live region.
+18. An amount's format error is announced like any field error, and only
+    once the field is left.
 
 ## 5. i18n
 

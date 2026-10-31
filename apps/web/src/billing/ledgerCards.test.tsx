@@ -98,6 +98,14 @@ describe('RetainerPlanCard', () => {
     )
   })
 
+  it('renders the start date when the API sends a full ISO timestamp', async () => {
+    // The API serialises the plan's Date column as a timestamp, not a date.
+    getCurrentRetainerPlan.mockResolvedValue({ ...plan, validFrom: '2026-01-01T00:00:00.000Z' })
+    renderWith(<RetainerPlanCard clientId="c1" onSaved={() => {}} />)
+
+    expect(await screen.findByText('01/01/2026')).toBeInTheDocument()
+  })
+
   it('cannot be saved without a positive amount', async () => {
     getCurrentRetainerPlan.mockResolvedValue(null)
     renderWith(<RetainerPlanCard clientId="c1" onSaved={() => {}} />)

@@ -21,7 +21,7 @@ test('sets up a company, generates obligations, sees them on the dashboard, and 
     await confirmPasswordField.fill(MASTER_PASSWORD)
   }
   await page.getByRole('button', { name: /criar|entrar/i }).click()
-  await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
+  await expect(page.getByRole('navigation').getByRole('link', { name: /clientes/i })).toBeVisible()
 
   // Register a company client with an open, monthly-VAT fiscal profile.
   // Distinct name and NIF from `setup-and-clients.spec.ts`'s own company:
@@ -29,7 +29,7 @@ test('sets up a company, generates obligations, sees them on the dashboard, and 
   // live in the same shared backend/DB, and a matching NIF would 409 on
   // `clients.tax_id_taken` (same reasoning `vault-offline.spec.ts` documents
   // for its own client).
-  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('navigation').getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Padaria Central Obrigações, Lda.')
@@ -37,7 +37,14 @@ test('sets up a company, generates obligations, sees them on the dashboard, and 
   await page.getByRole('button', { name: /^criar$/i }).click()
   await expect(page.getByText('Padaria Central Obrigações, Lda.')).toBeVisible()
 
-  await page.getByRole('button', { name: /guardar/i }).click() // saves the fiscal profile's own defaults, which already imply COMPANY/MONTHLY
+  // The fiscal profile is a card on the Overview tab; "Preencher" opens it
+  // with the kind's defaults, which already imply COMPANY/MONTHLY.
+  await page.getByRole('button', { name: /^preencher$/i }).click()
+  await page.getByRole('dialog', { name: /perfil fiscal/i }).getByRole('button', { name: /^guardar$/i }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  // The generator preview lives on the Obligations tab.
+  await page.getByRole('tab', { name: /obrigações/i }).click()
 
   // The regenerate preview banner should appear once the profile exists.
   // MONTHLY VAT generates one instance per month across the generator's
@@ -64,25 +71,26 @@ test('sets up a company, generates obligations, sees them on the dashboard, and 
   await expect(markDoneButtons).toHaveCount(pendingCountBeforeDone - 1)
 
   // Back on the client page, adjust a different obligation's due date.
-  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('navigation').getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: 'Padaria Central Obrigações, Lda.' }).click()
+  await page.getByRole('tab', { name: /obrigações/i }).click()
 
-  // Everything below is scoped to this section. The client page also carries
-  // ClientLedgerSection, whose own "Editar"/"Guardar" controls render
-  // immediately while this section is still waiting on its obligations
-  // query — so a page-wide `.first()`/`.last()` resolves to the billing
-  // form instead, depending on which query settles first.
+  // Scoped to the section, then to the dialog Edit opens: the adjust form is
+  // the only thing on screen once it is open.
   const obligations = page.getByRole('region', { name: /obrigações fiscais/i })
   await obligations.getByRole('button', { name: /^editar$/i }).first().click()
-  // Two "Prazo" fields are on screen at once here: the just-opened
-  // AdjustObligationForm and the always-rendered AddAdHocObligationForm at
-  // the bottom of ObligationsSection (both use the same `form.dueDate`/
-  // `adHoc.dueDate` "Prazo" label). AdjustObligationForm renders first.
-  await obligations.getByLabel(/prazo/i).first().fill('2026-12-31')
-  await obligations.getByRole('button', { name: /^guardar$/i }).click()
+  const adjust = page.getByRole('dialog')
+  await adjust.getByLabel(/prazo/i).fill('2026-12-31')
+  await adjust.getByRole('button', { name: /^guardar$/i }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   // The saved row renders the date through `formatDate` (b0f5b17), so the
   // assertion is on the pt-PT rendering, not on the ISO value typed above.
-  await expect(obligations.getByText('31/12/2026')).toBeVisible()
+  // The generator's calendar-year window can also produce an obligation that
+  // naturally falls due on that day, so the row is told apart by the
+  // "overridden" marker the adjusted date carries.
+  await expect(
+    obligations.getByRole('listitem').filter({ hasText: '31/12/2026' }).filter({ hasText: /data alterada manualmente/i }),
+  ).toHaveCount(1)
 })
 
 test('attaches a receipt to an obligation, downloads it, and keeps it out of the service-worker cache', async ({ page }) => {
@@ -95,23 +103,28 @@ test('attaches a receipt to an obligation, downloads it, and keeps it out of the
     await confirmPasswordField.fill(MASTER_PASSWORD)
   }
   await page.getByRole('button', { name: /criar|entrar/i }).click()
-  await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
+  await expect(page.getByRole('navigation').getByRole('link', { name: /clientes/i })).toBeVisible()
 
-  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('navigation').getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Padaria Central Anexos, Lda.')
   await page.getByLabel(/^nif$/i).fill('507555570')
   await page.getByRole('button', { name: /^criar$/i }).click()
-  await page.getByRole('button', { name: /guardar/i }).click() // fiscal profile defaults
+  // The fiscal profile is a card on the Overview tab; "Preencher" opens it
+  // with the kind's defaults, which already imply COMPANY/MONTHLY.
+  await page.getByRole('button', { name: /^preencher$/i }).click()
+  await page.getByRole('dialog', { name: /perfil fiscal/i }).getByRole('button', { name: /^guardar$/i }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 
+  await page.getByRole('tab', { name: /obrigações/i }).click()
   const obligations = page.getByRole('region', { name: /obrigações fiscais/i })
   await expect(page.getByRole('button', { name: /aplicar/i })).toBeVisible({ timeout: 10_000 })
   await page.getByRole('button', { name: /aplicar/i }).click()
   await expect(obligations.getByText(/declaração periódica de iva/i).first()).toBeVisible()
 
   await obligations.getByRole('button', { name: /^comprovativos$/i }).first().click()
-  const panel = page.getByRole('region', { name: /comprovativos/i })
+  const panel = page.getByRole('dialog', { name: /comprovativos/i })
 
   // A real, minimal PDF: the API sniffs the leading bytes and rejects
   // anything whose contents disagree with its declared type.

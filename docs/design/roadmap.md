@@ -114,7 +114,7 @@ in `SearchBox` and `PeriodSummaryReport`.
 
 ## Stage 3 — Client detail page
 
-**Status:** specced.
+**Status:** shipped.
 
 `ClientDetailPage` as a header plus five URL-backed tabs (Overview,
 Obligations, Billing, People, Credentials), every composed section and
@@ -129,6 +129,7 @@ Amounts typed in euros through `MoneyInput`. `ObligationRow` restyled
   `@radix-ui/react-dialog`, `@radix-ui/react-toast`.
 - **Depends on**: Stage 2's form controls.
 - [Spec](../superpowers/specs/2026-10-04-ui-refresh-stage-3-design.md).
+- [Plan](../superpowers/plans/2026-10-04-ui-refresh-stage-3.md).
 
 ## Stage 4 — Vault page & setup
 

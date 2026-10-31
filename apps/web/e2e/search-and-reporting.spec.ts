@@ -11,13 +11,13 @@ async function signIn(page: import('@playwright/test').Page) {
     await confirmPasswordField.fill(MASTER_PASSWORD)
   }
   await page.getByRole('button', { name: /criar|entrar/i }).click()
-  await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
+  await expect(page.getByRole('navigation').getByRole('link', { name: /clientes/i })).toBeVisible()
 }
 
 test('finds a client by a three-letter prefix and opens it', async ({ page }) => {
   await signIn(page)
 
-  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('navigation').getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Mercearia Pesquisável, Lda.')
@@ -36,13 +36,19 @@ test('finds a client by a three-letter prefix and opens it', async ({ page }) =>
 test('lists a client that is both overdue and in arrears on the reporting page', async ({ page }) => {
   await signIn(page)
 
-  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('navigation').getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Talho em Risco, Lda.')
   await page.getByLabel(/^nif$/i).fill('507777778')
   await page.getByRole('button', { name: /^criar$/i }).click()
-  await page.getByRole('button', { name: /guardar/i }).click() // fiscal profile defaults, which already imply COMPANY/MONTHLY
+  // The fiscal profile is a card on the Overview tab; "Preencher" opens it
+  // with the kind's defaults, which already imply COMPANY/MONTHLY.
+  await page.getByRole('button', { name: /^preencher$/i }).click()
+  await page.getByRole('dialog', { name: /perfil fiscal/i }).getByRole('button', { name: /^guardar$/i }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  await page.getByRole('tab', { name: /obrigações/i }).click()
 
   // Saving the profile only proposes a regeneration; it does not create
   // obligation instances until applied (obligations.spec.ts's own comment on
@@ -58,14 +64,14 @@ test('lists a client that is both overdue and in arrears on the reporting page',
 
   // A charge already past its due date puts the client in arrears, the
   // report's other half.
-  const ledger = page.getByRole('region', { name: /^faturação$/i })
-  const adHocCharge = ledger.getByRole('form', { name: /nova cobrança avulsa/i })
-  await adHocCharge.getByLabel(/descrição/i).fill('Trabalho extra')
-  await adHocCharge.getByLabel(/valor \(cêntimos\)/i).fill('20000')
-  await adHocCharge.getByLabel(/data de vencimento/i).fill('2026-02-28')
-  // AddAdHocChargeForm's own submit button reads "Criar" (common:actions.create),
-  // not "Guardar" — unlike the retainer-plan and fiscal-profile forms above.
-  await adHocCharge.getByRole('button', { name: /^criar$/i }).click()
+  await page.getByRole('tab', { name: /faturação/i }).click()
+  await page.getByRole('button', { name: /nova cobrança avulsa/i }).click()
+  const chargeDialog = page.getByRole('dialog', { name: /nova cobrança avulsa/i })
+  await chargeDialog.getByLabel(/descrição/i).fill('Trabalho extra')
+  await chargeDialog.getByLabel(/^valor$/i).fill('200,00')
+  await chargeDialog.getByLabel(/data de vencimento/i).fill('2026-02-28')
+  await chargeDialog.getByRole('button', { name: /^criar$/i }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 
   await page.getByRole('link', { name: /relatórios/i }).click()
   await expect(page.getByRole('heading', { name: /^em risco$/i })).toBeVisible()

@@ -54,7 +54,7 @@ export function RetainerPlanCard({ clientId, onSaved }: Props) {
             />
             <DataList.Row
               label={t('billing:retainerPlan.validFrom.label')}
-              value={<span className="tabular-nums">{formatDate(plan.data.validFrom, locale)}</span>}
+              value={<span className="tabular-nums">{formatDate(plan.data.validFrom.slice(0, 10), locale)}</span>}
             />
           </DataList>
         )}

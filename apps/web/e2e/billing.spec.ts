@@ -24,59 +24,58 @@ test('creates a retainer plan, charges a client, records a payment, and sees the
     await confirmPasswordField.fill(MASTER_PASSWORD)
   }
   await page.getByRole('button', { name: /criar|entrar/i }).click()
-  await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
+  await expect(page.getByRole('navigation').getByRole('link', { name: /clientes/i })).toBeVisible()
 
   // A distinct name and NIF from every other spec's own client, to avoid a
   // 409 on `clients.tax_id_taken` when the full suite runs together against
   // the one shared backend.
-  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('navigation').getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Padaria Central Faturação, Lda.')
   await page.getByLabel(/^nif$/i).fill('501442634')
   await page.getByRole('button', { name: /^criar$/i }).click()
   await expect(page.getByText('Padaria Central Faturação, Lda.')).toBeVisible()
-  await page.getByRole('button', { name: /guardar/i }).click() // fiscal profile defaults
-
-  // Every locator below is scoped to the region or form it belongs to.
-  // ClientLedgerSection deliberately renders three forms whose labels
-  // overlap ("Valor (cêntimos)" is in both RecordPaymentForm and
-  // AddAdHocChargeForm), and ClientDetailPage's own outer <section> wraps
-  // all of them — so an unscoped locator here resolves ambiguously, which
-  // is exactly the class of collision Phase 2's Task 18 had to unpick twice.
+  // The fiscal profile is a card on the Overview tab; "Preencher" opens it
+  // with the kind's defaults, which already imply COMPANY/MONTHLY.
+  await page.getByRole('button', { name: /^preencher$/i }).click()
+  await page.getByRole('dialog', { name: /perfil fiscal/i }).getByRole('button', { name: /^guardar$/i }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  // Billing is its own tab, and every form on it opens in a dialog, so each
+  // locator below is scoped to the dialog it belongs to — the ambiguity
+  // Phase 2 had to unpick twice (two open forms both labelled "Valor") cannot
+  // arise any more.
+  await page.getByRole('tab', { name: /faturação/i }).click()
   const ledger = page.getByRole('region', { name: /^faturação$/i })
-  const payment = ledger.getByRole('region', { name: /registar pagamento/i })
-  const adHocCharge = ledger.getByRole('form', { name: /nova cobrança avulsa/i })
 
-  // Create the retainer plan. The section's own "Editar" button toggles the
-  // create/renew form; the client page has other "Editar" buttons
-  // (ObligationsSection's own adjust toggle), hence the scoping.
-  await ledger.getByRole('button', { name: /^editar$/i }).click()
-  await ledger.getByLabel(/valor mensal/i).fill('9000')
-  await ledger.getByLabel(/dia de vencimento/i).fill('8')
-  await ledger.getByLabel(/em vigor desde/i).fill('2026-01-01')
-  await ledger.getByRole('button', { name: /^guardar$/i }).click()
+  // Create the retainer plan from its card. Amounts are typed in euros.
+  await ledger.getByRole('button', { name: /criar plano de retainer/i }).click()
+  const planDialog = page.getByRole('dialog', { name: /criar plano de retainer/i })
+  await planDialog.getByLabel(/valor mensal/i).fill('90,00')
+  await planDialog.getByLabel(/dia de vencimento/i).fill('8')
+  await planDialog.getByLabel(/em vigor desde/i).fill('2026-01-01')
+  await planDialog.getByRole('button', { name: /^guardar$/i }).click()
 
-  // Reopening the form now offers the renew variant, not the create one —
-  // which is what proves the plan actually persisted server-side rather
-  // than the form merely having closed.
-  await ledger.getByRole('button', { name: /^editar$/i }).click()
-  await expect(ledger.getByText(/atualizar valor/i)).toBeVisible()
-  await expect(ledger.getByText(/criar plano de retainer/i)).toHaveCount(0)
-  await ledger.getByRole('button', { name: /^editar$/i }).click() // close it again
+  // The card now offers to update the fee instead of creating a plan —
+  // which proves the plan persisted server-side, not merely that the dialog
+  // closed.
+  await expect(ledger.getByRole('button', { name: /atualizar valor/i })).toBeVisible()
+  await expect(ledger.getByRole('button', { name: /criar plano de retainer/i })).toHaveCount(0)
 
   // The plan itself only produces charges when the daily generation runs
   // (BillingCron, 3AM) — there is no per-client "generate now" control in
   // the UI, so this spec raises the charge it then pays through the ad-hoc
   // route, which lands the same Charge row the generator would and drives
   // the identical propose/confirm allocation path.
-  await adHocCharge.getByLabel(/descrição/i).fill('Consultoria extra')
-  await adHocCharge.getByLabel(/valor \(cêntimos\)/i).fill('15000')
+  await ledger.getByRole('button', { name: /nova cobrança avulsa/i }).click()
+  const chargeDialog = page.getByRole('dialog', { name: /nova cobrança avulsa/i })
+  await chargeDialog.getByLabel(/descrição/i).fill('Consultoria extra')
+  await chargeDialog.getByLabel(/^valor$/i).fill('150,00')
   // Dated in the past on purpose: receivables is an ageing list of charges
   // that are already due, so a future-dated charge would (correctly) not
   // appear there and the assertion below would prove nothing.
-  await adHocCharge.getByLabel(/data de vencimento/i).fill('2026-09-01')
-  await adHocCharge.getByRole('button', { name: /^criar$/i }).click()
+  await chargeDialog.getByLabel(/data de vencimento/i).fill('2026-09-01')
+  await chargeDialog.getByRole('button', { name: /^criar$/i }).click()
   await expect(ledger.getByText(/consultoria extra/i)).toBeVisible()
 
   // Unpaid, the client is on the home page's receivables list.
@@ -84,17 +83,22 @@ test('creates a retainer plan, charges a client, records a payment, and sees the
   await page.goto('/')
   await expect(receivables.getByText(/padaria central faturação/i)).toBeVisible()
 
+  // A receivable links straight to its client's Billing tab.
+  await receivables.getByRole('link', { name: /padaria central faturação/i }).click()
+  await expect(page).toHaveURL(/\?tab=billing/)
+
   // Record a payment covering the charge in full.
-  await page.getByRole('link', { name: /clientes/i }).click()
-  await page.getByRole('link', { name: 'Padaria Central Faturação, Lda.' }).click()
-  await payment.getByLabel(/valor \(cêntimos\)/i).fill('15000')
+  await ledger.getByRole('button', { name: /registar pagamento/i }).click()
+  const payment = page.getByRole('dialog', { name: /registar pagamento/i })
+  await payment.getByLabel(/^valor$/i).fill('150,00')
   await payment.getByLabel(/data de receção/i).fill('2026-09-05')
   await payment.getByRole('button', { name: /propor alocação/i }).click()
 
-  // The proposal is one row — the single open charge — for the full amount.
-  await expect(payment.getByRole('listitem')).toHaveCount(1)
-  await expect(payment.getByRole('listitem').first()).toContainText('150,00')
+  // The proposal is the single open charge, for the full amount.
+  await expect(payment.getByText(/consultoria extra/i)).toBeVisible()
+  await expect(payment.getByText(/150,00/)).toBeVisible()
   await payment.getByRole('button', { name: /^confirmar$/i }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 
   // The ledger now carries both sides of the movement.
   await expect(ledger.getByText(/pagamento — transfer/i)).toBeVisible()
@@ -115,9 +119,9 @@ test('records an advance payment, sees it as credit, and spends it on a later ch
     await confirmPasswordField.fill(MASTER_PASSWORD)
   }
   await page.getByRole('button', { name: /criar|entrar/i }).click()
-  await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
+  await expect(page.getByRole('navigation').getByRole('link', { name: /clientes/i })).toBeVisible()
 
-  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('navigation').getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   await page.getByLabel(/^nome$/i).fill('Talho do Bairro Crédito, Lda.')
@@ -125,29 +129,34 @@ test('records an advance payment, sees it as credit, and spends it on a later ch
   // take 123456789 and 5014426xx).
   await page.getByLabel(/^nif$/i).fill('507555554')
   await page.getByRole('button', { name: /^criar$/i }).click()
-  await page.getByRole('button', { name: /guardar/i }).click() // fiscal profile defaults
+  // The fiscal profile is a card on the Overview tab; "Preencher" opens it
+  // with the kind's defaults, which already imply COMPANY/MONTHLY.
+  await page.getByRole('button', { name: /^preencher$/i }).click()
+  await page.getByRole('dialog', { name: /perfil fiscal/i }).getByRole('button', { name: /^guardar$/i }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 
+  await page.getByRole('tab', { name: /faturação/i }).click()
   const ledger = page.getByRole('region', { name: /^faturação$/i })
-  const adHocCharge = ledger.getByRole('form', { name: /nova cobrança avulsa/i })
-  const payment = ledger.getByRole('region', { name: /registar pagamento/i })
   const credit = ledger.getByRole('region', { name: /crédito disponível/i })
 
   // A payment with nothing to settle: every cent becomes credit.
-  await payment.getByLabel(/valor \(cêntimos\)/i).fill('27000')
+  await ledger.getByRole('button', { name: /registar pagamento/i }).click()
+  const payment = page.getByRole('dialog', { name: /registar pagamento/i })
+  await payment.getByLabel(/^valor$/i).fill('270,00')
   await payment.getByLabel(/data de receção/i).fill('2026-01-05')
   await payment.getByRole('button', { name: /propor alocação/i }).click()
   await payment.getByRole('button', { name: /^confirmar$/i }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
 
   await expect(credit.getByText(/crédito disponível/i)).toBeVisible()
 
   // Now give it something to settle, due in the past so it has fallen due.
-  await adHocCharge.getByLabel(/descrição/i).fill('Trabalho extra')
-  await adHocCharge.getByLabel(/valor \(cêntimos\)/i).fill('9000')
-  await adHocCharge.getByLabel(/data de vencimento/i).fill('2026-02-28')
-  // AddAdHocChargeForm's submit button carries the shared "create" label
-  // ("Criar"), the same one ledger's own ad-hoc form uses above — not
-  // "Guardar", which belongs to the client and fiscal-profile forms.
-  await adHocCharge.getByRole('button', { name: /^criar$/i }).click()
+  await ledger.getByRole('button', { name: /nova cobrança avulsa/i }).click()
+  const chargeDialog = page.getByRole('dialog', { name: /nova cobrança avulsa/i })
+  await chargeDialog.getByLabel(/descrição/i).fill('Trabalho extra')
+  await chargeDialog.getByLabel(/^valor$/i).fill('90,00')
+  await chargeDialog.getByLabel(/data de vencimento/i).fill('2026-02-28')
+  await chargeDialog.getByRole('button', { name: /^criar$/i }).click()
   await expect(ledger.getByText(/trabalho extra/i)).toBeVisible()
 
   // `getReceivables` nets credit against debt notionally (design §4.4) the
@@ -168,9 +177,13 @@ test('records an advance payment, sees it as credit, and spends it on a later ch
   const creditBeforeCents = await readMoneyCents(availableCredit)
   expect(creditBeforeCents).toBe(27000)
 
+  // "Aplicar crédito" proposes first, in a dialog; nothing is written until Confirm.
   await credit.getByRole('button', { name: /aplicar crédito/i }).click()
-  await expect(credit.getByText(/trabalho extra/i)).toBeVisible()
-  await credit.getByRole('button', { name: /^confirmar$/i }).click()
+  const creditDialog = page.getByRole('dialog', { name: /crédito disponível/i })
+  await expect(creditDialog.getByText(/trabalho extra/i)).toBeVisible()
+  await creditDialog.getByRole('button', { name: /^confirmar$/i }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
 
   // The confirm mutation's own success handler re-fetches the ledger
   // asynchronously, so reading `availableCredit` right away would race it —

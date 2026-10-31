@@ -22,10 +22,10 @@ test('sets up the vault, adds a credential, and reads it back with the network d
     await confirmPasswordField.fill(MASTER_PASSWORD)
   }
   await page.getByRole('button', { name: /criar|entrar/i }).click()
-  await expect(page.getByRole('link', { name: /clientes/i })).toBeVisible()
+  await expect(page.getByRole('navigation').getByRole('link', { name: /clientes/i })).toBeVisible()
 
   // Register a client to attach a credential to.
-  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('navigation').getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: /^criar$/i }).first().click()
   await page.getByLabel(/tipo/i).selectOption('COMPANY')
   // Distinct name and NIF from `setup-and-clients.spec.ts`'s own company:
@@ -48,6 +48,8 @@ test('sets up the vault, adds a credential, and reads it back with the network d
   // below, silently re-locking the vault before the credential step and
   // contradicting this very comment. Reaching the route via the app's own
   // `<Link>` instead is a client-side route change, so that state survives.
+  // The vault prompt lives on the client's Credentials tab.
+  await page.getByRole('tab', { name: /credenciais/i }).click()
   await page.getByRole('link', { name: /configurar agora/i }).click()
   await page.getByLabel(/confirma a tua palavra-passe/i).fill(MASTER_PASSWORD)
   await page.getByRole('button', { name: /continuar/i }).click()
@@ -69,24 +71,22 @@ test('sets up the vault, adds a credential, and reads it back with the network d
 
   // Add a credential on the client's page. The vault is already unlocked
   // from the setup flow above, in the same browser session.
-  await page.getByRole('link', { name: /clientes/i }).click()
+  await page.getByRole('navigation').getByRole('link', { name: /clientes/i }).click()
   await page.getByRole('link', { name: 'Padaria Central Vault, Lda.' }).click()
-  // The client page also renders ObligationsSection's always-present
-  // AddAdHocObligationForm (Phase 2), whose own "name" field is labelled
-  // "Designação" too — same ambiguity class as "Prazo"/"Guardar" elsewhere
-  // in the obligations specs. Scope to the credential form specifically.
-  const credentialForm = page.locator('form', { hasText: /nova credencial/i })
+  await page.getByRole('tab', { name: /credenciais/i }).click()
+  // The empty state's button and the header's both read "Nova credencial"; wait
+  // for the empty-state text so the tab has settled, then take the first.
+  await expect(page.getByText(/ainda não há credenciais para este cliente/i)).toBeVisible()
+  // The form opens in its own dialog, so nothing else on the page — the
+  // obligations tab's own "Designação" field included — can collide with it.
+  await page.getByRole('button', { name: /nova credencial/i }).first().click()
+  const credentialForm = page.getByRole('dialog', { name: /nova credencial/i })
   await credentialForm.getByLabel(/designação/i).fill('Acesso principal')
   await credentialForm.getByLabel(/utilizador/i).fill('509123456')
   await credentialForm.getByLabel(/^palavra-passe$/i).fill('correct horse battery staple')
-  await credentialForm.getByRole('button', { name: /criar/i }).click()
-  // `getByText(/portal das finanças/i)` alone is ambiguous here: the
-  // AddCredentialForm's platform <select> still has a matching (collapsed)
-  // <option> with that same text, and Playwright's strict mode rejects the
-  // match — same class of ambiguity `setup-and-clients.spec.ts` already
-  // documents for "Maria Santos". The credential row renders "<platform> —
-  // <label>", which is what actually proves the row appeared.
-  await expect(page.getByText(/portal das finanças — acesso principal/i)).toBeVisible()
+  await credentialForm.getByRole('button', { name: /^criar$/i }).click()
+  // The row shows the platform and the label on separate lines now.
+  await expect(page.getByText('Acesso principal', { exact: false })).toBeVisible()
 
   // Let the service worker precache the shell before going offline.
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 20_000 })
