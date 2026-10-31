@@ -7,6 +7,7 @@ import { SetupPage } from './auth/SetupPage'
 import { ClientListPage } from './clients/ClientListPage'
 import { ClientFormPage } from './clients/ClientFormPage'
 import { ClientDetailPage } from './clients/ClientDetailPage'
+import { ClientEditPage } from './clients/ClientEditPage'
 import { VaultSetupPage } from './vault/VaultSetupPage'
 import { PlatformsPage } from './vault/PlatformsPage'
 import { HomePage } from './HomePage'
@@ -50,6 +51,12 @@ const clientDetailRoute = createRoute({
   component: ClientDetailPage,
 })
 
+const clientEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/clients/$clientId/edit',
+  component: ClientEditPage,
+})
+
 const vaultSetupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/vault/setup',
@@ -83,6 +90,7 @@ export const router = createRouter({
     clientsRoute,
     clientNewRoute,
     clientDetailRoute,
+    clientEditRoute,
     vaultSetupRoute,
     platformsRoute,
     searchRoute,
