@@ -204,6 +204,26 @@ describe('recovery mode', () => {
     expect(code.selectionStart).toBe(5)
   })
 
+  it('forward Delete right before a hyphen removes the next code character', async () => {
+    await openRecovery()
+
+    const code = screen.getByLabelText<HTMLInputElement>(/código de recuperação/i)
+    await userEvent.type(code, 'ABCDEFGHIJ')
+    await userEvent.type(code, '{Delete}', { initialSelectionStart: 5, initialSelectionEnd: 5 })
+    expect(code).toHaveValue('ABCDE-GHIJ')
+    expect(code.selectionStart).toBe(5)
+  })
+
+  it('moves focus to the new heading when switching between sign-in and recovery', async () => {
+    renderPage()
+
+    await userEvent.click(screen.getByRole('button', { name: /esqueceste a palavra-passe/i }))
+    expect(screen.getByRole('heading', { level: 1, name: /recuperar/i })).toHaveFocus()
+
+    await userEvent.click(screen.getByRole('button', { name: /voltar/i }))
+    expect(screen.getByRole('heading', { level: 1, name: /entrar/i })).toHaveFocus()
+  })
+
   it('does not move the code caret when another field re-renders after a rejected character', async () => {
     await openRecovery()
 

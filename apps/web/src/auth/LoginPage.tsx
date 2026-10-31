@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { MIN_MASTER_PASSWORD_LENGTH } from '@ledger-hq/crypto'
@@ -30,6 +30,19 @@ export function LoginPage() {
     recoveryCodeRef.current?.setSelectionRange(pendingCaret.current, pendingCaret.current)
     pendingCaret.current = null
   })
+
+  // Switching modes unmounts the focused button; hand focus to the new card's
+  // heading so keyboard and screen-reader users land at the top of the form.
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const modeChanged = useRef(false)
+  useEffect(() => {
+    if (!modeChanged.current) return
+    headingRef.current?.focus()
+  }, [mode])
+  const switchMode = (next: 'login' | 'recover') => {
+    modeChanged.current = true
+    setMode(next)
+  }
 
   const tooShortMessage = t('auth.passwordTooShort', { min: MIN_MASTER_PASSWORD_LENGTH })
 
@@ -69,7 +82,7 @@ export function LoginPage() {
           recoverMutation.mutate()
         }}
       >
-        <CardHeading title={t('auth.recoverTitle')} intro={t('auth.recoverIntro')} />
+        <CardHeading ref={headingRef} title={t('auth.recoverTitle')} intro={t('auth.recoverIntro')} />
 
         {/*
          * No maxLength: it would cut a pasted code with extra spacing before
@@ -86,7 +99,19 @@ export function LoginPage() {
           className="font-mono tracking-wider"
           value={recoveryCode}
           onChange={(event) => {
-            const { value, selectionStart } = event.target
+            const { selectionStart } = event.target
+            let { value } = event.target
+            const formattedBefore = formatRecoveryCode(value)
+            if (
+              formattedBefore === recoveryCode &&
+              (event.nativeEvent as InputEvent).inputType === 'deleteContentForward'
+            ) {
+              // Forward Delete right before a hyphen removed only the hyphen,
+              // which the formatter puts straight back. Delete the next code
+              // character instead, leaving the caret where it was.
+              const at = selectionStart ?? value.length
+              value = value.slice(0, at) + value.slice(at + 1)
+            }
             const formatted = formatRecoveryCode(value)
             const caret = caretInFormatted(formatted, significantBefore(value, selectionStart ?? value.length))
             if (formatted === recoveryCode) {
@@ -135,7 +160,7 @@ export function LoginPage() {
           {t('auth.recoverButton')}
         </Button>
 
-        <Button variant="ghost" size="sm" className="self-center" onClick={() => setMode('login')}>
+        <Button variant="ghost" size="sm" className="self-center" onClick={() => switchMode('login')}>
           {t('auth.backToLogin')}
         </Button>
       </form>
@@ -151,7 +176,7 @@ export function LoginPage() {
         loginMutation.mutate()
       }}
     >
-      <CardHeading title={t('auth.loginTitle')} />
+      <CardHeading ref={headingRef} title={t('auth.loginTitle')} />
 
       <Input
         type="email"
@@ -184,7 +209,7 @@ export function LoginPage() {
         {t('actions.signIn')}
       </Button>
 
-      <Button variant="ghost" size="sm" className="self-center" onClick={() => setMode('recover')}>
+      <Button variant="ghost" size="sm" className="self-center" onClick={() => switchMode('recover')}>
         {t('auth.forgotPassword')}
       </Button>
     </form>
