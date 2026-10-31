@@ -1,9 +1,6 @@
-import type { ReactNode } from 'react'
 import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router'
 import { AppLayout } from './shell/AppLayout'
-import { useBootstrapRequired, useSession } from './auth/session'
-import { LoginPage } from './auth/LoginPage'
-import { SetupPage } from './auth/SetupPage'
+import { RequireSession } from './auth/RequireSession'
 import { ClientListPage } from './clients/ClientListPage'
 import { ClientFormPage } from './clients/ClientFormPage'
 import { ClientDetailPage } from './clients/ClientDetailPage'
@@ -15,18 +12,15 @@ import { validateClientSearch } from './clients/clientTabs'
 import { SearchResultsPage } from './search/SearchResultsPage'
 import { ReportingPage } from './reporting/ReportingPage'
 
-export function RequireSession({ children }: { children: ReactNode }) {
-  const bootstrap = useBootstrapRequired()
-  const session = useSession()
-
-  if (bootstrap.isPending || session.isPending) return null
-  if (bootstrap.data?.required === true) return <SetupPage />
-  if (session.isError) return <LoginPage />
-
-  return <>{children}</>
+function Root() {
+  return (
+    <RequireSession>
+      <AppLayout />
+    </RequireSession>
+  )
 }
 
-const rootRoute = createRootRoute({ component: AppLayout })
+const rootRoute = createRootRoute({ component: Root })
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,

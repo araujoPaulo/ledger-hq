@@ -2,10 +2,10 @@ import { Outlet } from '@tanstack/react-router'
 import { ConnectionStatus } from './ConnectionStatus'
 import { Sidebar } from './Sidebar'
 import { MobileTabBar, MobileTopBar } from './MobileNav'
-import { RequireSession } from '../router'
 import { ToastProvider } from '../ui'
 import { useVaultSync } from '../vault/useVaultSync'
 
+/** The signed-in shell. `RequireSession` (auth/RequireSession.tsx) renders it only with a session. */
 export function AppLayout() {
   useVaultSync()
 
@@ -23,9 +23,7 @@ export function AppLayout() {
 
           {/* pb-24 keeps the fixed tab bar off the last row of content. */}
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-8">
-            <RequireSession>
-              <Outlet />
-            </RequireSession>
+            <Outlet />
           </main>
 
           <MobileTabBar />
