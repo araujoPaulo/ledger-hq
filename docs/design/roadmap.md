@@ -147,7 +147,7 @@ moves to Stage 5 — it is a mode of the sign-in page.
 
 ## Stage 5 — Auth
 
-**Status:** specced.
+**Status:** shipped.
 
 A standalone `AuthLayout` outside the shell for sign-in, recovery and
 account setup; the session gate moves above the shell; a splash
@@ -156,6 +156,7 @@ field normalises what is typed. No new components.
 
 - **Depends on**: Stage 2's form controls.
 - [Spec](../superpowers/specs/2026-10-04-ui-refresh-stage-5-design.md).
+- [Plan](../superpowers/plans/2026-10-04-ui-refresh-stage-5.md).
 
 ## Sequencing
 

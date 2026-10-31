@@ -93,6 +93,10 @@ cents become a localized string. `tone` defaults to reading the sign;
 pass it explicitly when sign and meaning come apart (Phase 4's client
 credit is a positive balance that is a credit).
 
+**A menu of actions** — a `DropdownMenu`: the account menu and the
+language menu. It opens on Enter/Space, moves with arrows and returns
+focus to its trigger; it floats on `shadow-overlay`.
+
 **Label/value rows** — `DataList`, with `DataList.Total` for a footer.
 Both slots take nodes, so a label can be a link and a value can be a badge
 beside an amount.
@@ -196,6 +200,14 @@ validates only on the server may keep the browser's `required` and
 `type="url"` checks.
 `noValidate` is for forms whose own checks cover every constraint; a form may leave constraints it does not check itself (required, min/max) to the browser.
 
+**Format structured codes as they are typed, idempotently.** The
+recovery code field (`vault/recoveryCode.ts`) upper-cases, strips
+anything outside the alphabet and re-inserts the hyphens on every
+change, restoring the caret after the same code character it followed;
+formatting a canonical value returns it unchanged. Never cap such a
+field with `maxLength` — the browser truncates a paste before the
+formatter can clean it; the formatter caps the code itself.
+
 ## 4. Secrets on screen
 
 - **Never render a password.** Show a mask plus a Copy button.
@@ -222,7 +234,8 @@ Run before opening a PR.
 3. Keyboard: tab order runs sidebar → content → account menu; the menu
    opens on Enter/Space, moves with arrows, closes on Escape, and returns
    focus to its trigger; every interactive element has a visible
-   `focus-visible` ring.
+   `focus-visible` ring. Signed out, there is no sidebar: tab order runs
+   language menu → the card's fields → submit.
 4. Touch targets are at least 44px in the mobile nav and in any list row
    that holds a control.
 5. Text contrast is at least 4.5:1, or 3:1 at 24px and above. `subtle` is
@@ -271,7 +284,29 @@ Test files are exempt from `i18next/no-literal-string`
 (`packages/config/eslint.config.mjs`): a component test has to render
 literal children to have anything to assert on, and none of it ships.
 
-## 7. The rule about `ui/`
+## 7. Signed-out screens
+
+Sign-in, vault recovery and account setup render outside the shell, in
+`auth/AuthLayout.tsx`: no sidebar, no tab bar, no search, no account menu
+— none of them can do anything without a session. `RequireSession`
+(`auth/RequireSession.tsx`) wraps the whole shell and chooses between the
+splash, the auth layout and the shell; no route path is involved.
+
+- **One card, one `<h1>`.** Each auth page renders its own heading block
+  inside the card (`text-2xl` title, optional `text-sm text-muted`
+  introduction). There is no `PageHeader` here — it is built for a page
+  body with an action slot.
+- **Language and connection are always reachable.** The auth layout's
+  corner holds `ConnectionStatus` and `LanguageMenu`. Account setup records
+  the active language as the account's locale.
+- **The splash is the frame and the mark, nothing else.** `AuthFrame` is
+  shared with the layout, so the mark does not move when the card or the
+  shell replaces the splash.
+- **Autocomplete tokens are exact**: `username` on the email,
+  `current-password` to sign in, `new-password` wherever a password is
+  being chosen. Password managers depend on them.
+
+## 8. The rule about `ui/`
 
 Nothing in `apps/web/src/ui/` imports from a feature folder —
 `obligations/`, `billing/`, `clients/`, `vault/`. It may import from
