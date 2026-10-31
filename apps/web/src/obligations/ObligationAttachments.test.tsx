@@ -53,7 +53,7 @@ function renderPanel() {
   return render(
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18next}>
-        <ObligationAttachments obligation={obligation} onClose={() => {}} />
+        <ObligationAttachments obligation={obligation} />
       </I18nextProvider>
     </QueryClientProvider>,
   )
@@ -119,28 +119,42 @@ describe('ObligationAttachments', () => {
     expect(await screen.findByText(/excede o limite/i)).toBeVisible()
   })
 
-  it('confirms before deleting, and does nothing when the operator declines', async () => {
+  // Spec §2.6: no window.confirm, and no dialog on top of a dialog — the
+  // row's Delete becomes "Delete for good" plus Cancel, in place.
+  it('asks again in place before deleting, and Cancel takes the question back', async () => {
     listAttachmentsMock.mockResolvedValue([attachment])
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const confirm = vi.spyOn(window, 'confirm')
 
     renderPanel()
 
     await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
-
-    expect(window.confirm).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /apagar definitivamente/i })).toBeInTheDocument()
     expect(deleteAttachmentMock).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }))
+    expect(screen.queryByRole('button', { name: /apagar definitivamente/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /eliminar declaração periódica\.pdf/i })).toBeInTheDocument()
+    expect(confirm).not.toHaveBeenCalled()
   })
 
-  it('deletes when the operator confirms', async () => {
+  it('deletes once the operator confirms in place', async () => {
     listAttachmentsMock.mockResolvedValue([attachment])
     deleteAttachmentMock.mockResolvedValue(undefined)
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     renderPanel()
 
     await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    await userEvent.click(screen.getByRole('button', { name: /apagar definitivamente/i }))
 
     await waitFor(() => expect(deleteAttachmentMock).toHaveBeenCalledWith('o1', 'a1'))
+  })
+
+  it('shows the size and the upload date beside the file', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+
+    renderPanel()
+
+    expect(await screen.findByText('34 kB · 18/03/2026')).toBeInTheDocument()
   })
 
   // Corrected from the brief: ErrorMessage gates on `error instanceof
@@ -152,6 +166,17 @@ describe('ObligationAttachments', () => {
     listAttachmentsMock.mockRejectedValue(new ApiError('attachments.file_missing', {}, 410))
 
     renderPanel()
+
+    expect(await screen.findByText(/não está no servidor/i)).toBeVisible()
+  })
+
+  it("shows the server's message inside the panel when an upload fails", async () => {
+    uploadAttachmentMock.mockRejectedValue(new ApiError('attachments.file_missing', {}, 410))
+    const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'recibo.pdf', { type: 'application/pdf' })
+
+    renderPanel()
+
+    await userEvent.upload(await screen.findByLabelText(/anexar ficheiro/i), file)
 
     expect(await screen.findByText(/não está no servidor/i)).toBeVisible()
   })

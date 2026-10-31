@@ -1,27 +1,33 @@
 import { useId, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { Loader2, Paperclip } from 'lucide-react'
 import { ACCEPTED_ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { formatDate } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
+import { Button, DataList, Skeleton } from '../ui'
 import type { ObligationResponse } from './api'
 import { attachmentDownloadUrl, deleteAttachment, listAttachments, uploadAttachment } from './attachmentsApi'
 
-type Props = { obligation: ObligationResponse; onClose: () => void }
+type Props = { obligation: ObligationResponse }
 
 /** Kilobytes are the right unit here: every accepted file is under 10 MiB. */
 function formatSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} kB`
 }
 
-export function ObligationAttachments({ obligation, onClose }: Props) {
+/** Renders inside the receipts dialog, which owns the title and the close. */
+export function ObligationAttachments({ obligation }: Props) {
   const { t, i18n } = useTranslation(['obligations', 'common', 'errors'])
+  const locale = i18n.language as SupportedLocale
   const queryClient = useQueryClient()
-  const titleId = useId()
   const inputId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
   const [tooLarge, setTooLarge] = useState(false)
+  // The one irreversible action here, with no undo behind it: Delete asks
+  // again in place rather than through window.confirm or a second dialog.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
 
   const queryKey = ['obligation-attachments', obligation.id]
   const attachments = useQuery({ queryKey, queryFn: () => listAttachments(obligation.id) })
@@ -40,87 +46,114 @@ export function ObligationAttachments({ obligation, onClose }: Props) {
 
   const remove = useMutation({
     mutationFn: (id: string) => deleteAttachment(obligation.id, id),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setConfirmingId(null)
+      void invalidate()
+    },
   })
 
   return (
-    <section aria-labelledby={titleId} className="flex flex-col gap-3 rounded border border-slate-200 bg-white p-3">
-      <div className="flex items-center justify-between">
-        <h3 id={titleId} className="text-sm font-semibold">
-          {t('obligations:attachments.title')} — {obligation.definitionName}
-        </h3>
-        <button type="button" onClick={onClose} className="text-xs underline">
-          {t('obligations:attachments.close')}
-        </button>
-      </div>
-
+    <div className="flex flex-col gap-4">
       <ErrorMessage error={attachments.error} />
       <ErrorMessage error={upload.error} />
       <ErrorMessage error={remove.error} />
       {tooLarge && <p className="text-sm text-danger-700">{t('errors:attachments.too_large')}</p>}
 
-      {attachments.isPending ? null : (attachments.data?.length ?? 0) === 0 ? (
-        <p className="text-sm text-slate-600">{t('obligations:attachments.empty')}</p>
+      {attachments.isPending ? (
+        <Skeleton height="2.75rem" />
+      ) : (attachments.data?.length ?? 0) === 0 ? (
+        // An EmptyState inside a dialog is too heavy (spec §7.2).
+        <p className="text-sm text-muted">{t('obligations:attachments.empty')}</p>
       ) : (
-        <ul className="flex flex-col gap-1">
+        <DataList>
           {attachments.data?.map((file) => (
-            <li key={file.id} className="flex items-center justify-between gap-3 text-sm">
-              <a
-                href={attachmentDownloadUrl(obligation.id, file.id)}
-                download={file.filename}
-                aria-label={t('obligations:attachments.download', { filename: file.filename })}
-                className="underline"
-              >
-                {file.filename}
-              </a>
-              <span className="text-slate-500">
-                {formatSize(file.sizeBytes)} · {formatDate(file.uploadedAt.slice(0, 10), i18n.language as SupportedLocale)}
-              </span>
-              <button
-                type="button"
-                aria-label={t('obligations:attachments.delete', { filename: file.filename })}
-                onClick={() => {
-                  // The one irreversible action in this panel, and there is
-                  // no undo behind it.
-                  if (!window.confirm(t('obligations:attachments.confirmDelete', { filename: file.filename }))) return
-                  remove.mutate(file.id)
-                }}
-                className="text-xs text-red-700 underline"
-              >
-                {t('common:actions.delete')}
-              </button>
-            </li>
+            <DataList.Row
+              key={file.id}
+              label={
+                <a
+                  href={attachmentDownloadUrl(obligation.id, file.id)}
+                  download={file.filename}
+                  aria-label={t('obligations:attachments.download', { filename: file.filename })}
+                  className="font-medium text-accent-700 hover:underline"
+                >
+                  {file.filename}
+                </a>
+              }
+              value={
+                confirmingId === file.id ? (
+                  <>
+                    <Button variant="danger" size="sm" isLoading={remove.isPending} onClick={() => remove.mutate(file.id)}>
+                      {t('obligations:attachments.confirmDeleteAction')}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmingId(null)}>
+                      {t('common:actions.cancel')}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-muted tabular-nums">
+                      {formatSize(file.sizeBytes)} · {formatDate(file.uploadedAt.slice(0, 10), locale)}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={t('obligations:attachments.delete', { filename: file.filename })}
+                      onClick={() => setConfirmingId(file.id)}
+                    >
+                      {t('common:actions.delete')}
+                    </Button>
+                  </>
+                )
+              }
+            />
           ))}
-        </ul>
+        </DataList>
       )}
 
-      <label htmlFor={inputId} className="text-sm font-medium">
-        {t('obligations:attachments.add')}
-      </label>
-      <input
-        id={inputId}
-        ref={inputRef}
-        type="file"
-        accept={ACCEPTED_ATTACHMENT_TYPES.join(',')}
-        disabled={upload.isPending}
-        onChange={(event) => {
-          const file = event.target.files?.[0]
-          if (!file) return
-          // Checked here as well as on the server: a 10 MiB upload that is
-          // going to be rejected anyway should not be sent over a phone's
-          // connection first.
-          if (file.size > MAX_ATTACHMENT_BYTES) {
-            setTooLarge(true)
-            event.target.value = ''
-            return
-          }
-          setTooLarge(false)
-          upload.mutate(file)
-        }}
-        className="text-sm"
-      />
-      <p className="text-xs text-slate-500">{t('obligations:attachments.hint')}</p>
-      {upload.isPending && <p className="text-xs text-slate-500">{t('obligations:attachments.uploading')}</p>}
-    </section>
+      <div className="flex flex-col gap-1.5">
+        {/* A label dressed as a secondary button, with the file input inside
+            it and visually hidden: the whole button opens the picker, and the
+            input keeps its accessible name and its keyboard focus. */}
+        <Button
+          asChild
+          variant="secondary"
+          size="sm"
+          className="cursor-pointer self-start has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent-600 has-[:focus-visible]:ring-offset-2 has-[:disabled]:pointer-events-none has-[:disabled]:opacity-60"
+        >
+          <label htmlFor={inputId}>
+            <input
+              id={inputId}
+              ref={inputRef}
+              type="file"
+              accept={ACCEPTED_ATTACHMENT_TYPES.join(',')}
+              disabled={upload.isPending}
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (!file) return
+                // Checked here as well as on the server: a 10 MiB upload that is
+                // going to be rejected anyway should not be sent over a phone's
+                // connection first.
+                if (file.size > MAX_ATTACHMENT_BYTES) {
+                  setTooLarge(true)
+                  event.target.value = ''
+                  return
+                }
+                setTooLarge(false)
+                upload.mutate(file)
+              }}
+            />
+            {upload.isPending ? (
+              <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Paperclip aria-hidden="true" className="h-3.5 w-3.5" />
+            )}
+            {t('obligations:attachments.add')}
+          </label>
+        </Button>
+        <p className="text-xs text-muted">{t('obligations:attachments.hint')}</p>
+        {upload.isPending && <p className="text-xs text-muted">{t('obligations:attachments.uploading')}</p>}
+      </div>
+    </div>
   )
 }

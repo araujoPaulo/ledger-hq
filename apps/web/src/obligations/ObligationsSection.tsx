@@ -138,7 +138,7 @@ export function ObligationsSection({ clientId }: { clientId: string }) {
       {attachmentsFor !== null && (
         <Dialog open onOpenChange={(open) => (open ? undefined : setAttachmentsFor(null))}>
           <Dialog.Content title={`${t('attachments.title')} — ${attachmentsFor.definitionName}`}>
-            <ObligationAttachments obligation={attachmentsFor} onClose={() => setAttachmentsFor(null)} />
+            <ObligationAttachments obligation={attachmentsFor} />
           </Dialog.Content>
         </Dialog>
       )}
