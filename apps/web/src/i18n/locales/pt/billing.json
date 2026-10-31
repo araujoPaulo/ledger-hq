@@ -13,6 +13,7 @@
     }
   },
   "ledger": {
+    "emptyHint": "As avenças e cobranças aparecem aqui quando são emitidas.",
     "title": "Faturação",
     "balance": "Saldo",
     "empty": "Sem movimentos de faturação.",
@@ -28,6 +29,8 @@
     "remaining": "Sobram {{amount}} de crédito."
   },
   "retainerPlan": {
+    "title": "Avença",
+    "none": "Sem avença em vigor.",
     "createTitle": "Criar plano de retainer",
     "renewTitle": "Atualizar valor",
     "amountCents": { "label": "Valor mensal (cêntimos)" },
@@ -54,7 +57,13 @@
     "dueOn": { "label": "Data de vencimento" }
   },
   "writeOff": {
+    "title": "Anular cobrança",
+    "badge": "Anulada",
     "action": "Perdoar dívida",
     "reason": { "label": "Motivo" }
+  },
+  "ageing": {
+    "title": "Antiguidade",
+    "oldest": "Cobrança por pagar mais antiga vence a {{date}}."
   }
 }

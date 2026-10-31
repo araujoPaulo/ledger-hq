@@ -13,6 +13,7 @@
     }
   },
   "ledger": {
+    "emptyHint": "Fees and charges appear here once they are issued.",
     "title": "Billing",
     "balance": "Balance",
     "empty": "No billing activity.",
@@ -28,6 +29,8 @@
     "remaining": "{{amount}} of credit left over."
   },
   "retainerPlan": {
+    "title": "Retainer plan",
+    "none": "No retainer plan in force.",
     "createTitle": "Create retainer plan",
     "renewTitle": "Update fee",
     "amountCents": { "label": "Monthly amount (cents)" },
@@ -54,7 +57,13 @@
     "dueOn": { "label": "Due date" }
   },
   "writeOff": {
+    "title": "Write off charge",
+    "badge": "Written off",
     "action": "Write off",
     "reason": { "label": "Reason" }
+  },
+  "ageing": {
+    "title": "Ageing",
+    "oldest": "Oldest unpaid charge fell due on {{date}}."
   }
 }

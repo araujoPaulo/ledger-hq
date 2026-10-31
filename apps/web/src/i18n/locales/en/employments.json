@@ -2,6 +2,7 @@
   "employeesTitle": "Employees",
   "employmentsTitle": "Employments",
   "empty": "No employment records.",
+  "emptyHint": "Record who works for whom, for the payroll obligations.",
   "add": "Add employment",
   "end": "End employment",
   "current": "Current",

@@ -7,6 +7,8 @@
     "continueButton": "Continuar"
   },
   "unlock": {
+    "lockedTitle": "O cofre está bloqueado",
+    "lockedHint": "As credenciais só são decifradas neste dispositivo. O cofre volta a bloquear após {{minutes}} minutos de inatividade.",
     "notSetUp": "O cofre ainda não foi configurado.",
     "setUpLink": "Configurar agora",
     "offlineUnknown": "Sem ligação ao servidor e ainda não há nada em cache neste dispositivo. Liga-te à internet para verificar o estado do cofre.",
@@ -26,6 +28,12 @@
   },
   "credentials": {
     "title": "Credenciais",
+    "changed": "Alterada a {{date}}",
+    "copyUsername": "Copiar utilizador",
+    "usernameCopied": "Utilizador copiado.",
+    "passwordCopied": "Palavra-passe copiada. A área de transferência limpa-se em 30 segundos.",
+    "clipboardClears": "Limpa ao fim de 30 s",
+    "secondsLeft": "{{seconds}} s restantes",
     "empty": "Ainda não há credenciais para este cliente.",
     "newTitle": "Nova credencial",
     "reveal": "Ver",

@@ -9,6 +9,10 @@
   "count_one": "{{count}} client",
   "count_other": "{{count}} clients",
   "archived": "Archived",
+  "actions": "Client actions",
+  "details": "Details",
+  "tabs": { "overview": "Overview", "obligations": "Obligations", "billing": "Billing", "credentials": "Credentials" },
+  "glance": { "title": "At a glance", "due": "Obligations due", "balance": "Balance" },
   "filter": { "all": "All", "search": "Search by name or tax number", "showArchived": "Show archived" },
   "form": {
     "section": { "identification": "Identification", "contact": "Contact" },
@@ -33,6 +37,9 @@
     "hasEmployees": "Has employees",
     "hasWithholding": "Withholds tax at source",
     "isVatCashBasis": "VAT cash basis",
-    "startedAt": "Start date"
+    "startedAt": "Start date",
+    "empty": "No fiscal profile yet. Without one, the generator proposes no obligations.",
+    "setUp": "Set up",
+    "openActivityCompany": "A company always has open activity."
   }
 }

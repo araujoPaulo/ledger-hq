@@ -2,6 +2,7 @@
   "employeesTitle": "Empregados",
   "employmentsTitle": "Vínculos",
   "empty": "Sem vínculos registados.",
+  "emptyHint": "Regista quem trabalha para quem, para as obrigações de pessoal.",
   "add": "Adicionar vínculo",
   "end": "Cessar vínculo",
   "current": "Em vigor",

@@ -9,6 +9,10 @@
   "count_one": "{{count}} cliente",
   "count_other": "{{count}} clientes",
   "archived": "Arquivado",
+  "actions": "Ações do cliente",
+  "details": "Dados",
+  "tabs": { "overview": "Resumo", "obligations": "Obrigações", "billing": "Faturação", "credentials": "Credenciais" },
+  "glance": { "title": "Num relance", "due": "Obrigações a vencer", "balance": "Saldo" },
   "filter": { "all": "Todos", "search": "Pesquisar por nome ou NIF", "showArchived": "Mostrar arquivados" },
   "form": {
     "section": { "identification": "Identificação", "contact": "Contacto" },
@@ -33,6 +37,9 @@
     "hasEmployees": "Tem empregados",
     "hasWithholding": "Faz retenções na fonte",
     "isVatCashBasis": "IVA de caixa",
-    "startedAt": "Início"
+    "startedAt": "Início",
+    "empty": "Ainda não há perfil fiscal. Sem ele, o gerador não propõe obrigações.",
+    "setUp": "Preencher",
+    "openActivityCompany": "Uma empresa tem sempre atividade aberta."
   }
 }

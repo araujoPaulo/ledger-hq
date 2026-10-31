@@ -7,6 +7,8 @@
     "continueButton": "Continue"
   },
   "unlock": {
+    "lockedTitle": "This vault is locked",
+    "lockedHint": "Credentials are decrypted on this device only. The vault locks again after {{minutes}} minutes of inactivity.",
     "notSetUp": "The vault has not been set up yet.",
     "setUpLink": "Set it up now",
     "offlineUnknown": "No connection to the server, and nothing is cached on this device yet. Connect to the internet to check the vault's status.",
@@ -26,6 +28,12 @@
   },
   "credentials": {
     "title": "Credentials",
+    "changed": "Changed {{date}}",
+    "copyUsername": "Copy username",
+    "usernameCopied": "Username copied.",
+    "passwordCopied": "Password copied. The clipboard clears in 30 seconds.",
+    "clipboardClears": "Clears after 30 s",
+    "secondsLeft": "{{seconds}} s left",
     "empty": "There are no credentials for this client yet.",
     "newTitle": "New credential",
     "reveal": "Reveal",

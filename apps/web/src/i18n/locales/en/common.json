@@ -26,8 +26,11 @@
     "signIn": "Sign in",
     "signOut": "Sign out",
     "lockVault": "Lock vault",
-    "delete": "Delete"
+    "delete": "Delete",
+    "close": "Close"
   },
+  "money": { "invalid": "Enter an amount such as 2,150.00." },
+  "notifications": "Notifications",
   "connection": {
     "online": "Online",
     "offline": "No connection to the server",

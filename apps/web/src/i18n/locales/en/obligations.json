@@ -10,16 +10,19 @@
   },
   "section": {
     "title": "Fiscal obligations",
+    "emptyHint": "Fill in the fiscal profile and the generator proposes this client's obligations.",
     "empty": "There are no obligations for this client yet.",
     "previewMessage": "{{toCreate}} to create, {{toRetract}} to retract",
     "apply": "Apply"
   },
   "row": {
+    "overridden": "Date changed by hand",
     "markDone": "Mark as done",
     "edit": "Edit",
     "waive": "Waive"
   },
   "attachments": {
+    "confirmDeleteAction": "Delete for good",
     "title": "Receipts",
     "manage": "Receipts",
     "add": "Attach a file",

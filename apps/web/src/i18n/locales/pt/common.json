@@ -26,8 +26,11 @@
     "signIn": "Entrar",
     "signOut": "Sair",
     "lockVault": "Bloquear cofre",
-    "delete": "Eliminar"
+    "delete": "Eliminar",
+    "close": "Fechar"
   },
+  "money": { "invalid": "Indica um valor como 2150,00." },
+  "notifications": "Notificações",
   "connection": {
     "online": "Ligado",
     "offline": "Sem ligação ao servidor",
