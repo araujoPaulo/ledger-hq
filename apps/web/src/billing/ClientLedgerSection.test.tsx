@@ -54,6 +54,9 @@ async function openPaymentDialog() {
   return screen.findByRole('dialog', { name: /registar pagamento/i })
 }
 
+/** The payment form ignores Confirmar for a moment after the proposal appears. */
+const afterConfirmGuard = () => new Promise((resolve) => setTimeout(resolve, 450))
+
 beforeEach(() => {
   vi.clearAllMocks()
   getClientLedgerMock.mockResolvedValue(EMPTY_LEDGER)
@@ -145,6 +148,7 @@ describe('ClientLedgerSection', () => {
     expect(await within(dialog).findByText(/retainer — 2026-01/i)).toBeInTheDocument()
     expect(within(dialog).queryByText('charge-1')).not.toBeInTheDocument()
 
+    await afterConfirmGuard()
     await userEvent.click(within(dialog).getByRole('button', { name: /^confirmar$/i }))
 
     await waitFor(() =>
@@ -291,11 +295,47 @@ describe('ClientLedgerSection', () => {
     await userEvent.type(within(dialog).getByLabelText(/^valor$/i), '2150,00')
     await userEvent.type(within(dialog).getByLabelText(/data de receção/i), '2026-09-03')
     await userEvent.click(within(dialog).getByRole('button', { name: /propor alocação/i }))
-    await userEvent.click(await within(dialog).findByRole('button', { name: /^confirmar$/i }))
+    const confirmButton = await within(dialog).findByRole('button', { name: /^confirmar$/i })
+    await afterConfirmGuard()
+    await userEvent.click(confirmButton)
 
     expect(await within(dialog).findByText(/ocorreu um erro no servidor/i)).toBeInTheDocument()
     // Leaving the field reformats it (2 150,00); what matters is it kept the amount.
     expect((within(dialog).getByLabelText(/^valor$/i) as HTMLInputElement).value.replace(/\s/g, '')).toBe('2150,00')
+  })
+
+  it('ignores a second click on Confirmar right after the proposal appears, then confirms', async () => {
+    proposeAllocationMock.mockResolvedValue(PROPOSAL)
+    recordPaymentMock.mockResolvedValue({ paymentId: 'p1' })
+    renderSection()
+
+    const dialog = await openPaymentDialog()
+    await userEvent.type(within(dialog).getByLabelText(/^valor$/i), '2150,00')
+    await userEvent.type(within(dialog).getByLabelText(/data de receção/i), '2026-09-03')
+    const submit = within(dialog).getByRole('button', { name: /propor alocação/i })
+    await userEvent.click(submit)
+    // The double-click's second press lands on the same slot, now Confirmar.
+    await userEvent.click(await within(dialog).findByRole('button', { name: /^confirmar$/i }))
+    expect(recordPaymentMock).not.toHaveBeenCalled()
+
+    await afterConfirmGuard()
+    await userEvent.click(within(dialog).getByRole('button', { name: /^confirmar$/i }))
+    await waitFor(() => expect(recordPaymentMock).toHaveBeenCalledTimes(1))
+  })
+
+  it('drops a refused proposal error when the amount changes', async () => {
+    proposeAllocationMock.mockRejectedValue(new ApiError('common.internal_error', {}, 500))
+    renderSection()
+
+    const dialog = await openPaymentDialog()
+    const amount = within(dialog).getByLabelText(/^valor$/i)
+    await userEvent.type(amount, '2150,00')
+    await userEvent.type(within(dialog).getByLabelText(/data de receção/i), '2026-09-03')
+    await userEvent.click(within(dialog).getByRole('button', { name: /propor alocação/i }))
+    expect(await within(dialog).findByText(/ocorreu um erro no servidor/i)).toBeInTheDocument()
+
+    await userEvent.type(amount, '1')
+    expect(within(dialog).queryByText(/ocorreu um erro no servidor/i)).not.toBeInTheDocument()
   })
 
   it('opens the retainer plan dialog from its card', async () => {
