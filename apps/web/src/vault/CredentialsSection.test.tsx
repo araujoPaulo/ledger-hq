@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import i18next from 'i18next'
@@ -110,7 +110,8 @@ describe('CredentialsSection', () => {
     })
 
     renderSection()
-    await userEvent.click(await screen.findByRole('button', { name: /nova credencial/i }))
+    await screen.findByText(/ainda não há credenciais/i)
+    await userEvent.click((await screen.findAllByRole('button', { name: /nova credencial/i }))[0]!)
     const dialog = await screen.findByRole('dialog', { name: /nova credencial/i })
     await userEvent.type(within(dialog).getByLabelText(/designação/i), 'Nova')
     await userEvent.type(within(dialog).getByLabelText(/utilizador/i), 'user2')
@@ -282,6 +283,7 @@ describe('CredentialsSection', () => {
     createCredentialMock.mockRejectedValue(new ApiError('common.not_found', {}, 404))
     renderSection()
 
+    await screen.findByText(/ainda não há credenciais/i)
     await userEvent.click((await screen.findAllByRole('button', { name: /nova credencial/i }))[0]!)
     const dialog = await screen.findByRole('dialog', { name: /nova credencial/i })
     await userEvent.type(within(dialog).getByLabelText(/designação/i), 'Nova')
@@ -297,7 +299,46 @@ describe('CredentialsSection', () => {
     renderSection()
 
     expect(await screen.findByText(/ainda não há credenciais/i)).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /nova credencial/i })).toHaveLength(2)
+    const buttons = screen.getAllByRole('button', { name: /nova credencial/i })
+    expect(buttons).toHaveLength(2)
+
+    await userEvent.click(buttons[1]!)
+    expect(await screen.findByRole('dialog', { name: /nova credencial/i })).toBeInTheDocument()
+  })
+
+  it('does not schedule a clipboard clear for a copy that did not happen', async () => {
+    Object.assign(navigator, { clipboard: undefined })
+    listCredentialsForClientMock.mockResolvedValue([await credentialFor({ username: 'user1', password: 'hunter2' })])
+    renderSection()
+    await userEvent.click(await screen.findByRole('button', { name: /^ver$/i }))
+    await screen.findByText('Limpa ao fim de 30 s')
+
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) }
+      await userEvent.click(screen.getByRole('button', { name: /^copiar$/i }))
+      // The clipboard appears only after the failed copy; a stray timer would use it.
+      Object.assign(navigator, { clipboard })
+      await vi.advanceTimersByTimeAsync(31_000)
+      expect(clipboard.writeText).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not reopen the new-credential dialog after an auto-lock and re-unlock', async () => {
+    listCredentialsForClientMock.mockResolvedValue([])
+    renderSection()
+    await screen.findByText(/ainda não há credenciais/i)
+    await userEvent.click((await screen.findAllByRole('button', { name: /nova credencial/i }))[0]!)
+    await screen.findByRole('dialog', { name: /nova credencial/i })
+
+    act(() => lockVault())
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    act(() => unlockVault(vaultKey))
+
+    expect(await screen.findByText(/ainda não há credenciais/i)).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('locks the vault from the section header', async () => {

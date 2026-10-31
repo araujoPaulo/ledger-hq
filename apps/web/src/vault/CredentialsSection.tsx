@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { KeyRound, Lock, Plus } from 'lucide-react'
@@ -18,6 +18,12 @@ export function CredentialsSection({ clientId }: { clientId: string }) {
   const titleId = useId()
   const vaultState = useVaultState()
   const [creating, setCreating] = useState(false)
+
+  // Same lock signal CredentialRow uses: a dialog left open by an auto-lock
+  // must not reopen on its own after the next unlock.
+  useEffect(() => {
+    if (vaultState.status === 'locked') setCreating(false)
+  }, [vaultState.status])
 
   return (
     <section aria-labelledby={titleId} className="flex flex-col gap-4">
