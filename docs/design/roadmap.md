@@ -79,8 +79,9 @@ stands after Phase 4 changed five things the earlier map assumed:
 - **Stage 3 adds two components the map did not name**: `Callout`
   (section-state messages) and `MoneyInput` (amounts typed in euros
   instead of cents).
-- **Stage 5 moves signed-out screens out of the shell** — today the
-  sign-in form renders beside a working sidebar.
+- **Stage 5 moves signed-out screens out of the shell** — before
+  it, the sign-in form rendered beside a working sidebar; Stage 5 shipped
+  that change.
 
 The mockups also disagree with the code in three places the specs
 resolve in the code's favour: the vault locks after 5 minutes, not 15;

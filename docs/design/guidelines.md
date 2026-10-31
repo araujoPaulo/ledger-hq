@@ -93,8 +93,8 @@ cents become a localized string. `tone` defaults to reading the sign;
 pass it explicitly when sign and meaning come apart (Phase 4's client
 credit is a positive balance that is a credit).
 
-**A menu of actions** — a `DropdownMenu`: the account menu and the
-language menu. It opens on Enter/Space, moves with arrows and returns
+**A menu of actions** — a `DropdownMenu`: the account menu, the
+language menu and the client header's actions menu. It opens on Enter/Space, moves with arrows and returns
 focus to its trigger; it floats on `shadow-overlay`.
 
 **Label/value rows** — `DataList`, with `DataList.Total` for a footer.
@@ -227,7 +227,8 @@ formatter can clean it; the formatter caps the code itself.
 
 Run before opening a PR.
 
-1. One `<h1>` per page, from `PageHeader`; headings descend with no level
+1. One `<h1>` per page, from `PageHeader` (or `CardHeading` on the
+   signed-out screens); headings descend with no level
    skipped.
 2. Every icon-only control has an `aria-label`; every decorative icon is
    `aria-hidden="true"`.
@@ -235,7 +236,7 @@ Run before opening a PR.
    opens on Enter/Space, moves with arrows, closes on Escape, and returns
    focus to its trigger; every interactive element has a visible
    `focus-visible` ring. Signed out, there is no sidebar: tab order runs
-   language menu → the card's fields → submit.
+   language menu → the card's fields → submit → the mode switch.
 4. Touch targets are at least 44px in the mobile nav and in any list row
    that holds a control.
 5. Text contrast is at least 4.5:1, or 3:1 at 24px and above. `subtle` is
@@ -300,8 +301,9 @@ splash, the auth layout and the shell; no route path is involved.
   corner holds `ConnectionStatus` and `LanguageMenu`. Account setup records
   the active language as the account's locale.
 - **The splash is the frame and the mark, nothing else.** `AuthFrame` is
-  shared with the layout, so the mark does not move when the card or the
-  shell replaces the splash.
+  shared with the layout and top-anchors its column at every width (never
+  vertically centred), so the mark sits at the same y on the splash and on
+  every card, and does not move when the card replaces the splash.
 - **Autocomplete tokens are exact**: `username` on the email,
   `current-password` to sign in, `new-password` wherever a password is
   being chosen. Password managers depend on them.
