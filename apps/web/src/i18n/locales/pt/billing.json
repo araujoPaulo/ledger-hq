@@ -42,7 +42,7 @@
   },
   "payment": {
     "recordTitle": "Registar pagamento",
-    "amountCents": { "label": "Valor (cêntimos)" },
+    "amountCents": { "label": "Valor" },
     "receivedOn": { "label": "Data de receção" },
     "method": { "label": "Método" },
     "reference": { "label": "Referência" },
@@ -53,7 +53,7 @@
   "adHocCharge": {
     "newTitle": "Nova cobrança avulsa",
     "description": { "label": "Descrição" },
-    "amountCents": { "label": "Valor (cêntimos)" },
+    "amountCents": { "label": "Valor" },
     "dueOn": { "label": "Data de vencimento" }
   },
   "writeOff": {

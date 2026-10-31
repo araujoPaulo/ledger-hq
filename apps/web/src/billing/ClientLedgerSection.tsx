@@ -1,21 +1,34 @@
 import { useId, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { Receipt } from 'lucide-react'
 import { ErrorMessage } from '../shell/ErrorMessage'
-import { formatCurrency } from '../i18n/format'
+import { formatDate } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
-import { getClientLedger, writeOffCharge } from './api'
+import { Badge, Button, Card, DataList, Dialog, EmptyState, Money } from '../ui'
+import { getClientLedger } from './api'
+import type { LedgerEntry } from './api'
 import { AddAdHocChargeForm } from './AddAdHocChargeForm'
+import { AgeingCard } from './AgeingCard'
+import { ClientLedgerSkeleton } from './ClientLedgerSkeleton'
 import { CreditCard } from './CreditCard'
 import { RecordPaymentForm } from './RecordPaymentForm'
 import { RetainerPlanCard } from './RetainerPlanCard'
+import { WriteOffDialog } from './WriteOffDialog'
 
+/**
+ * The Billing tab: the ledger, and beside it (below it on a phone) the plan,
+ * ageing and credit cards. Each card is its own file; this composes them and
+ * owns the ledger's three dialogs.
+ */
 export function ClientLedgerSection({ clientId }: { clientId: string }) {
   const { t, i18n } = useTranslation(['billing', 'common'])
+  const locale = i18n.language as SupportedLocale
   const queryClient = useQueryClient()
   const titleId = useId()
-  const [writingOffChargeId, setWritingOffChargeId] = useState<string | null>(null)
-  const [writeOffReason, setWriteOffReason] = useState('')
+  const [recording, setRecording] = useState(false)
+  const [charging, setCharging] = useState(false)
+  const [writingOff, setWritingOff] = useState<LedgerEntry | null>(null)
 
   const ledger = useQuery({ queryKey: ['client-ledger', clientId], queryFn: () => getClientLedger(clientId) })
 
@@ -26,86 +39,103 @@ export function ClientLedgerSection({ clientId }: { clientId: string }) {
     void queryClient.invalidateQueries({ queryKey: ['receivables'] })
   }
 
-  const writeOff = useMutation({
-    mutationFn: () => writeOffCharge(writingOffChargeId!, writeOffReason),
-    onSuccess: () => {
-      setWritingOffChargeId(null)
-      setWriteOffReason('')
-      invalidate()
-    },
-  })
-
   return (
-    <section aria-labelledby={titleId} className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h2 id={titleId} className="text-base font-semibold">
-          {t('billing:ledger.title')}
-        </h2>
+    <section aria-labelledby={titleId} className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <Card className="flex min-w-0 flex-col gap-4 self-start">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 id={titleId} className="text-base font-semibold">
+            {t('billing:ledger.title')}
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setCharging(true)}>
+              {t('billing:adHocCharge.newTitle')}
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => setRecording(true)}>
+              {t('billing:payment.recordTitle')}
+            </Button>
+          </div>
+        </div>
+
+        {ledger.isPending ? (
+          <ClientLedgerSkeleton />
+        ) : ledger.isError ? (
+          <ErrorMessage error={ledger.error} />
+        ) : ledger.data.entries.length === 0 ? (
+          <EmptyState icon={Receipt} title={t('billing:ledger.empty')} description={t('billing:ledger.emptyHint')} />
+        ) : (
+          <DataList>
+            {ledger.data.entries.map((entry, index) => (
+              <DataList.Row
+                key={index}
+                label={
+                  <span className="flex min-w-0 flex-col md:flex-row md:items-baseline md:gap-4">
+                    <span className="text-xs text-muted tabular-nums md:w-24 md:shrink-0">{formatDate(entry.date, locale)}</span>
+                    <span className="truncate">{entry.description}</span>
+                  </span>
+                }
+                value={
+                  <>
+                    {/* The ledger carries no paid state (spec §2.5): only written-off is badged. */}
+                    {entry.writtenOff && (
+                      <Badge tone="neutral" strikethrough>
+                        {t('billing:writeOff.badge')}
+                      </Badge>
+                    )}
+                    {entry.type === 'CHARGE' && entry.chargeId !== null && !entry.writtenOff && (
+                      <Button variant="danger" size="sm" onClick={() => setWritingOff(entry)}>
+                        {t('billing:writeOff.action')}
+                      </Button>
+                    )}
+                    <Money cents={entry.amountCents} tone={entry.writtenOff ? 'writtenOff' : 'auto'} />
+                  </>
+                }
+              />
+            ))}
+            <DataList.Total label={t('billing:ledger.balance')} value={<Money cents={ledger.data.balanceCents} />} />
+          </DataList>
+        )}
+      </Card>
+
+      <div className="flex flex-col gap-6">
+        <RetainerPlanCard clientId={clientId} onSaved={invalidate} />
+        <AgeingCard clientId={clientId} />
+        {ledger.data !== undefined && (
+          <CreditCard clientId={clientId} availableCreditCents={ledger.data.availableCreditCents} onApplied={invalidate} />
+        )}
       </div>
 
-      {ledger.isPending ? null : ledger.isError ? (
-        <ErrorMessage error={ledger.error} />
-      ) : ledger.data.entries.length === 0 ? (
-        <p className="text-sm text-slate-600">{t('billing:ledger.empty')}</p>
-      ) : (
-        <>
-          <ul className="flex flex-col gap-1">
-            {ledger.data.entries.map((entry, index) => (
-              <li key={index} className="flex items-center justify-between text-sm">
-                <span>{entry.description}</span>
-                <span className="flex items-center gap-2">
-                  <span className={entry.amountCents < 0 ? 'text-green-700' : ''}>
-                    {formatCurrency(entry.amountCents, i18n.language as SupportedLocale)}
-                  </span>
-                  {entry.type === 'CHARGE' && entry.chargeId !== null && !entry.writtenOff && (
-                    writingOffChargeId === entry.chargeId ? (
-                      <span className="flex items-center gap-1">
-                        <input
-                          value={writeOffReason}
-                          onChange={(event) => setWriteOffReason(event.target.value)}
-                          placeholder={t('billing:writeOff.reason.label')}
-                          className="rounded border border-slate-300 px-1 py-0.5 text-xs"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => writeOff.mutate()}
-                          disabled={writeOffReason.trim() === '' || writeOff.isPending}
-                          className="text-xs text-red-700 underline disabled:opacity-50"
-                        >
-                          {t('common:actions.save')}
-                        </button>
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setWritingOffChargeId(entry.chargeId)}
-                        className="text-xs text-red-700 underline"
-                      >
-                        {t('billing:writeOff.action')}
-                      </button>
-                    )
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <div className="flex items-center justify-between border-t border-slate-200 pt-2 text-sm font-medium">
-            <span>{t('billing:ledger.balance')}</span>
-            <span>{formatCurrency(ledger.data.balanceCents, i18n.language as SupportedLocale)}</span>
-          </div>
-        </>
-      )}
+      <Dialog open={recording} onOpenChange={setRecording}>
+        <Dialog.Content title={t('billing:payment.recordTitle')}>
+          <RecordPaymentForm
+            clientId={clientId}
+            onRecorded={() => {
+              setRecording(false)
+              invalidate()
+            }}
+          />
+        </Dialog.Content>
+      </Dialog>
 
-      <ErrorMessage error={writeOff.error} />
+      <Dialog open={charging} onOpenChange={setCharging}>
+        <Dialog.Content title={t('billing:adHocCharge.newTitle')}>
+          <AddAdHocChargeForm
+            clientId={clientId}
+            onCreated={() => {
+              setCharging(false)
+              invalidate()
+            }}
+          />
+        </Dialog.Content>
+      </Dialog>
 
-      <RetainerPlanCard clientId={clientId} onSaved={invalidate} />
-      {ledger.data !== undefined && (
-        <CreditCard clientId={clientId} availableCreditCents={ledger.data.availableCreditCents} onApplied={invalidate} />
-      )}
-
-      <RecordPaymentForm clientId={clientId} onRecorded={invalidate} />
-
-      <AddAdHocChargeForm clientId={clientId} onCreated={invalidate} />
+      <WriteOffDialog
+        entry={writingOff}
+        onClose={() => setWritingOff(null)}
+        onWrittenOff={() => {
+          setWritingOff(null)
+          invalidate()
+        }}
+      />
     </section>
   )
 }

@@ -42,7 +42,7 @@
   },
   "payment": {
     "recordTitle": "Record payment",
-    "amountCents": { "label": "Amount (cents)" },
+    "amountCents": { "label": "Amount" },
     "receivedOn": { "label": "Received on" },
     "method": { "label": "Method" },
     "reference": { "label": "Reference" },
@@ -53,7 +53,7 @@
   "adHocCharge": {
     "newTitle": "New ad-hoc charge",
     "description": { "label": "Description" },
-    "amountCents": { "label": "Amount (cents)" },
+    "amountCents": { "label": "Amount" },
     "dueOn": { "label": "Due date" }
   },
   "writeOff": {
