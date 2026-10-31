@@ -1,10 +1,13 @@
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { Plus, Users } from 'lucide-react'
 import type { ClientKind } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { formatDate } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
+import { Badge, Button, Card, DataList, Dialog, EmptyState, Skeleton } from '../ui'
 import { endEmployment, listEmployments } from './api'
 import { AddEmploymentForm } from './AddEmploymentForm'
 
@@ -19,7 +22,9 @@ export function EmploymentSection({ client }: Props) {
   const { t, i18n } = useTranslation(['employments', 'common'])
   const locale = i18n.language as SupportedLocale
   const queryClient = useQueryClient()
+  const titleId = useId()
   const isCompany = client.kind === 'COMPANY'
+  const [adding, setAdding] = useState(false)
 
   const employments = useQuery({
     queryKey: ['employments', client.id],
@@ -34,10 +39,16 @@ export function EmploymentSection({ client }: Props) {
   })
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-base font-semibold">
-        {isCompany ? t('employments:employeesTitle') : t('employments:employmentsTitle')}
-      </h2>
+    <section aria-labelledby={titleId} className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h2 id={titleId} className="text-base font-semibold">
+          {isCompany ? t('employments:employeesTitle') : t('employments:employmentsTitle')}
+        </h2>
+        <Button variant="primary" size="sm" onClick={() => setAdding(true)}>
+          <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+          {t('employments:add')}
+        </Button>
+      </div>
 
       {/*
        * Loading, a genuine fetch failure and "no spells yet" are three
@@ -45,51 +56,73 @@ export function EmploymentSection({ client }: Props) {
        * `data?.length === 0` collapse that would render a fetch failure
        * identically to an empty list.
        */}
-      {employments.isPending ? null : employments.isError ? (
+      {employments.isPending ? (
+        <Card padding="none" className="flex flex-col px-5" aria-busy="true">
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="flex min-h-[44px] items-center justify-between gap-4 border-b border-line py-3 last:border-b-0">
+              <Skeleton width="12rem" height="0.875rem" />
+              <Skeleton width="8rem" height="0.875rem" />
+            </div>
+          ))}
+        </Card>
+      ) : employments.isError ? (
         <ErrorMessage error={employments.error} />
       ) : employments.data.length === 0 ? (
-        <p className="text-sm text-slate-600">{t('employments:empty')}</p>
+        <EmptyState icon={Users} title={t('employments:empty')} description={t('employments:emptyHint')} />
       ) : (
-        <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">
-          {employments.data.map((spell) => {
-            const counterpartyId = isCompany ? spell.employeeId : spell.employerId
-            const counterpartyName = isCompany ? spell.employeeName : spell.employerName
-            const isOpen = spell.endedOn === null
+        <Card padding="none" className="px-5">
+          <DataList>
+            {employments.data.map((spell) => {
+              const counterpartyId = isCompany ? spell.employeeId : spell.employerId
+              const counterpartyName = isCompany ? spell.employeeName : spell.employerName
+              const isOpen = spell.endedOn === null
 
-            return (
-              <li key={spell.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                <Link to="/clients/$clientId" params={{ clientId: counterpartyId }} className="font-medium">
-                  {counterpartyName}
-                </Link>
-                <span className="text-slate-600">{spell.jobTitle}</span>
-                <span className="text-slate-600">
-                  {formatDate(spell.startedOn, locale)}
-                  {spell.endedOn === null ? '' : ` – ${formatDate(spell.endedOn, locale)}`}
-                </span>
-                {isOpen ? (
-                  <span className="flex items-center gap-2">
-                    <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">
-                      {t('employments:current')}
+              return (
+                <DataList.Row
+                  key={spell.id}
+                  label={
+                    <span className="flex min-w-0 flex-col">
+                      <Link to="/clients/$clientId" params={{ clientId: counterpartyId }} className="truncate font-medium">
+                        {counterpartyName}
+                      </Link>
+                      {spell.jobTitle !== null && <span className="text-xs text-muted">{spell.jobTitle}</span>}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => endMutation.mutate(spell.id)}
-                      disabled={endMutation.isPending}
-                      className="rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-50"
-                    >
-                      {t('employments:end')}
-                    </button>
-                  </span>
-                ) : null}
-              </li>
-            )
-          })}
-        </ul>
+                  }
+                  value={
+                    <>
+                      <span className="text-muted tabular-nums">
+                        {formatDate(spell.startedOn, locale)}
+                        {spell.endedOn === null ? '' : ` – ${formatDate(spell.endedOn, locale)}`}
+                      </span>
+                      {isOpen && (
+                        <>
+                          <Badge tone="success">{t('employments:current')}</Badge>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            isLoading={endMutation.isPending && endMutation.variables === spell.id}
+                            onClick={() => endMutation.mutate(spell.id)}
+                          >
+                            {t('employments:end')}
+                          </Button>
+                        </>
+                      )}
+                    </>
+                  }
+                />
+              )
+            })}
+          </DataList>
+        </Card>
       )}
 
       <ErrorMessage error={endMutation.error} />
 
-      <AddEmploymentForm client={client} />
+      <Dialog open={adding} onOpenChange={setAdding}>
+        <Dialog.Content title={t('employments:add')}>
+          <AddEmploymentForm client={client} onAdded={() => setAdding(false)} />
+        </Dialog.Content>
+      </Dialog>
     </section>
   )
 }

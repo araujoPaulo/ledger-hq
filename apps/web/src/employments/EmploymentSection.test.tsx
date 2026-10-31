@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   RouterProvider,
@@ -107,12 +107,13 @@ describe('EmploymentSection', () => {
     expect(screen.getByText(/30\/06\/2025/)).toBeInTheDocument()
   })
 
-  it('shows an empty state', async () => {
+  it('shows an empty state with its hint', async () => {
     listEmployments.mockResolvedValue([])
     listClients.mockResolvedValue([])
     renderSection('COMPANY', 'c1')
 
     expect(await screen.findByText(/sem vínculos|no employment/i)).toBeInTheDocument()
+    expect(screen.getByText(/regista quem trabalha|record who works/i)).toBeInTheDocument()
   })
 
   it('ends an open spell and reflects it in the list without a manual refresh', async () => {
@@ -154,7 +155,60 @@ describe('EmploymentSection', () => {
     listClients.mockRejectedValue(new ApiError('common.internal_error', {}, 500))
     renderSection('COMPANY', 'c1')
 
-    const alert = await screen.findByText(/erro no servidor|server error/i)
+    await userEvent.click(await screen.findByRole('button', { name: /adicionar vínculo|add employment/i }))
+    const dialog = await screen.findByRole('dialog')
+
+    const alert = await within(dialog).findByText(/erro no servidor|server error/i)
     expect(alert).toHaveAttribute('role', 'alert')
+  })
+
+  // createEmploymentSchema requires uuids, so this case uses real-shaped ids.
+  it('adds an employment from its dialog, which closes on success', async () => {
+    const employerId = '0192f1a0-0000-7000-8000-000000000001'
+    const employeeId = '0192f1a0-0000-7000-8000-000000000002'
+    listEmployments.mockResolvedValue([])
+    listClients.mockResolvedValue([{ id: employeeId, name: 'Maria Santos' }])
+    createEmployment.mockResolvedValue(spell)
+    renderSection('COMPANY', employerId)
+
+    await userEvent.click(await screen.findByRole('button', { name: /adicionar vínculo|add employment/i }))
+    const dialog = await screen.findByRole('dialog', { name: /adicionar vínculo|add employment/i })
+    await userEvent.selectOptions(await within(dialog).findByLabelText(/pessoa|person/i), employeeId)
+    await userEvent.type(within(dialog).getByLabelText(/data de admissão|start/i), '2024-01-15')
+    await userEvent.click(within(dialog).getByRole('button', { name: /adicionar vínculo|add employment/i }))
+
+    await waitFor(() =>
+      expect(createEmployment).toHaveBeenCalledWith(expect.objectContaining({ employerId, employeeId, startedOn: '2024-01-15' })),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('keeps the dialog open with the typed values and the server message when adding fails', async () => {
+    const employerId = '0192f1a0-0000-7000-8000-000000000001'
+    const employeeId = '0192f1a0-0000-7000-8000-000000000002'
+    listEmployments.mockResolvedValue([])
+    listClients.mockResolvedValue([{ id: employeeId, name: 'Maria Santos' }])
+    createEmployment.mockRejectedValue(new ApiError('employment.overlapping_spell', {}, 409))
+    renderSection('COMPANY', employerId)
+
+    await userEvent.click(await screen.findByRole('button', { name: /adicionar vínculo|add employment/i }))
+    const dialog = await screen.findByRole('dialog', { name: /adicionar vínculo|add employment/i })
+    await userEvent.selectOptions(await within(dialog).findByLabelText(/pessoa|person/i), employeeId)
+    await userEvent.type(within(dialog).getByLabelText(/data de admissão|start/i), '2024-01-15')
+    await userEvent.click(within(dialog).getByRole('button', { name: /adicionar vínculo|add employment/i }))
+
+    const alert = await within(dialog).findByText(/vínculo sobreposto|overlapping spell/i)
+    expect(alert).toHaveAttribute('role', 'alert')
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(/data de admissão|start/i)).toHaveValue('2024-01-15')
+  })
+
+  it('shows the job title under the counterparty', async () => {
+    listEmployments.mockResolvedValue([spell])
+    listClients.mockResolvedValue([])
+    renderSection('COMPANY', 'c1')
+
+    expect(await screen.findByRole('link', { name: 'Maria Santos' })).toBeInTheDocument()
+    expect(screen.getByText('Bookkeeper')).toHaveClass('text-xs')
   })
 })
