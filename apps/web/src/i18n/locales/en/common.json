@@ -54,6 +54,8 @@
     "backToLogin": "Back to sign in",
     "recoverButton": "Regain access",
     "recoverIntro": "Use the recovery code you wrote down when you set up the vault, then choose a new master password.",
-    "recoveryCodeHint": "Six groups of letters and digits, such as ABCDE-FGHIJ-…"
+    "recoveryCodeHint": "Six groups of letters and digits, such as ABCDE-FGHIJ-…",
+    "setupIntro": "This is the only account on this Ledger HQ. The master password signs you in and encrypts the vault, so choose one you will remember.",
+    "passwordHint": "At least {{min}} characters."
   }
 }
