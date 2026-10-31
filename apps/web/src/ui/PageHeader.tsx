@@ -13,7 +13,7 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {description !== undefined && <p className="text-sm text-muted">{description}</p>}
       </div>
-      {actions !== undefined && <div className="flex items-center gap-4">{actions}</div>}
+      {actions !== undefined && <div className="flex flex-wrap items-center gap-4">{actions}</div>}
     </header>
   )
 }

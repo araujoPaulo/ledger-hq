@@ -6,17 +6,24 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import i18next from 'i18next'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
 import { initI18n } from '../i18n'
+import { lockVault, unlockVault } from './vault-session'
 
 const listPlatformsMock = vi.hoisted(() => vi.fn())
 const createPlatformMock = vi.hoisted(() => vi.fn())
 vi.mock('./api', () => ({ listPlatforms: listPlatformsMock, createPlatform: createPlatformMock }))
+
+const resolveEnvelopeMock = vi.hoisted(() => vi.fn())
+vi.mock('./unlock', () => ({ resolveEnvelope: resolveEnvelopeMock }))
+
+const useSessionMock = vi.hoisted(() => vi.fn())
+vi.mock('../auth/session', () => ({ useSession: useSessionMock }))
 
 const { PlatformsPage } = await import('./PlatformsPage')
 
@@ -24,6 +31,15 @@ await initI18n()
 await i18next.changeLanguage('pt-PT')
 
 const PORTAL = { id: 'p1', name: 'Portal das Finanças', url: null, authKind: 'PASSWORD' }
+
+const EMAIL = 'paulo@example.com'
+const SET_UP = { kdfSalt: 'salt', protectedVaultKey: 'key', setUp: true, fromCache: false }
+const NOT_SET_UP = { ...SET_UP, setUp: false }
+
+// The page never uses the key itself, only the state.
+function unlock(): void {
+  unlockVault({ type: 'secret' } as CryptoKey)
+}
 
 function renderPage(queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   const rootRoute = createRootRoute()
@@ -48,6 +64,11 @@ describe('PlatformsPage', () => {
   beforeEach(() => {
     listPlatformsMock.mockReset()
     createPlatformMock.mockReset()
+    resolveEnvelopeMock.mockReset()
+    resolveEnvelopeMock.mockResolvedValue(SET_UP)
+    useSessionMock.mockReturnValue({ data: { id: 'u1', email: EMAIL, locale: 'pt-PT' } })
+    // vault-session is a module singleton: every test starts locked.
+    lockVault()
   })
 
   it('is titled Vault, with the platforms as a section beneath it', async () => {
@@ -210,5 +231,74 @@ describe('PlatformsPage', () => {
     renderPage()
 
     expect(await screen.findByText('localhost:8080')).toBeInTheDocument()
+  })
+
+  it('says the vault is locked', async () => {
+    listPlatformsMock.mockResolvedValue([PORTAL])
+    renderPage()
+    expect(await screen.findByText('Bloqueado')).toBeInTheDocument()
+  })
+
+  it('says the vault is unlocked, with the real five-minute timeout', async () => {
+    unlock()
+    listPlatformsMock.mockResolvedValue([PORTAL])
+    renderPage()
+    expect(await screen.findByText('Desbloqueado · bloqueia após 5 min')).toBeInTheDocument()
+  })
+
+  // Review Focus 2: auto-lock firing while the page is open.
+  it('flips the pill to locked the moment the vault locks', async () => {
+    unlock()
+    listPlatformsMock.mockResolvedValue([PORTAL])
+    renderPage()
+    await screen.findByText('Desbloqueado · bloqueia após 5 min')
+
+    act(() => lockVault())
+
+    expect(await screen.findByText('Bloqueado')).toBeInTheDocument()
+    expect(screen.queryByText(/desbloqueado/i)).not.toBeInTheDocument()
+  })
+
+  it('prompts to set up a vault that is not set up, linking to setup', async () => {
+    resolveEnvelopeMock.mockResolvedValue(NOT_SET_UP)
+    listPlatformsMock.mockResolvedValue([PORTAL])
+    renderPage()
+
+    expect(await screen.findByText('O cofre ainda não foi configurado.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /configurar agora/i })).toHaveAttribute('href', '/vault/setup')
+    expect(resolveEnvelopeMock).toHaveBeenCalledWith(EMAIL)
+  })
+
+  it('does not prompt when the vault is set up', async () => {
+    listPlatformsMock.mockResolvedValue([PORTAL])
+    renderPage()
+
+    await screen.findByText('Portal das Finanças')
+    await waitFor(() => expect(resolveEnvelopeMock).toHaveBeenCalled())
+    expect(screen.queryByText('O cofre ainda não foi configurado.')).not.toBeInTheDocument()
+  })
+
+  it('does not prompt when the vault state is unknown offline', async () => {
+    resolveEnvelopeMock.mockResolvedValue(null)
+    listPlatformsMock.mockResolvedValue([PORTAL])
+    renderPage()
+
+    await screen.findByText('Portal das Finanças')
+    await waitFor(() => expect(resolveEnvelopeMock).toHaveBeenCalled())
+    expect(screen.queryByText('O cofre ainda não foi configurado.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /configurar agora/i })).not.toBeInTheDocument()
+  })
+
+  // Review Focus 1: a cache entry from before setup must not survive into an
+  // unlocked vault, which is set up by definition.
+  it('ignores a stale not-set-up envelope while the vault is unlocked', async () => {
+    unlock()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    queryClient.setQueryData(['vault-envelope-resolved', EMAIL], NOT_SET_UP)
+    listPlatformsMock.mockResolvedValue([PORTAL])
+    renderPage(queryClient)
+
+    await screen.findByText('Portal das Finanças')
+    expect(screen.queryByText('O cofre ainda não foi configurado.')).not.toBeInTheDocument()
   })
 })
