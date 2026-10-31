@@ -41,6 +41,13 @@ describe('RecoveryCodeDisplay', () => {
     expect(groups).toEqual(['K7QPM', '3RTXA', 'WN5HD', '2ZBEC', 'Y6JLF', 'Q'])
   })
 
+  // F2: Tailwind's preflight removes list markers, which makes WebKit drop the
+  // list semantics (and the label) unless the role is explicit.
+  it('keeps its list semantics explicit', () => {
+    renderDisplay()
+    expect(screen.getByRole('list', { name: /código de recuperação/i })).toHaveAttribute('role', 'list')
+  })
+
   it('does not draw the hyphens — the grid is the separator', () => {
     renderDisplay()
     expect(screen.queryByText(CODE)).not.toBeInTheDocument()

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { TriangleAlert } from 'lucide-react'
@@ -30,6 +30,12 @@ export function VaultSetupPage() {
       setRecoveryCode(result.recoveryCode)
     },
   })
+
+  // The step-1 form is gone once the code arrives; without this focus falls to <body>.
+  const stepTwoRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (recoveryCode !== null) stepTwoRef.current?.focus()
+  }, [recoveryCode])
 
   const step = recoveryCode === null ? 1 : 2
 
@@ -63,9 +69,11 @@ export function VaultSetupPage() {
         </Card>
       ) : (
         <Card className="flex flex-col gap-6">
-          <Callout tone="warning" icon={TriangleAlert} title={t('setup.recoveryCodeTitle')}>
-            {t('setup.recoveryCodeIntro')}
-          </Callout>
+          <div ref={stepTwoRef} tabIndex={-1} className="outline-none">
+            <Callout tone="warning" icon={TriangleAlert} title={t('setup.recoveryCodeTitle')}>
+              {t('setup.recoveryCodeIntro')}
+            </Callout>
+          </div>
           <RecoveryCodeDisplay code={recoveryCode} />
           <Checkbox
             label={t('setup.acknowledgeLabel')}

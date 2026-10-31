@@ -30,7 +30,7 @@ export function RecoveryCodeDisplay({ code }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <ul aria-label={t('setup.recoveryCodeLabel')} className="grid grid-cols-2 gap-4 md:grid-cols-3">
+      <ul role="list" aria-label={t('setup.recoveryCodeLabel')} className="grid grid-cols-2 gap-4 md:grid-cols-3">
         {groups.map((group, index) => (
           <li
             key={`${index}-${group}`}

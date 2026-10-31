@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import i18next from 'i18next'
@@ -81,6 +81,18 @@ describe('VaultSetupPage', () => {
     expect(screen.getByRole('button', { name: /continuar/i })).toBeDisabled()
     await userEvent.click(screen.getByLabelText(/anotei o código/i))
     expect(screen.getByRole('button', { name: /continuar/i })).toBeEnabled()
+  })
+
+  // F3: the form that had focus is gone; focus must not fall to <body>.
+  it('moves focus to the step-2 title when the code appears', async () => {
+    setUpVaultMock.mockResolvedValue({ recoveryCode: CODE })
+    renderPage()
+
+    await completeStepOne()
+
+    const title = await screen.findByText('Anota isto agora')
+    await waitFor(() => expect(document.activeElement).toContainElement(title))
+    expect(document.activeElement).not.toBe(document.body)
   })
 
   it('copies the code from step 2 and confirms it with a toast', async () => {

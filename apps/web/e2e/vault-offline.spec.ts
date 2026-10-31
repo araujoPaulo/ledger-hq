@@ -84,7 +84,7 @@ test('sets up the vault, adds a credential, and reads it back with the network d
     await platformDialog.getByRole('button', { name: /cancelar/i }).click()
   }
   await expect(platformDialog).toBeHidden()
-  await expect(page.getByText('Portal das Finanças')).toBeVisible()
+  await expect(page.getByText('Portal das Finanças', { exact: true })).toBeVisible()
 
   // Add a credential on the client's page. The vault is already unlocked
   // from the setup flow above, in the same browser session.

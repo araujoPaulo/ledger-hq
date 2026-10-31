@@ -142,8 +142,8 @@ moves to Stage 5 — it is a mode of the sign-in page.
 
 - **Depends on**: Stage 3's `Dialog`, `Toast`, `Callout` and
   `PlatformAvatar`.
-- [Spec](../superpowers/specs/2026-10-04-ui-refresh-stage-4-design.md) ·
-  [plan](../superpowers/plans/2026-10-04-ui-refresh-stage-4.md).
+- [Spec](../superpowers/specs/2026-10-04-ui-refresh-stage-4-design.md)
+- [Plan](../superpowers/plans/2026-10-04-ui-refresh-stage-4.md)
 
 ## Stage 5 — Auth
 
