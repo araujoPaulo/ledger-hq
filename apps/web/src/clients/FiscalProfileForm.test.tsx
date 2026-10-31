@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import i18next from 'i18next'
@@ -168,5 +168,22 @@ describe('FiscalProfileCard', () => {
     await userEvent.click(await screen.findByRole('button', { name: /^guardar$/i }))
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  // Review Focus 5: a failed save keeps the dialog open, the typed values and
+  // shows the server's message inside it.
+  it('keeps the dialog open, the typed values and the server message when the save fails', async () => {
+    getFiscalProfile.mockResolvedValue(profile)
+    putFiscalProfile.mockRejectedValue(new ApiError('common.internal_error', {}, 500))
+    renderCard()
+
+    await userEvent.click(await screen.findByRole('button', { name: /^editar$/i }))
+    const dialog = await screen.findByRole('dialog', { name: 'Perfil fiscal' })
+    await userEvent.selectOptions(within(dialog).getByLabelText(/regime de iva/i), 'QUARTERLY')
+    await userEvent.click(within(dialog).getByRole('button', { name: /^guardar$/i }))
+
+    expect(await within(dialog).findByText(/ocorreu um erro no servidor/i)).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Perfil fiscal' })).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(/regime de iva/i)).toHaveValue('QUARTERLY')
   })
 })
