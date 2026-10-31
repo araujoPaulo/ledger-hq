@@ -78,7 +78,7 @@ describe('ClientFormPage', () => {
     await userEvent.selectOptions(await screen.findByLabelText(/tipo|kind/i), 'COMPANY')
     await userEvent.type(screen.getByLabelText(/nome|^name/i), 'Padaria')
     await userEvent.type(screen.getByLabelText(/NIF|tax number/i), '000000000')
-    await userEvent.click(screen.getByRole('button', { name: /guardar|save/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^criar$/i }))
 
     expect(createClient).not.toHaveBeenCalled()
     // Two alerts now: the generic summary (kept as a fallback for anything
@@ -97,12 +97,47 @@ describe('ClientFormPage', () => {
     await userEvent.selectOptions(await screen.findByLabelText(/tipo|kind/i), 'COMPANY')
     await userEvent.type(screen.getByLabelText(/nome|^name/i), 'Padaria Central, Lda.')
     await userEvent.type(screen.getByLabelText(/NIF|tax number/i), '501442600')
-    await userEvent.click(screen.getByRole('button', { name: /guardar|save/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^criar$/i }))
 
     await vi.waitFor(() => {
       expect(createClient).toHaveBeenCalledWith(
         expect.objectContaining({ kind: 'COMPANY', taxId: '501442600', legalForm: 'LDA' }),
       )
     })
+  })
+
+  // Spec §10: still role="alert", now also tied to the field.
+  it('links a field error to its field', async () => {
+    renderPage()
+
+    await userEvent.type(await screen.findByLabelText(/^nome$/i), 'Padaria')
+    await userEvent.type(screen.getByLabelText(/^nif$/i), '000000000')
+    await userEvent.click(screen.getByRole('button', { name: /^criar$/i }))
+
+    const taxId = screen.getByLabelText(/^nif$/i)
+    expect(taxId).toHaveAttribute('aria-invalid', 'true')
+    expect(taxId).toHaveAccessibleDescription(/o nif não é válido/i)
+  })
+
+  it('clears the personal fields when the kind switches away and back', async () => {
+    renderPage()
+
+    await userEvent.selectOptions(await screen.findByLabelText(/^tipo$/i), 'INDIVIDUAL')
+    await userEvent.type(screen.getByLabelText(/^niss$/i), '12345678901')
+    await userEvent.selectOptions(screen.getByLabelText(/^tipo$/i), 'COMPANY')
+    await userEvent.selectOptions(screen.getByLabelText(/^tipo$/i), 'INDIVIDUAL')
+
+    expect(screen.getByLabelText(/^niss$/i)).toHaveValue('')
+  })
+
+  it('lays the form out in two titled sections and says where the fiscal profile went', async () => {
+    renderPage()
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Novo cliente' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Identificação' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Contacto' })).toBeInTheDocument()
+    expect(screen.getByText(/o perfil fiscal preenche-se depois/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Clientes' })).toHaveAttribute('href', '/clients')
+    expect(screen.getByRole('link', { name: /cancelar/i })).toHaveAttribute('href', '/clients')
   })
 })
