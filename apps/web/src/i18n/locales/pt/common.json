@@ -1,5 +1,6 @@
 {
   "appName": "Ledger HQ",
+  "loading": "A carregar",
   "home": { "title": "Resumo", "outstanding": "Em dívida" },
   "nav": { "clients": "Clientes", "vault": "Cofre", "reporting": "Relatórios" },
   "search": {
