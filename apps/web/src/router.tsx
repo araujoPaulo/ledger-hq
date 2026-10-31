@@ -11,6 +11,7 @@ import { ClientEditPage } from './clients/ClientEditPage'
 import { VaultSetupPage } from './vault/VaultSetupPage'
 import { PlatformsPage } from './vault/PlatformsPage'
 import { HomePage } from './HomePage'
+import { validateClientSearch } from './clients/clientTabs'
 import { SearchResultsPage } from './search/SearchResultsPage'
 import { ReportingPage } from './reporting/ReportingPage'
 
@@ -48,6 +49,9 @@ const clientNewRoute = createRoute({
 const clientDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/clients/$clientId',
+  // The active tab lives in the URL, so a reload keeps it and a receivable
+  // can link straight to its client's Billing tab.
+  validateSearch: validateClientSearch,
   component: ClientDetailPage,
 })
 
