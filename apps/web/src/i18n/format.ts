@@ -48,14 +48,22 @@ const SEPARATORS: Record<SupportedLocale, { decimal: string; group: string }> = 
  * The locale's decimal mark is the only decimal mark. The other separator is
  * accepted only as a thousands separator, between groups of exactly three
  * digits: in pt-PT "2.150" is 2150 euros, but "2150.50" is refused rather than
- * read as 215 050 euros. Whitespace (Intl groups with a narrow no-break space)
- * and a euro sign at either end are ignored, so an amount copied from the
+ * read as 215 050 euros. A run of whitespace between digits (Intl groups pt-PT with a
+ * narrow no-break space) counts as the group mark and obeys the same rule; leading
+ * and trailing whitespace and a euro sign at either end are ignored, so an amount copied from the
  * app's own display parses. No floating point: the digits are joined and
  * parsed as one integer.
  */
 export function parseAmount(text: string, locale: SupportedLocale): number | null {
   const { decimal, group } = SEPARATORS[locale]
-  const compact = text.replace(/\s/g, '').replace(/^€|€$/g, '')
+  // Whitespace between digits is a grouping mark (Intl emits U+00A0/U+202F), so
+  // it goes through the same groups-of-three check as the locale's group char.
+  // Any whitespace left after that (e.g. before the decimal mark) is refused.
+  const compact = text
+    .trim()
+    .replace(/^€|€$/g, '')
+    .trim()
+    .replace(/(\d)\s+(?=\d)/g, `$1${group}`)
   if (compact === '') return null
 
   const parts = compact.split(decimal)

@@ -50,8 +50,23 @@ describe('parseAmount', () => {
   it('accepts pt-PT thousands grouping by dot or space', () => {
     expect(parseAmount('2.150,00', 'pt-PT')).toBe(215000)
     expect(parseAmount('1.234.567,89', 'pt-PT')).toBe(123456789)
-    expect(parseAmount('2 150,00', 'pt-PT')).toBe(215000)
-    expect(parseAmount('2 150,00', 'pt-PT')).toBe(215000)
+    expect(parseAmount('2 150,50', 'pt-PT')).toBe(215050)
+    expect(parseAmount('2\u00a0150,50', 'pt-PT')).toBe(215050)
+    expect(parseAmount('2\u202f150,50', 'pt-PT')).toBe(215050)
+    expect(parseAmount('1 234 567,89', 'pt-PT')).toBe(123456789)
+    expect(parseAmount('2 150,50 €', 'pt-PT')).toBe(215050)
+  })
+
+  // Space is pt-PT's real grouping mark: it follows the same groups-of-three rule.
+  it('refuses a space that is not between groups of three digits', () => {
+    expect(parseAmount('15 00', 'pt-PT')).toBeNull()
+    expect(parseAmount('10 0', 'pt-PT')).toBeNull()
+    expect(parseAmount('1 0 0 0', 'pt-PT')).toBeNull()
+    expect(parseAmount('21 50,00', 'pt-PT')).toBeNull()
+    expect(parseAmount('15\u00a000', 'pt-PT')).toBeNull()
+    expect(parseAmount('15\u202f00', 'pt-PT')).toBeNull()
+    expect(parseAmount('15 00', 'en-GB')).toBeNull()
+    expect(parseAmount('2 150,5 0', 'pt-PT')).toBeNull()
   })
 
   it('reads en-GB amounts with a dot as the decimal mark', () => {
