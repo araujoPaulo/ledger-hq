@@ -65,7 +65,7 @@ export function PeriodSummaryReport() {
     <section className="flex flex-col gap-4">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <h2 className="text-lg font-semibold">{t('periodSummary.title')}</h2>
-        <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
           <Input
             type="date"
             label={t('periodSummary.from')}

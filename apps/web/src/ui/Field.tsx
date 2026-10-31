@@ -80,7 +80,9 @@ export function Field({
 
   const labelClass = hideLabel
     ? 'sr-only'
-    : `text-sm font-medium text-muted${layout === 'inline' ? ' whitespace-nowrap' : ''}`
+    : layout === 'inline'
+      ? 'text-sm font-medium text-muted whitespace-nowrap'
+      : 'text-sm font-medium text-muted'
   const labelElement = (
     <label htmlFor={controlId} className={labelClass}>
       {label}

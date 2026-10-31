@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   RouterProvider,
@@ -191,5 +191,24 @@ describe('ClientEditPage', () => {
 
     expect(await screen.findByText('Registo não encontrado.')).toBeInTheDocument()
     expect(screen.queryByLabelText(/^nome$/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Clientes' })).toHaveAttribute('href', '/clients')
+  })
+
+  // A failed background refetch keeps the loaded data (status 'error' with
+  // data); it must not unmount the form and discard what the user typed.
+  it('keeps the form and typed edits when a background refetch fails', async () => {
+    getClient.mockResolvedValue(company)
+    const { queryClient } = renderPage()
+
+    await userEvent.type(await screen.findByLabelText(/^telefone$/i), '912345678')
+    getClient.mockRejectedValue(new ApiError('common.not_found', {}, 500))
+    // TanStack batches observer notifications on a timer, so let it run
+    // inside act before looking at the screen.
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['client', '1'] })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(queryClient.getQueryState(['client', '1'])?.status).toBe('error')
+    expect(screen.getByLabelText(/^telefone$/i)).toHaveValue('912345678')
   })
 })

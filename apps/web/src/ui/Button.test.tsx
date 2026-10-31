@@ -58,6 +58,15 @@ describe('Button', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
+  it('forwards a caller className to the child under asChild', () => {
+    render(
+      <Button asChild className="x">
+        <a href="/">Um</a>
+      </Button>,
+    )
+    expect(screen.getByRole('link', { name: 'Um' })).toHaveClass('x')
+  })
+
   it('will not compile asChild with a type, a loading state or disabled', () => {
     // @ts-expect-error type="button" on an anchor is invalid
     render(<Button asChild type="button"><a href="/">Um</a></Button>)

@@ -41,7 +41,7 @@ test('sets up the vault, adds a credential, and reads it back with the network d
 
   // Set up the vault (re-enters the master password by design — see Task 12).
   // `ClientFormPage` already navigated us to this client's detail page after
-  // "Guardar", and its Credentials section (VaultUnlockGate) offers a link
+  // "Criar", and its Credentials section (VaultUnlockGate) offers a link
   // into vault setup from right here. The brief's original `page.goto('/vault/setup')`
   // is a full browser navigation — it would tear down the in-memory JS module
   // state (vault-session.ts's singleton) that `unlockVault()` sets a few lines
@@ -55,7 +55,7 @@ test('sets up the vault, adds a credential, and reads it back with the network d
   await page.getByLabel(/anotei o código/i).check()
   await page.getByRole('button', { name: /continuar/i }).click()
 
-  // Add a platform. Reached via the persistent nav link, not `page.goto`, for
+  // Add a platform (the "Cofre" nav link). Reached via the persistent nav link, not `page.goto`, for
   // the same in-memory-state reason as above. The platform catalog is seeded
   // with "Portal das Finanças" by the vault migration (a permanent fixture,
   // not test leftover — see `20260911083418_vault/migration.sql`), so this

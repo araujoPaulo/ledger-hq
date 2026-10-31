@@ -22,11 +22,11 @@ function isFiltered(filters: ClientFilters): boolean {
   return (filters.search ?? '').trim() !== '' || filters.kind !== undefined
 }
 
-function CreateClientButton() {
+function CreateClientButton({ className }: { className?: string }) {
   const { t } = useTranslation('common')
 
   return (
-    <Button asChild variant="primary">
+    <Button asChild variant="primary" {...(className === undefined ? {} : { className })}>
       <Link to="/clients/new">
         <Plus aria-hidden="true" className="h-4 w-4" />
         {t('actions.create')}
@@ -78,7 +78,7 @@ export function ClientListPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={t('clients:title')} actions={<CreateClientButton />} />
+      <PageHeader title={t('clients:title')} actions={<CreateClientButton className="w-full sm:w-auto" />} />
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="w-full sm:w-auto sm:max-w-[360px] sm:flex-1">

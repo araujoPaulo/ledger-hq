@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from '@tanstack/react-router'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { ChevronLeft } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { UpdateClientInput } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { getClient, updateClient } from './api'
@@ -9,6 +11,7 @@ import { ClientFormSkeleton } from './ClientFormSkeleton'
 /** `/clients/$clientId/edit`. */
 export function ClientEditPage() {
   const { clientId } = useParams({ from: '/clients/$clientId/edit' })
+  const { t } = useTranslation('clients')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -31,8 +34,23 @@ export function ClientEditPage() {
     },
   })
 
-  if (client.isPending) return <ClientFormSkeleton />
-  if (client.isError) return <ErrorMessage error={client.error} />
+  // Data first: TanStack keeps `data` when a background refetch fails (status
+  // 'error'), and unmounting the form then would discard the user's edits.
+  if (client.data === undefined) {
+    if (!client.isError) return <ClientFormSkeleton />
+    return (
+      <div className="flex flex-col gap-4">
+        <Link
+          to="/clients"
+          className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-muted hover:text-ink"
+        >
+          <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+          {t('title')}
+        </Link>
+        <ErrorMessage error={client.error} />
+      </div>
+    )
+  }
 
   // An archived client's edit URL still renders the form: the server refuses
   // the save with clients.archived, and its message is the guard (spec §6.2).
