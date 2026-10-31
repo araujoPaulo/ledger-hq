@@ -151,6 +151,15 @@ describe('recovery mode', () => {
     await userEvent.paste(' abcde  fghij  klmno  pqrst  uvwxy  z ')
 
     expect(code).toHaveValue('ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z')
+
+    recoverVaultMock.mockResolvedValue(undefined)
+    await userEvent.type(screen.getByLabelText('Nova palavra-passe mestra'), 'a new long master password')
+    await userEvent.type(screen.getByLabelText(/confirma a nova palavra-passe/i), 'a new long master password')
+    await userEvent.click(screen.getByRole('button', { name: /^recuperar acesso$/i }))
+
+    await vi.waitFor(() => {
+      expect(recoverVaultMock).toHaveBeenCalledWith('a new long master password', 'ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z')
+    })
   })
 
   // Review Focus 2: re-grouping moves characters across hyphens; the caret
@@ -169,6 +178,42 @@ describe('recovery mode', () => {
 
     await userEvent.type(code, 'L', { skipClick: true })
     expect(code).toHaveValue('ABCKL-DEFGH-IJ')
+  })
+
+  it('keeps the caret when a rejected character is typed mid-code', async () => {
+    await openRecovery()
+
+    const code = screen.getByLabelText<HTMLInputElement>(/código de recuperação/i)
+    await userEvent.type(code, 'ABCDEFGHIJ')
+    await userEvent.type(code, '0', { initialSelectionStart: 3, initialSelectionEnd: 3 })
+    expect(code).toHaveValue('ABCDE-FGHIJ')
+    expect(code.selectionStart).toBe(3)
+
+    await userEvent.type(code, 'K', { skipClick: true })
+    expect(code).toHaveValue('ABCKD-EFGHI-J')
+  })
+
+  it('keeps the caret sensible on backspace right after a hyphen', async () => {
+    await openRecovery()
+
+    const code = screen.getByLabelText<HTMLInputElement>(/código de recuperação/i)
+    await userEvent.type(code, 'ABCDEFGHIJ')
+    await userEvent.type(code, '{Backspace}', { initialSelectionStart: 6, initialSelectionEnd: 6 })
+    expect(code).toHaveValue('ABCDE-FGHIJ')
+    expect(code.selectionStart).toBeLessThan(11)
+    expect(code.selectionStart).toBe(5)
+  })
+
+  it('does not move the code caret when another field re-renders after a rejected character', async () => {
+    await openRecovery()
+
+    const code = screen.getByLabelText<HTMLInputElement>(/código de recuperação/i)
+    await userEvent.type(code, 'ABCDEFGHIJ')
+    await userEvent.type(code, '0', { initialSelectionStart: 3, initialSelectionEnd: 3 })
+    code.setSelectionRange(2, 2)
+
+    await userEvent.type(screen.getByLabelText('Nova palavra-passe mestra'), 'x')
+    expect(code.selectionStart).toBe(2)
   })
 
   it('shows length and mismatch problems on the fields they belong to', async () => {

@@ -31,7 +31,7 @@ export function LoginPage() {
     pendingCaret.current = null
   })
 
-  const tooShort = t('auth.passwordTooShort', { min: MIN_MASTER_PASSWORD_LENGTH })
+  const tooShortMessage = t('auth.passwordTooShort', { min: MIN_MASTER_PASSWORD_LENGTH })
 
   const passwordTooShort = masterPassword.length > 0 && masterPassword.length < MIN_MASTER_PASSWORD_LENGTH
 
@@ -88,7 +88,17 @@ export function LoginPage() {
           onChange={(event) => {
             const { value, selectionStart } = event.target
             const formatted = formatRecoveryCode(value)
-            pendingCaret.current = caretInFormatted(formatted, significantBefore(value, selectionStart ?? value.length))
+            const caret = caretInFormatted(formatted, significantBefore(value, selectionStart ?? value.length))
+            if (formatted === recoveryCode) {
+              // State is unchanged, so React will not re-render and the layout
+              // effect would never run: React would restore the DOM value and
+              // push the caret to the end. Put both back by hand instead.
+              event.target.value = formatted
+              event.target.setSelectionRange(caret, caret)
+              pendingCaret.current = null
+              return
+            }
+            pendingCaret.current = caret
             setRecoveryCode(formatted)
           }}
         />
@@ -100,7 +110,7 @@ export function LoginPage() {
           label={t('auth.newMasterPasswordLabel')}
           value={newMasterPassword}
           onChange={(event) => setNewMasterPassword(event.target.value)}
-          error={newPasswordTooShort ? tooShort : undefined}
+          error={newPasswordTooShort ? tooShortMessage : undefined}
         />
 
         <Input
@@ -159,7 +169,7 @@ export function LoginPage() {
         label={t('auth.masterPasswordLabel')}
         value={masterPassword}
         onChange={(event) => setMasterPassword(event.target.value)}
-        error={passwordTooShort ? tooShort : undefined}
+        error={passwordTooShort ? tooShortMessage : undefined}
       />
 
       <ErrorMessage error={loginMutation.error} />
