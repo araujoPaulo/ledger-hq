@@ -1,15 +1,30 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Plus } from 'lucide-react'
+import { Globe, Plus } from 'lucide-react'
 import { ErrorMessage } from '../shell/ErrorMessage'
-import { Button, Dialog, PageHeader } from '../ui'
+import { Badge, Button, Card, DataList, Dialog, EmptyState, PageHeader } from '../ui'
 import { listPlatforms } from './api'
 import { NewPlatformForm } from './NewPlatformForm'
+import { PlatformAvatar } from './PlatformAvatar'
+import { PlatformsPageSkeleton } from './PlatformsPageSkeleton'
+
+/**
+ * The host is all a reader needs to recognise a platform. A stored URL that
+ * does not parse (no scheme, say) is shown as stored rather than dropped.
+ */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
+}
 
 export function PlatformsPage() {
   const { t } = useTranslation(['vault', 'domain', 'common'])
   const [creating, setCreating] = useState(false)
+  const headingId = useId()
 
   const platforms = useQuery({ queryKey: ['platforms'], queryFn: listPlatforms })
 
@@ -31,22 +46,52 @@ export function PlatformsPage() {
           }
         />
 
-        <section className="flex flex-col gap-4">
-          <h2 className="text-lg font-semibold">{t('vault:platforms.title')}</h2>
+        <section aria-labelledby={headingId} className="flex flex-col gap-4">
+          <h2 id={headingId} className="text-lg font-semibold">
+            {t('vault:platforms.title')}
+          </h2>
 
-          {platforms.isPending ? null : platforms.isError ? (
+          {platforms.isPending ? (
+            <PlatformsPageSkeleton />
+          ) : platforms.isError ? (
             <ErrorMessage error={platforms.error} />
           ) : platforms.data.length === 0 ? (
-            <p className="text-sm text-slate-500">{t('vault:platforms.empty')}</p>
+            <EmptyState
+              icon={Globe}
+              title={t('vault:platforms.empty')}
+              description={t('vault:platforms.emptyHint')}
+              action={
+                <Button variant="primary" onClick={() => setCreating(true)}>
+                  <Plus aria-hidden="true" className="h-4 w-4" />
+                  {t('vault:platforms.newTitle')}
+                </Button>
+              }
+            />
           ) : (
-            <ul className="flex flex-col gap-2">
-              {platforms.data.map((platform) => (
-                <li key={platform.id} className="rounded border border-slate-200 bg-white p-3 text-sm">
-                  <span className="font-medium">{platform.name}</span>{' '}
-                  <span className="text-slate-500">{t(`domain:authKind.${platform.authKind}`)}</span>
-                </li>
-              ))}
-            </ul>
+            <Card padding="none" className="px-5">
+              <DataList>
+                {platforms.data.map((platform) => (
+                  <DataList.Row
+                    key={platform.id}
+                    wrap
+                    label={
+                      <span className="flex items-center gap-4">
+                        <PlatformAvatar name={platform.name} />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate font-medium">{platform.name}</span>
+                          {platform.url !== null && (
+                            // Plain text, not a link: the row is about the
+                            // record, and a stray click should not leave the app.
+                            <span className="truncate text-xs text-muted">{hostOf(platform.url)}</span>
+                          )}
+                        </span>
+                      </span>
+                    }
+                    value={<Badge tone="neutral">{t(`domain:authKind.${platform.authKind}`)}</Badge>}
+                  />
+                ))}
+              </DataList>
+            </Card>
           )}
         </section>
       </div>

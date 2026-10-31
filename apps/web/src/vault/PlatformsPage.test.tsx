@@ -137,4 +137,69 @@ describe('PlatformsPage', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(createPlatformMock).not.toHaveBeenCalled()
   })
+
+  it('shows a skeleton while loading, not a blank screen', async () => {
+    // A promise that never settles: the query stays pending.
+    listPlatformsMock.mockReturnValue(new Promise(() => {}))
+    renderPage()
+
+    await waitFor(() => {
+      expect(document.querySelector('[aria-busy="true"]')).not.toBeNull()
+    })
+    expect(document.querySelectorAll('[aria-hidden="true"].animate-pulse').length).toBeGreaterThan(0)
+  })
+
+  it('offers to create the first platform from the empty state', async () => {
+    listPlatformsMock.mockResolvedValue([])
+    renderPage()
+
+    expect(await screen.findByText(/adiciona as plataformas/i)).toBeInTheDocument()
+    // Two triggers when empty: the header's and the empty state's.
+    const buttons = screen.getAllByRole('button', { name: /nova plataforma/i })
+    expect(buttons).toHaveLength(2)
+
+    await userEvent.click(buttons[1]!)
+    expect(await screen.findByRole('dialog', { name: /nova plataforma/i })).toBeInTheDocument()
+  })
+
+  it('shows each platform with its URL host and authentication kind, not the full URL', async () => {
+    listPlatformsMock.mockResolvedValue([
+      {
+        id: 'p1',
+        name: 'Portal das Finanças',
+        url: 'https://www.portaldasfinancas.gov.pt/at/html/index.html',
+        authKind: 'PASSWORD_OTP',
+      },
+    ])
+    renderPage()
+
+    expect(await screen.findByText('www.portaldasfinancas.gov.pt')).toBeInTheDocument()
+    expect(screen.queryByText(/index\.html/)).not.toBeInTheDocument()
+    expect(screen.getByText('Palavra-passe + código de verificação')).toBeInTheDocument()
+  })
+
+  it('omits the host line for a platform with no URL', async () => {
+    // One platform with a URL, one without: the assertion can fail if the
+    // URL-less row grows a host line.
+    listPlatformsMock.mockResolvedValue([
+      PORTAL,
+      { id: 'p2', name: 'Segurança Social Direta', url: 'https://app.seg-social.pt/login', authKind: 'PASSWORD' },
+    ])
+    renderPage()
+
+    await screen.findByText('Portal das Finanças')
+    expect(screen.getAllByText(/\.pt$/)).toHaveLength(1)
+    expect(screen.getByText('app.seg-social.pt')).toBeInTheDocument()
+  })
+
+  // Review Focus 5: a URL stored without a scheme does not parse; show it as
+  // stored rather than throwing or dropping it.
+  it('shows a URL that does not parse exactly as stored', async () => {
+    listPlatformsMock.mockResolvedValue([
+      { id: 'p1', name: 'Segurança Social Direta', url: 'seg-social.pt', authKind: 'PASSWORD' },
+    ])
+    renderPage()
+
+    expect(await screen.findByText('seg-social.pt')).toBeInTheDocument()
+  })
 })
