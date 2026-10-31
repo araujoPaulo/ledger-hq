@@ -1,135 +1,105 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import type { LegalForm } from '@ledger-hq/domain'
-import { Button } from '../ui'
+import { Lock } from 'lucide-react'
+import { groupByUrgency } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
-import { formatDate } from '../i18n/format'
-import type { SupportedLocale } from '../i18n/format'
-import { archiveClient, getClient, restoreClient } from './api'
-import { FiscalProfileCard } from './FiscalProfileCard'
-import { EmploymentSection } from '../employments/EmploymentSection'
-import { CredentialsSection } from '../vault/CredentialsSection'
-import { ObligationsSection } from '../obligations/ObligationsSection'
+import { Badge, Tabs } from '../ui'
 import { ClientLedgerSection } from '../billing/ClientLedgerSection'
+import { EmploymentSection } from '../employments/EmploymentSection'
+import { ObligationsSection } from '../obligations/ObligationsSection'
+import { listObligations } from '../obligations/api'
+import { CredentialsSection } from '../vault/CredentialsSection'
+import { useVaultState } from '../vault/vault-session'
+import { getClient } from './api'
+import { ClientDetailSkeleton } from './ClientDetailSkeleton'
+import { ClientHeader } from './ClientHeader'
+import { ClientOverviewTab } from './ClientOverviewTab'
+import { isClientTab } from './clientTabs'
 
+/**
+ * A header and five tabs. Only the active tab is mounted, so each tab's
+ * queries run when it is opened — except what Overview's summary needs, which
+ * Overview fetches under the Obligations and Billing tabs' own keys.
+ */
 export function ClientDetailPage() {
   const { clientId } = useParams({ from: '/clients/$clientId' })
-  const { t, i18n } = useTranslation(['clients', 'common', 'domain'])
-  const queryClient = useQueryClient()
+  const search = useSearch({ from: '/clients/$clientId' })
+  // Guard here too: the router can hand an unvalidated `?tab=` through, and a
+  // stale value must open Overview rather than an empty strip.
+  const tab = isClientTab(search.tab) ? search.tab : 'overview'
+  const navigate = useNavigate()
+  const { t } = useTranslation(['clients', 'employments'])
+  const vaultState = useVaultState()
 
   const client = useQuery({
     queryKey: ['client', clientId],
     queryFn: () => getClient(clientId),
   })
 
-  const archiveMutation = useMutation({
-    mutationFn: () => archiveClient(clientId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['client', clientId] })
-    },
+  // Read from the cache only, for the tab badge: Overview and the Obligations
+  // tab fetch this key; the badge never fetches it on its own.
+  const obligations = useQuery({
+    queryKey: ['obligations', clientId],
+    queryFn: () => listObligations({ clientId }),
+    enabled: false,
   })
 
-  const restoreMutation = useMutation({
-    mutationFn: () => restoreClient(clientId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['client', clientId] })
-    },
-  })
-
-  if (client.isPending) return null
+  if (client.isPending) return <ClientDetailSkeleton />
   if (client.isError) return <ErrorMessage error={client.error} />
 
   const record = client.data
+  const overdue = obligations.data === undefined ? 0 : groupByUrgency(obligations.data, new Date()).overdue.length
+
+  function selectTab(next: string) {
+    if (!isClientTab(next)) return
+    // replace: Back leaves the client rather than walking the tabs clicked
+    // through. Overview is the default, so it keeps a clean URL.
+    void navigate({
+      to: '/clients/$clientId',
+      params: { clientId },
+      search: next === 'overview' ? {} : { tab: next },
+      replace: true,
+    })
+  }
+
   return (
-    <section className="flex flex-col gap-6">
-      <header className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold">{record.name}</h1>
-          <p className="text-sm text-slate-500">{t(`domain:clientKind.${record.kind}`)}</p>
-        </div>
+    <div className="flex flex-col gap-6">
+      <ClientHeader client={record} />
 
-        <div className="flex items-center gap-4">
-          {record.archivedAt === null ? (
-            <>
-              <Button asChild variant="secondary">
-                <Link to="/clients/$clientId/edit" params={{ clientId }}>
-                  {t('common:actions.edit')}
-                </Link>
-              </Button>
-              <Button variant="secondary" onClick={() => archiveMutation.mutate()} isLoading={archiveMutation.isPending}>
-                {t('common:actions.archive')}
-              </Button>
-            </>
-          ) : (
-            <Button variant="secondary" onClick={() => restoreMutation.mutate()} isLoading={restoreMutation.isPending}>
-              {t('common:actions.restore')}
-            </Button>
-          )}
-        </div>
-      </header>
+      <Tabs value={tab} onValueChange={selectTab} className="flex flex-col gap-6">
+        <Tabs.List>
+          <Tabs.Trigger value="overview">{t('clients:tabs.overview')}</Tabs.Trigger>
+          <Tabs.Trigger value="obligations">
+            {t('clients:tabs.obligations')}
+            {overdue > 0 && <Badge tone="danger">{overdue}</Badge>}
+          </Tabs.Trigger>
+          <Tabs.Trigger value="billing">{t('clients:tabs.billing')}</Tabs.Trigger>
+          <Tabs.Trigger value="people">
+            {record.kind === 'COMPANY' ? t('employments:employeesTitle') : t('employments:employmentsTitle')}
+          </Tabs.Trigger>
+          <Tabs.Trigger value="credentials">
+            {t('clients:tabs.credentials')}
+            {vaultState.status === 'locked' && <Lock aria-hidden="true" className="h-3.5 w-3.5 text-subtle" />}
+          </Tabs.Trigger>
+        </Tabs.List>
 
-      <ErrorMessage error={archiveMutation.error} />
-      <ErrorMessage error={restoreMutation.error} />
-
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 rounded border border-slate-200 bg-white p-4 text-sm">
-        <dt className="text-slate-500">{t('clients:form.taxId.label')}</dt>
-        <dd>{record.taxId}</dd>
-
-        <dt className="text-slate-500">{t('clients:form.accounting.label')}</dt>
-        <dd>{t(`domain:accounting.${record.accounting}`)}</dd>
-
-        {record.legalForm !== null && (
-          <>
-            <dt className="text-slate-500">{t('clients:form.legalForm.label')}</dt>
-            {/* Guaranteed non-null only for a COMPANY, whose legalForm is always one of LEGAL_FORM_VALUES. */}
-            <dd>{t(`domain:legalForm.${record.legalForm as LegalForm}`)}</dd>
-          </>
-        )}
-
-        {record.socialSecurityNo !== null && (
-          <>
-            <dt className="text-slate-500">{t('clients:form.socialSecurityNo.label')}</dt>
-            <dd>{record.socialSecurityNo}</dd>
-          </>
-        )}
-
-        {record.dateOfBirth !== null && (
-          <>
-            <dt className="text-slate-500">{t('clients:form.dateOfBirth.label')}</dt>
-            <dd>{formatDate(record.dateOfBirth, i18n.language as SupportedLocale)}</dd>
-          </>
-        )}
-
-        {record.email !== null && (
-          <>
-            <dt className="text-slate-500">{t('clients:form.email.label')}</dt>
-            <dd>{record.email}</dd>
-          </>
-        )}
-
-        {record.phone !== null && (
-          <>
-            <dt className="text-slate-500">{t('clients:form.phone.label')}</dt>
-            <dd>{record.phone}</dd>
-          </>
-        )}
-
-        {record.notes !== null && (
-          <>
-            <dt className="text-slate-500">{t('clients:form.notes.label')}</dt>
-            <dd>{record.notes}</dd>
-          </>
-        )}
-      </dl>
-
-      <FiscalProfileCard clientId={clientId} kind={record.kind} />
-
-      <ObligationsSection clientId={clientId} />
-      <ClientLedgerSection clientId={clientId} />
-
-      <EmploymentSection client={{ id: record.id, kind: record.kind, name: record.name }} />
-      <CredentialsSection clientId={clientId} />
-    </section>
+        <Tabs.Content value="overview">
+          <ClientOverviewTab client={record} />
+        </Tabs.Content>
+        <Tabs.Content value="obligations">
+          <ObligationsSection clientId={clientId} />
+        </Tabs.Content>
+        <Tabs.Content value="billing">
+          <ClientLedgerSection clientId={clientId} />
+        </Tabs.Content>
+        <Tabs.Content value="people">
+          <EmploymentSection client={{ id: record.id, kind: record.kind, name: record.name }} />
+        </Tabs.Content>
+        <Tabs.Content value="credentials">
+          <CredentialsSection clientId={clientId} />
+        </Tabs.Content>
+      </Tabs>
+    </div>
   )
 }
