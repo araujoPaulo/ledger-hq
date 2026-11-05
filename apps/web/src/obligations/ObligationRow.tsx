@@ -1,7 +1,11 @@
 import { useTranslation } from 'react-i18next'
-import { formatDate } from '../i18n/format'
+import { Paperclip, PencilLine } from 'lucide-react'
+import type { ObligationStatus } from '@ledger-hq/domain'
+import { formatDate, formatQuarter } from '../i18n/format'
 import type { SupportedLocale } from '../i18n/format'
+import { Badge, Button } from '../ui'
 import type { ObligationResponse } from './api'
+import { STATUS_TONE } from './statusTone'
 
 type Props = {
   obligation: ObligationResponse
@@ -13,46 +17,63 @@ type Props = {
   onManageAttachments?: () => void
 }
 
-export function ObligationRow({
-  obligation,
-  showClient,
-  onMarkDone,
-  onEdit,
-  onManageAttachments,
-}: Props) {
-  const { t, i18n } = useTranslation('obligations')
-  const isActionable = obligation.status === 'PENDING' || obligation.status === 'IN_PROGRESS'
+/** Today as a UTC calendar date — the same day boundary `groupByUrgency` uses. */
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+/** Draws its own bordered surface, so its lists are plain `<ul>`s, not cards. */
+export function ObligationRow({ obligation, showClient, onMarkDone, onEdit, onManageAttachments }: Props) {
+  const { t, i18n } = useTranslation(['obligations', 'domain'])
+  const locale = i18n.language as SupportedLocale
+  const status = obligation.status as ObligationStatus
+  const isActionable = status === 'PENDING' || status === 'IN_PROGRESS'
+  const isOverdue = isActionable && obligation.dueDate < todayIso()
+  const dueClass = ['flex items-center gap-1 text-sm tabular-nums', isOverdue && 'text-danger-700']
+    .filter(Boolean)
+    .join(' ')
 
   return (
-    <li className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white p-3 text-sm">
-      <span className="font-medium">
-        {showClient ? `${obligation.clientName} — ` : ''}
-        {obligation.definitionName}
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-surface border border-line bg-surface px-4 py-3">
+      <div className="flex min-w-0 grow basis-full flex-col sm:basis-0">
+        <span className="text-sm font-medium">
+          {showClient ? `${obligation.clientName} — ` : ''}
+          {obligation.definitionName}
+        </span>
+        <span className="text-xs text-muted">{formatQuarter(obligation.periodLabel, locale)}</span>
+      </div>
+
+      <span className={dueClass}>
+        <span>{formatDate(obligation.dueDate, locale)}</span>
+        {obligation.dueDateOverridden && (
+          <>
+            <PencilLine aria-hidden="true" className="h-3.5 w-3.5 text-subtle" />
+            <span className="sr-only">{t('obligations:row.overridden')}</span>
+          </>
+        )}
       </span>
-      <span className="text-slate-500">{formatDate(obligation.dueDate, i18n.language as SupportedLocale)}</span>
 
-      {isActionable && (
-        <div className="flex gap-2">
-          {onEdit && (
-            <button type="button" onClick={onEdit} className="text-xs underline">
-              {t('row.edit')}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onMarkDone}
-            className="rounded border border-slate-300 px-2 py-1 text-xs"
-          >
-            {t('row.markDone')}
-          </button>
-        </div>
-      )}
+      {status !== 'PENDING' && <Badge tone={STATUS_TONE[status]}>{t(`domain:obligationStatus.${status}`)}</Badge>}
 
-      {onManageAttachments && (
-        <button type="button" onClick={onManageAttachments} className="flex items-center gap-1 text-xs underline">
-          {t('attachments.manage')}
-        </button>
-      )}
+      <div className="flex items-center gap-2">
+        {isActionable && (
+          <Button variant="secondary" size="sm" onClick={onMarkDone}>
+            {t('obligations:row.markDone')}
+          </Button>
+        )}
+        {/* As today: a done or waived obligation is not adjusted from its row. */}
+        {isActionable && onEdit && (
+          <Button variant="ghost" size="sm" onClick={onEdit}>
+            {t('obligations:row.edit')}
+          </Button>
+        )}
+        {onManageAttachments && (
+          <Button variant="ghost" size="sm" onClick={onManageAttachments}>
+            <Paperclip aria-hidden="true" className="h-3.5 w-3.5" />
+            {t('obligations:attachments.manage')}
+          </Button>
+        )}
+      </div>
     </li>
   )
 }

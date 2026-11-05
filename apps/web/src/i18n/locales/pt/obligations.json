@@ -10,25 +10,27 @@
   },
   "section": {
     "title": "Obrigações fiscais",
+    "emptyHint": "Preenche o perfil fiscal e o gerador propõe as obrigações deste cliente.",
     "empty": "Ainda não há obrigações para este cliente.",
     "previewMessage": "{{toCreate}} a criar, {{toRetract}} a retirar",
     "apply": "Aplicar"
   },
   "row": {
+    "overridden": "Data alterada manualmente",
     "markDone": "Marcar como feita",
     "edit": "Editar",
     "waive": "Dispensar"
   },
   "attachments": {
+    "confirmDeleteAction": "Apagar definitivamente",
+    "confirmDeleteNamed": "Apagar definitivamente {{filename}}",
     "title": "Comprovativos",
     "manage": "Comprovativos",
     "add": "Anexar ficheiro",
     "download": "Transferir {{filename}}",
     "delete": "Eliminar {{filename}}",
-    "confirmDelete": "Eliminar {{filename}}? Não há forma de o recuperar.",
     "empty": "Ainda não há comprovativos anexados.",
     "uploading": "A carregar…",
-    "close": "Fechar",
     "hint": "PDF, PNG ou JPEG, até 10 MiB."
   },
   "form": {

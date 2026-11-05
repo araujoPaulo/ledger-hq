@@ -40,9 +40,14 @@ export function ReceivablesSection() {
               <DataList.Row
                 key={row.clientId}
                 label={
-                  // Following a receivable to its client is the only thing
-                  // anyone does from this list.
-                  <Link to="/clients/$clientId" params={{ clientId: row.clientId }} className="font-medium">
+                  // Following a receivable to its client's billing is the
+                  // only thing anyone does from this list.
+                  <Link
+                    to="/clients/$clientId"
+                    params={{ clientId: row.clientId }}
+                    search={{ tab: 'billing' }}
+                    className="font-medium"
+                  >
                     {row.clientName}
                   </Link>
                 }

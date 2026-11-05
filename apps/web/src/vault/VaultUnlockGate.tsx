@@ -3,9 +3,11 @@ import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from '@tanstack/react-router'
+import { Lock, ShieldAlert, WifiOff } from 'lucide-react'
 import { useSession } from '../auth/session'
+import { Button, Callout, Card, Input, Skeleton } from '../ui'
 import { resolveEnvelope, unlockWithPassword } from './unlock'
-import { useVaultState } from './vault-session'
+import { INACTIVITY_LOCK_MS, useVaultState } from './vault-session'
 
 export function VaultUnlockGate({ children }: { children: ReactNode }) {
   const { t } = useTranslation('vault')
@@ -13,7 +15,10 @@ export function VaultUnlockGate({ children }: { children: ReactNode }) {
   const email = session.data?.email ?? ''
   const vaultState = useVaultState()
   const [masterPassword, setMasterPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  // Only a wrong password belongs on the password field; the other two submit
+  // failures are not about what was typed and render apart from it.
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
   const envelope = useQuery({
@@ -23,7 +28,15 @@ export function VaultUnlockGate({ children }: { children: ReactNode }) {
   })
 
   if (vaultState.status === 'unlocked') return <>{children}</>
-  if (envelope.isPending) return null
+  if (envelope.isPending) {
+    return (
+      <div className="mx-auto w-full max-w-md">
+        <Card aria-busy="true">
+          <Skeleton height="10rem" />
+        </Card>
+      </div>
+    )
+  }
 
   // `resolveEnvelope` returns `null` only when it could not reach the server
   // AND nothing was ever cached — a fundamentally different situation from a
@@ -33,72 +46,83 @@ export function VaultUnlockGate({ children }: { children: ReactNode }) {
   // up — which they can't do offline anyway.
   if (envelope.data === null || envelope.data === undefined) {
     return (
-      <p className="text-sm" role="status">
+      <Callout tone="warning" icon={WifiOff} role="status">
         {t('unlock.offlineUnknown')}
-      </p>
+      </Callout>
     )
   }
 
   if (!envelope.data.setUp) {
     return (
-      <p className="text-sm">
-        {t('unlock.notSetUp')}{' '}
-        <Link to="/vault/setup" className="underline">
-          {t('unlock.setUpLink')}
-        </Link>
-      </p>
+      <Callout
+        tone="neutral"
+        icon={ShieldAlert}
+        action={
+          <Button asChild variant="primary" size="sm">
+            <Link to="/vault/setup">{t('unlock.setUpLink')}</Link>
+          </Button>
+        }
+      >
+        {t('unlock.notSetUp')}
+      </Callout>
     )
   }
 
   return (
-    <form
-      className="flex flex-col gap-3"
-      onSubmit={(event) => {
-        event.preventDefault()
-        setPending(true)
-        setError(null)
-        unlockWithPassword(email, masterPassword)
-          .then(() => setMasterPassword(''))
-          .catch((error: unknown) => {
-            // `unlockWithPassword` throws two distinguishable, non-password
-            // errors — see its own doc comment — on top of a genuine
-            // wrong-password rejection (AES-KW's own integrity check).
-            // Collapsing all three into "incorrect password" told a user
-            // with no vault, or one who went offline between page load and
-            // submit, that their (irrelevant) password was wrong.
-            const message = error instanceof Error ? error.message : ''
-            if (message === 'vault not set up') setError(t('unlock.notSetUp'))
-            else if (message === 'vault unknown offline') setError(t('unlock.offlineUnknown'))
-            else setError(t('unlock.wrongPassword'))
-          })
-          .finally(() => setPending(false))
-      }}
-    >
-      <label className="flex flex-col gap-1 text-sm">
-        {t('unlock.passwordLabel')}
-        <input
-          type="password"
-          autoComplete="current-password"
-          required
-          value={masterPassword}
-          onChange={(event) => setMasterPassword(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        />
-      </label>
-
-      {error !== null && (
-        <p role="alert" className="text-sm text-red-700">
-          {error}
-        </p>
-      )}
-
-      <button
-        type="submit"
-        disabled={pending}
-        className="self-start rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-      >
-        {t('unlock.unlockButton')}
-      </button>
-    </form>
+    <div className="mx-auto w-full max-w-md">
+      <Card className="flex flex-col items-center gap-6 text-center">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-ground text-muted">
+          <Lock aria-hidden="true" className="h-6 w-6" />
+        </span>
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-base font-semibold">{t('unlock.lockedTitle')}</h3>
+          <p className="text-sm font-normal text-muted">
+            {t('unlock.lockedHint', { minutes: INACTIVITY_LOCK_MS / 60_000 })}
+          </p>
+        </div>
+        <form
+          className="flex w-full flex-col gap-4 text-left"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setPending(true)
+            setPasswordError(null)
+            setSubmitError(null)
+            unlockWithPassword(email, masterPassword)
+              .then(() => setMasterPassword(''))
+              .catch((error: unknown) => {
+                // `unlockWithPassword` throws two distinguishable, non-password
+                // errors — see its own doc comment — on top of a genuine
+                // wrong-password rejection (AES-KW's own integrity check).
+                // Collapsing all three into "incorrect password" told a user
+                // with no vault, or one who went offline between page load and
+                // submit, that their (irrelevant) password was wrong.
+                const message = error instanceof Error ? error.message : ''
+                if (message === 'vault not set up') setSubmitError(t('unlock.notSetUp'))
+                else if (message === 'vault unknown offline') setSubmitError(t('unlock.offlineUnknown'))
+                else setPasswordError(t('unlock.wrongPassword'))
+              })
+              .finally(() => setPending(false))
+          }}
+        >
+          <Input
+            type="password"
+            autoComplete="current-password"
+            required
+            label={t('unlock.passwordLabel')}
+            value={masterPassword}
+            onChange={(event) => setMasterPassword(event.target.value)}
+            error={passwordError ?? undefined}
+          />
+          {submitError !== null && (
+            <p role="alert" className="text-sm text-danger-700">
+              {submitError}
+            </p>
+          )}
+          <Button variant="primary" type="submit" isLoading={pending} className="w-full">
+            {t('unlock.unlockButton')}
+          </Button>
+        </form>
+      </Card>
+    </div>
   )
 }

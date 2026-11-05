@@ -61,11 +61,8 @@ export function MobileTabBar() {
           to={to}
           aria-label={t(labelKey)}
           activeOptions={{ exact: to === '/' }}
-          className="flex h-[52px] flex-1 items-center justify-center rounded-surface text-muted"
-          activeProps={{
-            className: 'flex h-[52px] flex-1 items-center justify-center rounded-surface text-accent-700',
-            'aria-current': 'page',
-          }}
+          className="flex h-[52px] flex-1 items-center justify-center rounded-surface text-muted aria-[current=page]:text-accent-700"
+          activeProps={{ 'aria-current': 'page' }}
         >
           <Icon aria-hidden="true" className="h-6 w-6" />
         </Link>

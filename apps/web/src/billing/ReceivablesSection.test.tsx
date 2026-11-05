@@ -85,7 +85,7 @@ describe('ReceivablesSection', () => {
     expect(screen.getByText(/61-90/)).toBeInTheDocument()
   })
 
-  it('links each client name to its detail page', async () => {
+  it('links each client name to its Billing tab', async () => {
     getReceivablesMock.mockResolvedValue([
       {
         clientId: 'c1',
@@ -100,7 +100,7 @@ describe('ReceivablesSection', () => {
     renderSection()
 
     const link = await screen.findByRole('link', { name: /padaria central/i })
-    expect(link).toHaveAttribute('href', '/clients/c1')
+    expect(link).toHaveAttribute('href', '/clients/c1?tab=billing')
   })
 
   it('shows the total of every outstanding balance', async () => {

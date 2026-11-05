@@ -4,12 +4,14 @@ import { useTranslation } from 'react-i18next'
 import { encryptCredentialItem, toBase64 } from '@ledger-hq/crypto'
 import { credentialItemSchema } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
+import { Button, Dialog, Input, Select } from '../ui'
 import { createCredential } from './api'
 import type { PlatformResponse } from './api'
 import { useVaultState } from './vault-session'
 
 type Props = { clientId: string; platforms: PlatformResponse[]; onCreated: () => void }
 
+/** Renders inside the New credential dialog; encrypts on this device before anything is sent. */
 export function AddCredentialForm({ clientId, platforms, onCreated }: Props) {
   const { t } = useTranslation(['vault', 'common'])
   const vaultState = useVaultState()
@@ -32,89 +34,63 @@ export function AddCredentialForm({ clientId, platforms, onCreated }: Props) {
 
       return createCredential({ clientId, platformId, label, ciphertext: toBase64(ciphertext), iv: toBase64(iv) })
     },
-    onSuccess: () => {
-      setLabel('')
-      setUsername('')
-      setPassword('')
-      setTotpSecret('')
-      onCreated()
-    },
+    onSuccess: () => onCreated(),
   })
-
-  if (platforms.length === 0) return null
 
   return (
     <form
-      className="flex max-w-sm flex-col gap-3"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
         mutation.mutate()
       }}
     >
-      <h3 className="font-medium">{t('vault:credentials.newTitle')}</h3>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('vault:credentials.form.platform.label')}
-        <select
-          value={platformId}
-          onChange={(event) => setPlatformId(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        >
-          {platforms.map((platform) => (
-            <option key={platform.id} value={platform.id}>
-              {platform.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('vault:credentials.form.label.label')}
-        <input
-          required
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('vault:credentials.form.username.label')}
-        <input
+      <Select
+        label={t('vault:credentials.form.platform.label')}
+        value={platformId}
+        onChange={(event) => setPlatformId(event.target.value)}
+      >
+        {platforms.map((platform) => (
+          <option key={platform.id} value={platform.id}>
+            {platform.name}
+          </option>
+        ))}
+      </Select>
+      <Input required label={t('vault:credentials.form.label.label')} value={label} onChange={(event) => setLabel(event.target.value)} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input
+          autoComplete="off"
+          label={t('vault:credentials.form.username.label')}
           value={username}
           onChange={(event) => setUsername(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
         />
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('vault:credentials.form.password.label')}
-        <input
+        <Input
           type="password"
+          autoComplete="new-password"
+          label={t('vault:credentials.form.password.label')}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
         />
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('vault:credentials.form.totpSecret.label')}
-        <input
-          value={totpSecret}
-          onChange={(event) => setTotpSecret(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1 font-mono"
-        />
-      </label>
+      </div>
+      <Input
+        autoComplete="off"
+        spellCheck={false}
+        label={t('vault:credentials.form.totpSecret.label')}
+        value={totpSecret}
+        onChange={(event) => setTotpSecret(event.target.value)}
+        className="font-mono"
+      />
 
       <ErrorMessage error={mutation.error} />
 
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="self-start rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-      >
-        {t('common:actions.create')}
-      </button>
+      <Dialog.Footer>
+        <Dialog.Close asChild>
+          <Button variant="ghost">{t('common:actions.cancel')}</Button>
+        </Dialog.Close>
+        <Button variant="primary" type="submit" isLoading={mutation.isPending}>
+          {t('common:actions.create')}
+        </Button>
+      </Dialog.Footer>
     </form>
   )
 }

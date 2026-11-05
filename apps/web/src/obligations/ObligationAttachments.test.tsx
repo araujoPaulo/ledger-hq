@@ -53,7 +53,7 @@ function renderPanel() {
   return render(
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18next}>
-        <ObligationAttachments obligation={obligation} onClose={() => {}} />
+        <ObligationAttachments obligation={obligation} />
       </I18nextProvider>
     </QueryClientProvider>,
   )
@@ -119,28 +119,65 @@ describe('ObligationAttachments', () => {
     expect(await screen.findByText(/excede o limite/i)).toBeVisible()
   })
 
-  it('confirms before deleting, and does nothing when the operator declines', async () => {
+  // Spec §2.6: no window.confirm, and no dialog on top of a dialog — the
+  // row's Delete becomes "Delete for good" plus Cancel, in place.
+  // V4: the whole file name stays readable, above all while confirming its deletion.
+  it('wraps the file name instead of ellipsising it, also while confirming the delete', async () => {
     listAttachmentsMock.mockResolvedValue([attachment])
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
-
     renderPanel()
 
-    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    const link = await screen.findByRole('link', { name: /transferir declaração periódica\.pdf/i })
+    expect(link).toHaveClass('break-words')
+    expect(link.closest('div')?.className).not.toContain('truncate')
 
-    expect(window.confirm).toHaveBeenCalled()
-    expect(deleteAttachmentMock).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    const confirmLink = screen.getByRole('link', { name: /transferir declaração periódica\.pdf/i })
+    expect(confirmLink.className).not.toContain('truncate')
+    expect(confirmLink.closest('div')).toHaveClass('flex-wrap')
   })
 
-  it('deletes when the operator confirms', async () => {
+  it('asks again in place before deleting, and Cancel takes the question back', async () => {
     listAttachmentsMock.mockResolvedValue([attachment])
-    deleteAttachmentMock.mockResolvedValue(undefined)
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const confirm = vi.spyOn(window, 'confirm')
 
     renderPanel()
 
     await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    expect(screen.getByRole('button', { name: /apagar definitivamente/i })).toBeInTheDocument()
+    expect(deleteAttachmentMock).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }))
+    expect(screen.queryByRole('button', { name: /apagar definitivamente/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /eliminar declaração periódica\.pdf/i })).toBeInTheDocument()
+    expect(confirm).not.toHaveBeenCalled()
+  })
+
+  it('names the file on the inline confirm button', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    expect(screen.getByRole('button', { name: 'Apagar definitivamente Declaração periódica.pdf' })).toBeInTheDocument()
+  })
+
+  it('deletes once the operator confirms in place', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+    deleteAttachmentMock.mockResolvedValue(undefined)
+
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    await userEvent.click(screen.getByRole('button', { name: /apagar definitivamente/i }))
 
     await waitFor(() => expect(deleteAttachmentMock).toHaveBeenCalledWith('o1', 'a1'))
+  })
+
+  it('shows the size and the upload date beside the file', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+
+    renderPanel()
+
+    expect(await screen.findByText('34 kB · 18/03/2026')).toBeInTheDocument()
   })
 
   // Corrected from the brief: ErrorMessage gates on `error instanceof
@@ -154,5 +191,67 @@ describe('ObligationAttachments', () => {
     renderPanel()
 
     expect(await screen.findByText(/não está no servidor/i)).toBeVisible()
+  })
+
+  it("shows the server's message inside the panel when an upload fails", async () => {
+    uploadAttachmentMock.mockRejectedValue(new ApiError('attachments.file_missing', {}, 410))
+    const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'recibo.pdf', { type: 'application/pdf' })
+
+    renderPanel()
+
+    await userEvent.upload(await screen.findByLabelText(/anexar ficheiro/i), file)
+
+    expect(await screen.findByText(/não está no servidor/i)).toBeVisible()
+  })
+
+  it('keeps the inline confirmation and shows the server message when a delete fails', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+    deleteAttachmentMock.mockRejectedValue(new ApiError('common.internal_error', {}, 500))
+
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    await userEvent.click(screen.getByRole('button', { name: /apagar definitivamente/i }))
+
+    expect(await screen.findByText(/ocorreu um erro no servidor/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: /apagar definitivamente/i })).toBeInTheDocument()
+  })
+
+  it('moves focus to Cancel when the confirmation appears, and back to Delete on Cancel', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    expect(screen.getByRole('button', { name: /^cancelar$/i })).toHaveFocus()
+
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }))
+    expect(screen.getByRole('button', { name: /eliminar declaração periódica\.pdf/i })).toHaveFocus()
+  })
+
+  it('moves focus to the upload control after a successful delete', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+    deleteAttachmentMock.mockResolvedValue(undefined)
+
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    await userEvent.click(screen.getByRole('button', { name: /apagar definitivamente/i }))
+
+    await waitFor(() => expect(screen.getByLabelText(/anexar ficheiro/i)).toHaveFocus())
+  })
+
+  it('clears a stale delete error when the confirmation is cancelled', async () => {
+    listAttachmentsMock.mockResolvedValue([attachment])
+    deleteAttachmentMock.mockRejectedValue(new ApiError('common.internal_error', {}, 500))
+
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: /eliminar declaração periódica\.pdf/i }))
+    await userEvent.click(screen.getByRole('button', { name: /apagar definitivamente/i }))
+    await screen.findByText(/ocorreu um erro no servidor/i)
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }))
+
+    expect(screen.queryByText(/ocorreu um erro no servidor/i)).not.toBeInTheDocument()
   })
 })

@@ -33,6 +33,7 @@ vi.mock('../api/client', async (importOriginal) => {
 })
 
 const { AppLayout } = await import('./AppLayout')
+const { RequireSession } = await import('../auth/RequireSession')
 
 await initI18n()
 // See LoginPage.test.tsx: jsdom reports "en-US" regardless of the host,
@@ -41,7 +42,13 @@ await i18next.changeLanguage('pt-PT')
 
 function renderLayout() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const rootRoute = createRootRoute({ component: AppLayout })
+  const rootRoute = createRootRoute({
+    component: () => (
+      <RequireSession>
+        <AppLayout />
+      </RequireSession>
+    ),
+  })
   const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => null })
   const router = createRouter({
     routeTree: rootRoute.addChildren([indexRoute]),
@@ -103,10 +110,16 @@ describe('AppLayout', () => {
     })
 
     // Stronger assertion than "the query was invalidated": the session
-    // query re-fetches, fails, and RequireSession renders the login page.
+    // query re-fetches, fails, and RequireSession renders the auth layout with the login page.
     // Scoped to the heading (not the button, which shares the same
     // translated "Entrar"/"Sign in" text).
     expect(await screen.findByRole('heading', { name: /entrar|sign in/i })).toBeInTheDocument()
+
+    // The whole shell is gone, not just its content: no sidebar, no tab bar,
+    // no account menu behind the sign-in card.
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /paulo@example\.com/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
   })
 
   it('shows the lock-vault button only once the vault is unlocked', async () => {

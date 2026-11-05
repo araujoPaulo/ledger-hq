@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider, createMemoryHistory, createRootRoute, createRouter } from '@tanstack/react-router'
@@ -106,5 +106,54 @@ describe('VaultUnlockGate', () => {
     await userEvent.click(screen.getByRole('button', { name: /desbloquear/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/sem ligação ao servidor/i)
+  })
+
+  // Spec §3: the boards said 15 minutes; the real timeout is the constant's.
+  it('says the vault locks again after 5 minutes of inactivity', async () => {
+    resolveEnvelopeMock.mockResolvedValue({ kdfSalt: 'AAAA', protectedVaultKey: 'BBBB', setUp: true, fromCache: false })
+    renderGate()
+
+    expect(await screen.findByText('O cofre está bloqueado')).toBeInTheDocument()
+    expect(screen.getByText(/volta a bloquear após 5 minutos de inatividade/i)).toBeInTheDocument()
+  })
+
+  it("puts a wrong password on the password field itself", async () => {
+    resolveEnvelopeMock.mockResolvedValue({ kdfSalt: 'AAAA', protectedVaultKey: 'BBBB', setUp: true, fromCache: false })
+    unlockWithPasswordMock.mockRejectedValue(new Error('OperationError'))
+    renderGate()
+
+    const field = await screen.findByLabelText(/palavra-passe mestra/i)
+    await userEvent.type(field, 'wrong password')
+    await userEvent.click(screen.getByRole('button', { name: /desbloquear/i }))
+
+    await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'))
+    expect(field).toHaveAccessibleDescription(/incorreta/i)
+  })
+
+  it('does not mark a correct password invalid when the submit failure is not about the password', async () => {
+    resolveEnvelopeMock.mockResolvedValue({ kdfSalt: 'AAAA', protectedVaultKey: 'BBBB', setUp: true, fromCache: false })
+    unlockWithPasswordMock.mockRejectedValue(new Error('vault unknown offline'))
+    renderGate()
+
+    const field = await screen.findByLabelText(/palavra-passe mestra/i)
+    await userEvent.type(field, 'a long master password')
+    await userEvent.click(screen.getByRole('button', { name: /desbloquear/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/sem ligação ao servidor/i)
+    expect(field).not.toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('keeps the offline message a status region', async () => {
+    resolveEnvelopeMock.mockResolvedValue(null)
+    renderGate()
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/sem ligação ao servidor/i)
+  })
+
+  it('links to vault setup when no vault exists', async () => {
+    resolveEnvelopeMock.mockResolvedValue({ kdfSalt: '', protectedVaultKey: '', setUp: false, fromCache: false })
+    renderGate()
+
+    expect(await screen.findByRole('link', { name: /configurar agora/i })).toHaveAttribute('href', '/vault/setup')
   })
 })

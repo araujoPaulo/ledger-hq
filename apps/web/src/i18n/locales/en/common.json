@@ -1,5 +1,6 @@
 {
   "appName": "Ledger HQ",
+  "loading": "Loading",
   "home": { "title": "Overview", "outstanding": "Outstanding" },
   "nav": { "clients": "Clients", "vault": "Vault", "reporting": "Reports" },
   "search": {
@@ -26,8 +27,11 @@
     "signIn": "Sign in",
     "signOut": "Sign out",
     "lockVault": "Lock vault",
-    "delete": "Delete"
+    "delete": "Delete",
+    "close": "Close"
   },
+  "money": { "invalid": "Enter an amount such as 2,150.00." },
+  "notifications": "Notifications",
   "connection": {
     "online": "Online",
     "offline": "No connection to the server",
@@ -48,6 +52,10 @@
     "newMasterPasswordLabel": "New master password",
     "confirmNewMasterPasswordLabel": "Confirm the new master password",
     "backToLogin": "Back to sign in",
-    "recoverButton": "Regain access"
+    "recoverButton": "Regain access",
+    "recoverIntro": "Use the recovery code you wrote down when you set up the vault, then choose a new master password.",
+    "recoveryCodeHint": "Six groups of letters and digits, such as ABCDE-FGHIJ-…",
+    "setupIntro": "This is the only account on this Ledger HQ. The master password signs you in and encrypts the vault, so choose one you will remember.",
+    "passwordHint": "At least {{min}} characters."
   }
 }

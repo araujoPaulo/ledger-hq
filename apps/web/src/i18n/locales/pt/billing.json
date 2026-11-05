@@ -13,6 +13,7 @@
     }
   },
   "ledger": {
+    "emptyHint": "As avenças e cobranças aparecem aqui quando são emitidas.",
     "title": "Faturação",
     "balance": "Saldo",
     "empty": "Sem movimentos de faturação.",
@@ -28,10 +29,12 @@
     "remaining": "Sobram {{amount}} de crédito."
   },
   "retainerPlan": {
+    "title": "Avença",
+    "none": "Sem avença em vigor.",
     "createTitle": "Criar plano de retainer",
     "renewTitle": "Atualizar valor",
-    "amountCents": { "label": "Valor mensal (cêntimos)" },
-    "newAmountCents": { "label": "Novo valor (cêntimos)" },
+    "amountCents": { "label": "Valor mensal" },
+    "newAmountCents": { "label": "Novo valor" },
     "periodicity": { "label": "Periodicidade" },
     "dueDayOfMonth": { "label": "Dia de vencimento" },
     "validFrom": { "label": "Em vigor desde" },
@@ -39,7 +42,7 @@
   },
   "payment": {
     "recordTitle": "Registar pagamento",
-    "amountCents": { "label": "Valor (cêntimos)" },
+    "amountCents": { "label": "Valor" },
     "receivedOn": { "label": "Data de receção" },
     "method": { "label": "Método" },
     "reference": { "label": "Referência" },
@@ -50,11 +53,17 @@
   "adHocCharge": {
     "newTitle": "Nova cobrança avulsa",
     "description": { "label": "Descrição" },
-    "amountCents": { "label": "Valor (cêntimos)" },
+    "amountCents": { "label": "Valor" },
     "dueOn": { "label": "Data de vencimento" }
   },
   "writeOff": {
+    "title": "Anular cobrança",
+    "badge": "Anulada",
     "action": "Perdoar dívida",
     "reason": { "label": "Motivo" }
+  },
+  "ageing": {
+    "title": "Antiguidade",
+    "oldest": "Cobrança por pagar mais antiga vence a {{date}}."
   }
 }

@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { MIN_MASTER_PASSWORD_LENGTH } from '@ledger-hq/crypto'
 import { ErrorMessage } from '../shell/ErrorMessage'
+import { Button, Input } from '../ui'
+import { CardHeading } from './CardHeading'
 import { createAccount } from './credentials'
 import { SESSION_QUERY_KEY } from './session'
 
@@ -20,6 +22,8 @@ export function SetupPage() {
   const passwordTooShort = masterPassword.length > 0 && masterPassword.length < MIN_MASTER_PASSWORD_LENGTH
 
   const mutation = useMutation({
+    // The account's locale is whatever language is active at submit — which
+    // is why the auth layout keeps the language menu on this screen.
     mutationFn: () => createAccount(email, masterPassword, i18n.language as 'pt-PT' | 'en-GB'),
     onSuccess: async () => {
       setMasterPassword('')
@@ -31,72 +35,56 @@ export function SetupPage() {
 
   return (
     <form
-      className="mx-auto flex max-w-sm flex-col gap-4"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
         if (passwordsMismatch || passwordTooShort) return
         mutation.mutate()
       }}
     >
-      <h1 className="text-lg font-semibold">{t('auth.setupTitle')}</h1>
+      <CardHeading title={t('auth.setupTitle')} intro={t('auth.setupIntro')} />
 
-      <label className="flex flex-col gap-1 text-sm">
-        {t('auth.emailLabel')}
-        <input
-          type="email"
-          autoComplete="username"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        />
-      </label>
+      <Input
+        type="email"
+        autoComplete="username"
+        required
+        label={t('auth.emailLabel')}
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+      />
 
-      <label className="flex flex-col gap-1 text-sm">
-        {t('auth.masterPasswordLabel')}
-        <input
-          type="password"
-          autoComplete="new-password"
-          required
-          value={masterPassword}
-          onChange={(event) => setMasterPassword(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        />
-      </label>
+      <Input
+        type="password"
+        autoComplete="new-password"
+        required
+        label={t('auth.masterPasswordLabel')}
+        hint={t('auth.passwordHint', { min: MIN_MASTER_PASSWORD_LENGTH })}
+        value={masterPassword}
+        onChange={(event) => setMasterPassword(event.target.value)}
+        error={passwordTooShort ? t('auth.passwordTooShort', { min: MIN_MASTER_PASSWORD_LENGTH }) : undefined}
+      />
 
-      <label className="flex flex-col gap-1 text-sm">
-        {t('auth.confirmPasswordLabel')}
-        <input
-          type="password"
-          autoComplete="new-password"
-          required
-          value={confirmPassword}
-          onChange={(event) => setConfirmPassword(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        />
-      </label>
-
-      {passwordTooShort && (
-        <p role="alert" className="text-sm text-red-700">
-          {t('auth.passwordTooShort', { min: MIN_MASTER_PASSWORD_LENGTH })}
-        </p>
-      )}
-
-      {passwordsMismatch && (
-        <p role="alert" className="text-sm text-red-700">
-          {t('auth.passwordMismatch')}
-        </p>
-      )}
+      <Input
+        type="password"
+        autoComplete="new-password"
+        required
+        label={t('auth.confirmPasswordLabel')}
+        value={confirmPassword}
+        onChange={(event) => setConfirmPassword(event.target.value)}
+        error={passwordsMismatch ? t('auth.passwordMismatch') : undefined}
+      />
 
       <ErrorMessage error={mutation.error} />
 
-      <button
+      <Button
         type="submit"
-        disabled={mutation.isPending || passwordsMismatch || passwordTooShort}
-        className="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+        variant="primary"
+        className="w-full"
+        isLoading={mutation.isPending}
+        disabled={passwordsMismatch || passwordTooShort}
       >
         {t('actions.create')}
-      </button>
+      </Button>
     </form>
   )
 }

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { CircleAlert } from 'lucide-react'
 import { INCOME_TAX_VALUES, VAT_REGIME_VALUES, checkFiscalProfileConsistency } from '@ledger-hq/domain'
 import type { ClientKind, FiscalProfileInput, IncomeTax, VatRegime } from '@ledger-hq/domain'
 import { ErrorMessage, translateErrorCode } from '../shell/ErrorMessage'
+import { Button, Callout, Checkbox, Dialog, Input, Select } from '../ui'
 import { putFiscalProfile } from './api'
 import type { FiscalProfileResponse } from './api'
 
@@ -12,6 +14,8 @@ type Props = {
   kind: ClientKind
   /** `null` when no profile has been saved yet: GET returns 404 in that case. */
   initial: FiscalProfileResponse | null
+  /** Called once the save and its invalidations are done; the card closes its dialog. */
+  onSaved: () => void
 }
 
 /**
@@ -54,7 +58,8 @@ function toInput(profile: FiscalProfileResponse): FiscalProfileInput {
   }
 }
 
-export function FiscalProfileForm({ clientId, kind, initial }: Props) {
+/** Renders inside `Dialog.Content`: its footer is a `Dialog.Footer` with a `Dialog.Close`. */
+export function FiscalProfileForm({ clientId, kind, initial, onSaved }: Props) {
   const { t } = useTranslation(['clients', 'domain', 'common'])
   const { t: tError } = useTranslation('errors')
   const queryClient = useQueryClient()
@@ -72,6 +77,7 @@ export function FiscalProfileForm({ clientId, kind, initial }: Props) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['fiscal-profile', clientId] })
       await queryClient.invalidateQueries({ queryKey: ['obligations-preview', clientId] })
+      onSaved()
     },
   })
 
@@ -81,113 +87,92 @@ export function FiscalProfileForm({ clientId, kind, initial }: Props) {
 
   return (
     <form
-      className="flex flex-col gap-4 rounded border border-slate-200 bg-white p-4"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
         if (violations.length > 0) return
         mutation.mutate(values)
       }}
     >
-      <h2 className="text-base font-semibold">{t('clients:profile.title')}</h2>
-
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={values.hasOpenActivity}
-          disabled={kind === 'COMPANY'}
-          onChange={(event) => update('hasOpenActivity', event.target.checked)}
-        />
-        {t('clients:profile.hasOpenActivity')}
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('clients:profile.vatRegime')}
-        <select
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Select
+          label={t('clients:profile.vatRegime')}
           value={values.vatRegime}
           onChange={(event) => update('vatRegime', event.target.value as VatRegime)}
-          className="rounded border border-slate-300 px-2 py-1"
         >
           {VAT_REGIME_VALUES.map((value) => (
             <option key={value} value={value}>
               {t(`domain:vatRegime.${value}`)}
             </option>
           ))}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('clients:profile.incomeTax')}
-        <select
+        </Select>
+        <Select
+          label={t('clients:profile.incomeTax')}
           value={values.incomeTax}
           onChange={(event) => update('incomeTax', event.target.value as IncomeTax)}
-          className="rounded border border-slate-300 px-2 py-1"
         >
           {INCOME_TAX_VALUES.map((value) => (
             <option key={value} value={value}>
               {t(`domain:incomeTax.${value}`)}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+        <Input
+          type="date"
+          label={t('clients:profile.startedAt')}
+          value={values.startedAt}
+          onChange={(event) => update('startedAt', event.target.value)}
+        />
+      </div>
 
-      {kind === 'COMPANY' && (
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+      <div className="flex flex-col gap-4">
+        {/* Disabled is right here: for a company the flag applies and cannot change. */}
+        <Checkbox
+          label={t('clients:profile.hasOpenActivity')}
+          checked={values.hasOpenActivity}
+          disabled={kind === 'COMPANY'}
+          description={kind === 'COMPANY' ? t('clients:profile.openActivityCompany') : undefined}
+          onChange={(event) => update('hasOpenActivity', event.target.checked)}
+        />
+        {kind === 'COMPANY' && (
+          <Checkbox
+            label={t('clients:profile.hasEmployees')}
             checked={values.hasEmployees}
             onChange={(event) => update('hasEmployees', event.target.checked)}
           />
-          {t('clients:profile.hasEmployees')}
-        </label>
-      )}
-
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+        )}
+        <Checkbox
+          label={t('clients:profile.hasWithholding')}
           checked={values.hasWithholding}
           onChange={(event) => update('hasWithholding', event.target.checked)}
         />
-        {t('clients:profile.hasWithholding')}
-      </label>
-
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
+          label={t('clients:profile.isVatCashBasis')}
           checked={values.isVatCashBasis}
           onChange={(event) => update('isVatCashBasis', event.target.checked)}
         />
-        {t('clients:profile.isVatCashBasis')}
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('clients:profile.startedAt')}
-        <input
-          type="date"
-          value={values.startedAt}
-          onChange={(event) => update('startedAt', event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        />
-      </label>
+      </div>
 
       {violations.length > 0 && (
-        <ul className="flex flex-col gap-1">
-          {violations.map((code) => (
-            <li key={code} role="alert" className="text-sm text-red-700">
-              {translateErrorCode(tError, code)}
-            </li>
-          ))}
-        </ul>
+        <Callout tone="danger" icon={CircleAlert} role="alert">
+          <ul className="flex flex-col gap-1">
+            {violations.map((code) => (
+              <li key={code}>{translateErrorCode(tError, code)}</li>
+            ))}
+          </ul>
+        </Callout>
       )}
 
       <ErrorMessage error={mutation.error} />
 
-      <button
-        type="submit"
-        disabled={mutation.isPending || violations.length > 0}
-        className="self-start rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
-      >
-        {t('common:actions.save')}
-      </button>
+      <Dialog.Footer>
+        <Dialog.Close asChild>
+          <Button variant="ghost">{t('common:actions.cancel')}</Button>
+        </Dialog.Close>
+        <Button variant="primary" type="submit" isLoading={mutation.isPending} disabled={violations.length > 0}>
+          {t('common:actions.save')}
+        </Button>
+      </Dialog.Footer>
     </form>
   )
 }

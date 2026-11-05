@@ -13,6 +13,7 @@
     }
   },
   "ledger": {
+    "emptyHint": "Fees and charges appear here once they are issued.",
     "title": "Billing",
     "balance": "Balance",
     "empty": "No billing activity.",
@@ -28,10 +29,12 @@
     "remaining": "{{amount}} of credit left over."
   },
   "retainerPlan": {
+    "title": "Retainer plan",
+    "none": "No retainer plan in force.",
     "createTitle": "Create retainer plan",
     "renewTitle": "Update fee",
-    "amountCents": { "label": "Monthly amount (cents)" },
-    "newAmountCents": { "label": "New amount (cents)" },
+    "amountCents": { "label": "Monthly amount" },
+    "newAmountCents": { "label": "New amount" },
     "periodicity": { "label": "Periodicity" },
     "dueDayOfMonth": { "label": "Due day of month" },
     "validFrom": { "label": "In force from" },
@@ -39,7 +42,7 @@
   },
   "payment": {
     "recordTitle": "Record payment",
-    "amountCents": { "label": "Amount (cents)" },
+    "amountCents": { "label": "Amount" },
     "receivedOn": { "label": "Received on" },
     "method": { "label": "Method" },
     "reference": { "label": "Reference" },
@@ -50,11 +53,17 @@
   "adHocCharge": {
     "newTitle": "New ad-hoc charge",
     "description": { "label": "Description" },
-    "amountCents": { "label": "Amount (cents)" },
+    "amountCents": { "label": "Amount" },
     "dueOn": { "label": "Due date" }
   },
   "writeOff": {
+    "title": "Write off charge",
+    "badge": "Written off",
     "action": "Write off",
     "reason": { "label": "Reason" }
+  },
+  "ageing": {
+    "title": "Ageing",
+    "oldest": "Oldest unpaid charge fell due on {{date}}."
   }
 }

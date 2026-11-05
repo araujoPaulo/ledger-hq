@@ -5,9 +5,10 @@ import { ERROR_CODES, createEmploymentSchema } from '@ledger-hq/domain'
 import type { ClientKind, ErrorCode } from '@ledger-hq/domain'
 import { ErrorMessage, translateErrorCode } from '../shell/ErrorMessage'
 import { listClients } from '../clients/api'
+import { Button, Dialog, Input, Select } from '../ui'
 import { createEmployment } from './api'
 
-type Props = { client: { id: string; kind: ClientKind; name: string } }
+type Props = { client: { id: string; kind: ClientKind; name: string }; onAdded: () => void }
 
 type FormValues = {
   counterpartyId: string
@@ -46,7 +47,8 @@ function toCandidate(client: Props['client'], isCompany: boolean, values: FormVa
   }
 }
 
-export function AddEmploymentForm({ client }: Props) {
+/** Renders inside `Dialog.Content`. A fresh form each time the dialog opens. */
+export function AddEmploymentForm({ client, onAdded }: Props) {
   const { t } = useTranslation(['employments', 'common'])
   const { t: tError } = useTranslation('errors')
   const queryClient = useQueryClient()
@@ -73,7 +75,7 @@ export function AddEmploymentForm({ client }: Props) {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['employments', client.id] })
-      setValues(initialValues)
+      onAdded()
     },
   })
 
@@ -83,33 +85,31 @@ export function AddEmploymentForm({ client }: Props) {
 
   const canSubmit =
     values.counterpartyId !== '' && values.startedOn !== '' && violations.length === 0 && parsed.success
+  const counterpartyLabel = isCompany ? t('employments:form.employee.label') : t('employments:form.employer.label')
 
   return (
     <form
-      className="flex flex-col gap-3 rounded border border-slate-200 bg-white p-4"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
         if (!canSubmit) return
         mutation.mutate()
       }}
     >
-      <label className="flex flex-col gap-1 text-sm">
-        {isCompany ? t('employments:form.employee.label') : t('employments:form.employer.label')}
-        <select
-          value={values.counterpartyId}
-          onChange={(event) => update('counterpartyId', event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        >
-          <option value="" disabled>
-            {isCompany ? t('employments:form.employee.label') : t('employments:form.employer.label')}
+      <Select
+        label={counterpartyLabel}
+        value={values.counterpartyId}
+        onChange={(event) => update('counterpartyId', event.target.value)}
+      >
+        <option value="" disabled>
+          {counterpartyLabel}
+        </option>
+        {counterparties.data?.map((counterparty) => (
+          <option key={counterparty.id} value={counterparty.id}>
+            {counterparty.name}
           </option>
-          {counterparties.data?.map((counterparty) => (
-            <option key={counterparty.id} value={counterparty.id}>
-              {counterparty.name}
-            </option>
-          ))}
-        </select>
-      </label>
+        ))}
+      </Select>
       {/*
        * Without this, a failed fetch of eligible counterparties would look
        * identical to "none exist yet" — an empty dropdown with no
@@ -119,39 +119,30 @@ export function AddEmploymentForm({ client }: Props) {
        */}
       {counterparties.isError ? <ErrorMessage error={counterparties.error} /> : null}
 
-      <label className="flex flex-col gap-1 text-sm">
-        {t('employments:form.startedOn.label')}
-        <input
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input
           type="date"
+          label={t('employments:form.startedOn.label')}
           value={values.startedOn}
           onChange={(event) => update('startedOn', event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
         />
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('employments:form.endedOn.label')}
-        <input
+        <Input
           type="date"
+          label={t('employments:form.endedOn.label')}
           value={values.endedOn}
           onChange={(event) => update('endedOn', event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
         />
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('employments:form.jobTitle.label')}
-        <input
-          value={values.jobTitle}
-          onChange={(event) => update('jobTitle', event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
-        />
-      </label>
+      </div>
+      <Input
+        label={t('employments:form.jobTitle.label')}
+        value={values.jobTitle}
+        onChange={(event) => update('jobTitle', event.target.value)}
+      />
 
       {violations.length > 0 && (
         <ul className="flex flex-col gap-1">
           {violations.map((code) => (
-            <li key={code} role="alert" className="text-sm text-red-700">
+            <li key={code} role="alert" className="text-sm text-danger-700">
               {translateErrorCode(tError, code)}
             </li>
           ))}
@@ -160,13 +151,14 @@ export function AddEmploymentForm({ client }: Props) {
 
       <ErrorMessage error={mutation.error} />
 
-      <button
-        type="submit"
-        disabled={!canSubmit || mutation.isPending}
-        className="self-start rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
-      >
-        {t('employments:add')}
-      </button>
+      <Dialog.Footer>
+        <Dialog.Close asChild>
+          <Button variant="ghost">{t('common:actions.cancel')}</Button>
+        </Dialog.Close>
+        <Button variant="primary" type="submit" isLoading={mutation.isPending} disabled={!canSubmit}>
+          {t('employments:add')}
+        </Button>
+      </Dialog.Footer>
     </form>
   )
 }

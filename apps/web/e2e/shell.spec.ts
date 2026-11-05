@@ -63,4 +63,48 @@ test.describe('app shell', () => {
     await vaultTab.click()
     await expect(page).toHaveURL(/\/vault\/platforms$/)
   })
+
+  test('opens the new platform dialog on a phone viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await signIn(page)
+
+    await page.getByRole('link', { name: /cofre/i }).click()
+    await page.getByRole('button', { name: /nova plataforma/i }).click()
+    await expect(page.getByRole('dialog', { name: /nova plataforma/i })).toBeVisible()
+  })
+
+  // Signed out there is no shell: the sidebar and the tab bar are both
+  // absent, not merely hidden. The unit tests prove the gate; this proves it
+  // in the built app at both viewports, and that the URL survives sign-in.
+  for (const viewport of [
+    { name: 'desktop', width: 1280, height: 800 },
+    { name: 'phone', width: 390, height: 844 },
+  ]) {
+    test(`shows only the auth card when signed out, then the shell on the same URL (${viewport.name})`, async ({ page }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height })
+      await page.goto('/clients')
+
+      // Sign-in, or account setup on a fresh install — see signIn() above.
+      await expect(page.getByRole('heading', { level: 1, name: /^entrar$|configura a tua conta/i })).toBeVisible()
+      await expect(page.getByRole('navigation')).toHaveCount(0)
+      await expect(page.getByRole('searchbox')).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /idioma/i })).toBeVisible()
+
+      await page.getByLabel(/email/i).fill('paulo@example.com')
+      await page.getByLabel(/^palavra-passe mestra$/i).fill(MASTER_PASSWORD)
+      const confirmPasswordField = page.getByLabel(/confirma/i)
+      if (await confirmPasswordField.isVisible().catch(() => false)) {
+        await confirmPasswordField.fill(MASTER_PASSWORD)
+      }
+      await page.getByRole('button', { name: /^criar$|^entrar$/i }).click()
+
+      // The shell appears around the route the URL already named.
+      await expect(page).toHaveURL(/\/clients$/)
+      await expect(page.getByRole('heading', { level: 1, name: /clientes/i })).toBeVisible()
+      // Both navs are in the DOM; the media query shows exactly one — the
+      // sidebar on desktop, the tab bar on a phone. `.first()` alone would be
+      // the sidebar, which is display:none at 390px.
+      await expect(page.getByRole('navigation').filter({ visible: true })).toHaveCount(1)
+    })
+  }
 })

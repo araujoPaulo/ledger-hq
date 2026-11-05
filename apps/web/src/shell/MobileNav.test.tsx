@@ -49,6 +49,17 @@ describe('MobileTabBar', () => {
     expect(screen.getByRole('link', { name: /cofre/i })).toBeInTheDocument()
   })
 
+  // The active tab is accent-coloured by the aria-current attribute, so it does
+  // not fight a second text colour utility on the same element.
+  it('colours the active tab with the accent through aria-current', async () => {
+    renderTabBar()
+
+    const active = await screen.findByRole('link', { name: /prazos/i })
+    expect(active).toHaveAttribute('aria-current', 'page')
+    expect(active.className).toContain('aria-[current=page]:text-accent-700')
+    expect(screen.getByRole('link', { name: /clientes/i }).className).toContain('text-muted')
+  })
+
   // index.html sets viewport-fit=cover, so a fixed bottom bar sits under the
   // iOS home indicator unless it pads for the safe area. jsdom has no layout
   // and Chromium reports no inset, so the declaration is the only thing that

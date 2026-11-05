@@ -1,5 +1,6 @@
 {
   "appName": "Ledger HQ",
+  "loading": "A carregar",
   "home": { "title": "Resumo", "outstanding": "Em dívida" },
   "nav": { "clients": "Clientes", "vault": "Cofre", "reporting": "Relatórios" },
   "search": {
@@ -26,8 +27,11 @@
     "signIn": "Entrar",
     "signOut": "Sair",
     "lockVault": "Bloquear cofre",
-    "delete": "Eliminar"
+    "delete": "Eliminar",
+    "close": "Fechar"
   },
+  "money": { "invalid": "Indica um valor como 2150,00." },
+  "notifications": "Notificações",
   "connection": {
     "online": "Ligado",
     "offline": "Sem ligação ao servidor",
@@ -48,6 +52,10 @@
     "newMasterPasswordLabel": "Nova palavra-passe mestra",
     "confirmNewMasterPasswordLabel": "Confirma a nova palavra-passe mestra",
     "backToLogin": "Voltar a entrar",
-    "recoverButton": "Recuperar acesso"
+    "recoverButton": "Recuperar acesso",
+    "recoverIntro": "Usa o código de recuperação que anotaste ao configurar o cofre e escolhe a seguir uma nova palavra-passe mestra.",
+    "recoveryCodeHint": "Seis grupos de letras e números, por exemplo ABCDE-FGHIJ-…",
+    "setupIntro": "Esta é a única conta deste Ledger HQ. A palavra-passe mestra serve para entrar e para cifrar o cofre — escolhe uma de que te lembres.",
+    "passwordHint": "Pelo menos {{min}} caracteres."
   }
 }

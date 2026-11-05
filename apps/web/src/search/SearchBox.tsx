@@ -2,15 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { Search } from 'lucide-react'
+import { Input } from '../ui'
 
-/**
- * The shell's only text input, so it owns the `/` shortcut.
- *
- * A plain `<input>` on purpose: `apps/web/src/ui/` has no `Input` yet — UI
- * refresh Stage 2 introduces it, designed against `ClientFormPage` rather
- * than against one search box. `ClientListPage`'s filter bar is the same
- * plain shape for the same reason; Stage 2 adopts both at once.
- */
+/** The shell's only text input, so it owns the `/` shortcut. */
 export function SearchBox() {
   const { t } = useTranslation('common')
   const navigate = useNavigate()
@@ -52,12 +46,13 @@ export function SearchBox() {
   }, [value, navigate])
 
   return (
-    <div className="relative px-2">
-      <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-      <input
+    <div className="px-2">
+      <Input
         ref={inputRef}
         type="search"
-        aria-label={t('search.label')}
+        leadingIcon={Search}
+        hideLabel
+        label={t('search.label')}
         placeholder={t('search.placeholder')}
         value={value}
         onChange={(event) => setValue(event.target.value)}
@@ -66,7 +61,8 @@ export function SearchBox() {
           setValue('')
           event.currentTarget.blur()
         }}
-        className="w-full rounded-control border border-line bg-ground py-1.5 pl-8 pr-2 text-sm placeholder:text-subtle"
+        // 36px to sit in the sidebar; `!` because Input's own height is h-10.
+        className="h-9!"
       />
     </div>
   )

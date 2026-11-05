@@ -1,12 +1,20 @@
 {
   "setup": {
     "title": "Set up the vault",
+    "step": "Step {{current}} of {{total}}",
+    "intro": "The vault encrypts client credentials with a key only your master password opens. Confirm it to continue.",
     "confirmPasswordLabel": "Confirm your master password",
     "recoveryCodeIntro": "This is your recovery code. It is the only way to regain access if you lose your master password.",
+    "recoveryCodeTitle": "Write this down now",
+    "recoveryCodeLabel": "Recovery code",
+    "copyCode": "Copy code",
+    "codeCopied": "Code copied. The clipboard clears in 30 seconds.",
     "acknowledgeLabel": "I have written down the recovery code and stored it somewhere safe.",
     "continueButton": "Continue"
   },
   "unlock": {
+    "lockedTitle": "This vault is locked",
+    "lockedHint": "Credentials are decrypted on this device only. The vault locks again after {{minutes}} minutes of inactivity.",
     "notSetUp": "The vault has not been set up yet.",
     "setUpLink": "Set it up now",
     "offlineUnknown": "No connection to the server, and nothing is cached on this device yet. Connect to the internet to check the vault's status.",
@@ -14,10 +22,16 @@
     "wrongPassword": "Incorrect password.",
     "unlockButton": "Unlock"
   },
+  "status": {
+    "unlocked": "Unlocked · locks after {{minutes}} min",
+    "locked": "Locked"
+  },
   "platforms": {
     "title": "Platforms",
+    "description": "The platforms the practice signs in to. Credentials live on each client, encrypted on this device.",
     "newTitle": "New platform",
-    "empty": "There are no platforms yet.",
+    "empty": "No platforms yet",
+    "emptyHint": "Add the platforms — Portal das Finanças, Segurança Social Direta — before storing client credentials.",
     "form": {
       "name": { "label": "Name", "invalid": "Enter a valid name." },
       "url": { "label": "URL", "invalid": "Enter a valid URL." },
@@ -26,6 +40,12 @@
   },
   "credentials": {
     "title": "Credentials",
+    "changed": "Changed {{date}}",
+    "copyUsername": "Copy username",
+    "usernameCopied": "Username copied.",
+    "passwordCopied": "Password copied. The clipboard clears in 30 seconds.",
+    "clipboardClears": "Clears after 30 s",
+    "secondsLeft": "{{seconds}} s left",
     "empty": "There are no credentials for this client yet.",
     "newTitle": "New credential",
     "reveal": "Reveal",

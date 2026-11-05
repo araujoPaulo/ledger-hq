@@ -1,32 +1,44 @@
 import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { Copy } from 'lucide-react'
 import { decryptCredentialItem, encryptCredentialItem, fromBase64, generateTotp, toBase64 } from '@ledger-hq/crypto'
 import type { CredentialItem } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
+import { formatDate } from '../i18n/format'
+import type { SupportedLocale } from '../i18n/format'
+import { Button, DataList, Dialog, Input, useToast } from '../ui'
 import { rotateCredential } from './api'
 import type { CredentialResponse } from './api'
 import { recordReveal } from './outbox'
+import { copyAndClear } from './clipboard'
+import { PlatformAvatar } from './PlatformAvatar'
 import { useVaultState } from './vault-session'
 
 type Props = { credential: CredentialResponse; platformName: string; onRotated: () => void }
 
-const CLIPBOARD_CLEAR_MS = 30_000
 const PASSWORD_MASK = '••••••••'
+const TOTP_STEP_SECONDS = 30
 
-/** Clears the clipboard 30 seconds after copying a secret — "to the extent the browser permits" (spec 9.4). */
-async function copyAndClear(value: string): Promise<void> {
+/**
+ * A plain copy, for a username: not a secret, so no clear. Async so a missing
+ * clipboard API (plain HTTP) rejects rather than throwing synchronously.
+ */
+async function copyText(value: string): Promise<void> {
   await navigator.clipboard.writeText(value)
-  setTimeout(() => {
-    navigator.clipboard.writeText('').catch(() => {})
-  }, CLIPBOARD_CLEAR_MS)
+}
+
+function secondsLeftInStep(): number {
+  return TOTP_STEP_SECONDS - (Math.floor(Date.now() / 1000) % TOTP_STEP_SECONDS)
 }
 
 export function CredentialRow({ credential, platformName, onRotated }: Props) {
-  const { t } = useTranslation('vault')
+  const { t, i18n } = useTranslation(['vault', 'common'])
+  const { toast } = useToast()
   const vaultState = useVaultState()
   const [item, setItem] = useState<CredentialItem | null>(null)
   const [totp, setTotp] = useState<string | null>(null)
+  const [secondsLeft, setSecondsLeft] = useState(secondsLeftInStep)
   const [rotating, setRotating] = useState(false)
   const [newPassword, setNewPassword] = useState('')
 
@@ -53,7 +65,9 @@ export function CredentialRow({ credential, platformName, onRotated }: Props) {
     }
 
     let cancelled = false
+    // One tick refreshes both the code and the seconds left in its step.
     const tick = () => {
+      setSecondsLeft(secondsLeftInStep())
       generateTotp(secret).then((code) => {
         if (!cancelled) setTotp(code)
       })
@@ -81,71 +95,145 @@ export function CredentialRow({ credential, platformName, onRotated }: Props) {
     },
   })
 
+  // A copy that did not happen (no clipboard API, or a denied write) gets no
+  // toast — a "copied" message for a copy that failed is worse than silence.
+  function copyPassword(password: string) {
+    copyAndClear(password)
+      .then(() => toast({ title: t('vault:credentials.passwordCopied'), tone: 'success' }))
+      .catch(() => {})
+  }
+
+  function copyUsername(username: string) {
+    copyText(username)
+      .then(() => toast({ title: t('vault:credentials.usernameCopied'), tone: 'success' }))
+      .catch(() => {})
+  }
+
   return (
-    <li className="rounded border border-slate-200 bg-white p-3 text-sm">
-      <div className="flex items-center justify-between gap-3">
-        <span className="font-medium">
-          {platformName} — {credential.label}
-        </span>
+    <li className="flex flex-col gap-4 px-5 py-3">
+      <div className="flex items-center gap-4">
+        <PlatformAvatar name={platformName} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm font-medium">{platformName}</span>
+          <span className="break-words text-xs text-muted">
+            {credential.label} ·{' '}
+            {t('vault:credentials.changed', {
+              date: formatDate(credential.updatedAt.slice(0, 10), i18n.language as SupportedLocale),
+            })}
+          </span>
+        </div>
         {item === null ? (
-          <button type="button" onClick={reveal} className="rounded border border-slate-300 px-2 py-1 text-xs">
-            {t('credentials.reveal')}
-          </button>
+          <Button variant="secondary" size="sm" onClick={() => void reveal()}>
+            {t('vault:credentials.reveal')}
+          </Button>
         ) : (
-          <button type="button" onClick={() => setItem(null)} className="rounded border border-slate-300 px-2 py-1 text-xs">
-            {t('credentials.hide')}
-          </button>
+          <Button variant="ghost" size="sm" onClick={() => setItem(null)}>
+            {t('vault:credentials.hide')}
+          </Button>
         )}
       </div>
 
       {item !== null && (
-        <div className="mt-2 flex flex-col gap-1">
-          {item.username !== undefined && (
-            <p>
-              {t('credentials.form.username.label')}: {item.username}
-            </p>
-          )}
-          {item.password !== undefined && (
-            <p className="flex items-center gap-2">
-              {t('credentials.form.password.label')}: {PASSWORD_MASK}
-              <button type="button" onClick={() => void copyAndClear(item.password ?? '')} className="text-xs underline">
-                {t('credentials.copy')}
-              </button>
-            </p>
-          )}
-          {totp !== null && (
-            <p className="font-mono">
-              {t('credentials.totp')}: {totp}
-            </p>
-          )}
-          {item.notes !== undefined && <p className="text-slate-600">{item.notes}</p>}
-
-          {rotating ? (
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                className="rounded border border-slate-300 px-2 py-1"
+        <div className="flex flex-col gap-4 md:pl-12">
+          <DataList as="dl">
+            {item.username !== undefined && (
+              <DataList.Row
+                wrap
+                label={t('vault:credentials.form.username.label')}
+                value={
+                  <>
+                    <span className="truncate">{item.username}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t('vault:credentials.copyUsername')}
+                      onClick={() => copyUsername(item.username ?? '')}
+                    >
+                      <Copy aria-hidden="true" className="h-4 w-4" />
+                    </Button>
+                  </>
+                }
               />
-              <button
-                type="button"
-                onClick={() => rotateMutation.mutate()}
-                disabled={rotateMutation.isPending}
-                className="rounded bg-slate-900 px-2 py-1 text-xs text-white disabled:opacity-50"
-              >
-                {t('credentials.rotateConfirm')}
-              </button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => setRotating(true)} className="mt-2 self-start text-xs underline">
-              {t('credentials.rotate')}
-            </button>
-          )}
-
-          <ErrorMessage error={rotateMutation.error} />
+            )}
+            {item.password !== undefined && (
+              // Never rendered in clear: a mask, Copy, and the clear stated where it happens.
+              <DataList.Row
+                wrap
+                label={t('vault:credentials.form.password.label')}
+                value={
+                  <>
+                    <span className="font-mono">{PASSWORD_MASK}</span>
+                    <Button variant="secondary" size="sm" onClick={() => copyPassword(item.password ?? '')}>
+                      {t('vault:credentials.copy')}
+                    </Button>
+                    <span className="whitespace-nowrap text-xs text-muted">{t('vault:credentials.clipboardClears')}</span>
+                  </>
+                }
+              />
+            )}
+            {totp !== null && (
+              // Not a live region: announcing every second would make the page
+              // unusable with a screen reader (spec §10.4).
+              <DataList.Row
+                wrap
+                label={t('vault:credentials.totp')}
+                value={
+                  <>
+                    <span className="font-mono text-lg tabular-nums">{`${totp.slice(0, 3)} ${totp.slice(3)}`}</span>
+                    <span className="text-xs text-muted tabular-nums">
+                      {t('vault:credentials.secondsLeft', { seconds: secondsLeft })}
+                    </span>
+                  </>
+                }
+              />
+            )}
+          </DataList>
+          {item.notes !== undefined && <p className="whitespace-pre-line text-sm font-normal">{item.notes}</p>}
+          <Button variant="ghost" size="sm" className="self-start" onClick={() => setRotating(true)}>
+            {t('vault:credentials.rotate')}
+          </Button>
         </div>
       )}
+
+      <Dialog
+        open={rotating}
+        onOpenChange={(open) => {
+          setRotating(open)
+          if (!open) {
+            setNewPassword('')
+            rotateMutation.reset()
+          }
+        }}
+      >
+        <Dialog.Content title={t('vault:credentials.rotate')} size="sm">
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (newPassword === '') return
+              rotateMutation.mutate()
+            }}
+          >
+            <Input
+              type="password"
+              autoComplete="new-password"
+              required
+              label={t('vault:credentials.form.password.label')}
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+            <ErrorMessage error={rotateMutation.error} />
+            <Dialog.Footer>
+              <Dialog.Close asChild>
+                <Button variant="ghost">{t('common:actions.cancel')}</Button>
+              </Dialog.Close>
+              <Button variant="primary" type="submit" isLoading={rotateMutation.isPending} disabled={newPassword === ''}>
+                {t('vault:credentials.rotateConfirm')}
+              </Button>
+            </Dialog.Footer>
+          </form>
+        </Dialog.Content>
+      </Dialog>
     </li>
   )
 }

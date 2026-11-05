@@ -1,4 +1,5 @@
 import type { ComponentPropsWithoutRef } from 'react'
+import { Check } from 'lucide-react'
 import * as RadixDropdownMenu from '@radix-ui/react-dropdown-menu'
 
 const ITEM_CLASS =
@@ -11,7 +12,9 @@ function Content({ className, children, ...rest }: ComponentPropsWithoutRef<type
         align="end"
         sideOffset={6}
         {...rest}
-        className={`min-w-[12rem] rounded-surface border border-line bg-surface p-1.5 shadow-overlay${className === undefined ? '' : ` ${className}`}`}
+        className={['min-w-[12rem] rounded-surface border border-line bg-surface p-1.5 shadow-overlay', className]
+          .filter(Boolean)
+          .join(' ')}
       >
         {children}
       </RadixDropdownMenu.Content>
@@ -25,12 +28,17 @@ function Item({ className, ...rest }: ComponentPropsWithoutRef<typeof RadixDropd
   )
 }
 
-function RadioItem({ className, ...rest }: ComponentPropsWithoutRef<typeof RadixDropdownMenu.RadioItem>) {
+function RadioItem({ className, children, ...rest }: ComponentPropsWithoutRef<typeof RadixDropdownMenu.RadioItem>) {
   return (
     <RadixDropdownMenu.RadioItem
       {...rest}
       className={`${ITEM_CLASS} data-[state=checked]:font-semibold${className === undefined ? '' : ` ${className}`}`}
-    />
+    >
+      {children}
+      <RadixDropdownMenu.ItemIndicator className="ml-auto">
+        <Check aria-hidden="true" className="h-4 w-4" />
+      </RadixDropdownMenu.ItemIndicator>
+    </RadixDropdownMenu.RadioItem>
   )
 }
 
@@ -38,7 +46,9 @@ function Label({ className, ...rest }: ComponentPropsWithoutRef<typeof RadixDrop
   return (
     <RadixDropdownMenu.Label
       {...rest}
-      className={`px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted${className === undefined ? '' : ` ${className}`}`}
+      className={['px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted', className]
+        .filter(Boolean)
+        .join(' ')}
     />
   )
 }
@@ -47,7 +57,7 @@ function Separator({ className, ...rest }: ComponentPropsWithoutRef<typeof Radix
   return (
     <RadixDropdownMenu.Separator
       {...rest}
-      className={`my-1.5 h-px bg-line${className === undefined ? '' : ` ${className}`}`}
+      className={['my-1.5 h-px bg-line', className].filter(Boolean).join(' ')}
     />
   )
 }

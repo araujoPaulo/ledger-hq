@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next'
 import { PERIODICITY_VALUES } from '@ledger-hq/domain'
 import type { Periodicity } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
+import { Button, Dialog, Input, Select } from '../ui'
 import { createAdHocObligation } from './api'
 
 type Props = { clientId: string; onCreated: () => void }
 
+/** Renders inside `Dialog.Content`. A fresh form each time the dialog opens. */
 export function AddAdHocObligationForm({ clientId, onCreated }: Props) {
   const { t } = useTranslation(['obligations', 'domain', 'common'])
   const [code, setCode] = useState('')
@@ -28,80 +30,56 @@ export function AddAdHocObligationForm({ clientId, onCreated }: Props) {
         periodLabel,
         dueDate,
       }),
-    onSuccess: () => {
-      setCode('')
-      setName('')
-      setPeriodLabel('')
-      setDueDate('')
-      onCreated()
-    },
+    onSuccess: onCreated,
   })
 
   return (
     <form
-      className="flex max-w-sm flex-col gap-3"
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
         mutation.mutate()
       }}
     >
-      <h3 className="font-medium">{t('obligations:adHoc.newTitle')}</h3>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('obligations:adHoc.code.label')}
-        <input required value={code} onChange={(event) => setCode(event.target.value)} className="rounded border border-slate-300 px-2 py-1" />
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('obligations:adHoc.name.label')}
-        <input required value={name} onChange={(event) => setName(event.target.value)} className="rounded border border-slate-300 px-2 py-1" />
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('obligations:adHoc.periodicity.label')}
-        <select
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input required label={t('obligations:adHoc.code.label')} value={code} onChange={(event) => setCode(event.target.value)} />
+        <Input required label={t('obligations:adHoc.name.label')} value={name} onChange={(event) => setName(event.target.value)} />
+        <Select
+          label={t('obligations:adHoc.periodicity.label')}
           value={periodicity}
           onChange={(event) => setPeriodicity(event.target.value as Periodicity)}
-          className="rounded border border-slate-300 px-2 py-1"
         >
           {PERIODICITY_VALUES.map((value) => (
             <option key={value} value={value}>
               {t(`domain:periodicity.${value}`)}
             </option>
           ))}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('obligations:adHoc.periodLabel.label')}
-        <input
+        </Select>
+        <Input
           required
+          label={t('obligations:adHoc.periodLabel.label')}
           value={periodLabel}
           onChange={(event) => setPeriodLabel(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
         />
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        {t('obligations:adHoc.dueDate.label')}
-        <input
+        <Input
           type="date"
           required
+          label={t('obligations:adHoc.dueDate.label')}
           value={dueDate}
           onChange={(event) => setDueDate(event.target.value)}
-          className="rounded border border-slate-300 px-2 py-1"
         />
-      </label>
+      </div>
 
       <ErrorMessage error={mutation.error} />
 
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="self-start rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
-      >
-        {t('common:actions.create')}
-      </button>
+      <Dialog.Footer>
+        <Dialog.Close asChild>
+          <Button variant="ghost">{t('common:actions.cancel')}</Button>
+        </Dialog.Close>
+        <Button variant="primary" type="submit" isLoading={mutation.isPending}>
+          {t('common:actions.create')}
+        </Button>
+      </Dialog.Footer>
     </form>
   )
 }

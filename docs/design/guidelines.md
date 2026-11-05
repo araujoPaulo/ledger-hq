@@ -58,6 +58,10 @@ Three gaps: `gap-4` inside a control group, `gap-6` between elements in a
 section, `gap-8` between sections. A layout that wants a fourth value
 usually wants a different structure.
 
+Inside a single control — label to box, icon to text — `gap-1.5` or
+`gap-2` is the control's own business; the three gaps are between
+elements.
+
 `rounded-surface` (8px) on cards and normal buttons; `rounded-control`
 (6px) on small and icon-only buttons and on badges.
 
@@ -73,8 +77,10 @@ Map the domain value to a tone in the feature's own folder
 (`obligations/urgencyTone.ts`, `billing/ageingTone.ts`), never inside
 `ui/`.
 
-**Status about the app** — a `Badge` with `shape="pill"`. Only the
-connection indicator, so far.
+**Status about the app** — a `Badge` with `shape="pill"`. The connection
+indicator and the Vault page's lock state (`Desbloqueado · bloqueia após 5
+min` / `Bloqueado`, driven by the vault store). A pill is not a live
+region: it states, it does not announce.
 
 **A container** — a `Card`. `padding="none"` when its children own their
 own padding, which is what a full-width row separator needs. Do not wrap
@@ -86,6 +92,10 @@ component: `Money` is the only caller, so there is exactly one place where
 cents become a localized string. `tone` defaults to reading the sign;
 pass it explicitly when sign and meaning come apart (Phase 4's client
 credit is a positive balance that is a credit).
+
+**A menu of actions** — a `DropdownMenu`: the account menu, the
+language menu and the client header's actions menu. It opens on Enter/Space, moves with arrows and returns
+focus to its trigger; it floats on `shadow-overlay`.
 
 **Label/value rows** — `DataList`, with `DataList.Total` for a footer.
 Both slots take nodes, so a label can be a link and a value can be a badge
@@ -103,18 +113,130 @@ layout that replaces it is the screen's knowledge, not the library's.
 **A page title** — exactly one `PageHeader` per page, which owns the page's
 only `<h1>`. Sections below it start at `<h2>`.
 
-## 3. Accessibility checklist
+**A form** — in a `Dialog` when it is launched from a row, has more than
+one step, or creates something; on the client page, that is every form.
+No form is permanently rendered under a list. The section that owns the
+button owns the dialog's `open` state; a successful submit closes it, a
+failed one keeps it open with the `ErrorMessage` inside. The form renders
+its own `<form>` and ends in a `Dialog.Footer` — Cancel
+(`Dialog.Close asChild` + a ghost `Button`) first, the primary action last.
+The dialog's `title` replaces the form's own heading. **One dialog at a
+time**: a dialog never opens another; confirm in place instead (the
+receipts dialog's "Delete for good").
+
+**Tabs** — `Tabs`, always controlled, with the value in the URL
+(`?tab=`, validated by the route, absent means the first tab) and changed
+with `replace: true`, so Back leaves the page rather than walking the
+tabs. An inactive panel is unmounted, so its queries do not run; a
+summary that needs another tab's data fetches it under that tab's own
+query key.
+
+**A confirmation with no other visible result** — a toast, through
+`useToast()`; in practice, a copy to the clipboard. A dialog that closes
+and a list that updates is its own confirmation. A toast never carries the
+only copy of anything, and a copy that failed gets no toast.
+
+**A message about a section's state** — `Callout`, when it is neither an
+error nor empty and there may be content below it: the generator preview,
+the vault not set up, the vault unknown offline. `EmptyState` is for a list
+with nothing in it; `ErrorMessage` is for a request that failed. `role` on
+a `Callout` only when the message must be announced as it appears.
+
+**An amount typed by a person** — `MoneyInput`, which shows euros in the
+locale's notation and hands the form integer cents. `parseAmount` (text to
+cents) and `formatCurrency`/`formatAmount` (cents to text) in
+`i18n/format.ts` are the only conversions. A grouping separator is
+accepted only between groups of three digits, so a decimal typed with the
+wrong mark is refused rather than read as a hundredfold amount. Whether an
+amount must be positive is the form's rule.
+
+**Name/value descriptions** — `DataList as="dl"`. Lists of records stay
+`div`.
+
+## 3. Forms
+
+Four controls, all in `apps/web/src/ui/`:
+
+| Control | For |
+|---|---|
+| `Input` | one line of text, a number, a date (the browser's own picker), an email, a search |
+| `Textarea` | prose — notes, reasons. Regular weight, grows downwards |
+| `Select` | a choice among a handful of options, as `<option>` children built from a `*_VALUES` constant. Native, so the phone shows its own picker |
+| `Checkbox` | a yes/no. `boxed` in a filter bar, so it sits level with the other controls |
+
+**The `Field` contract.** `Input`, `Textarea` and `Select` render through
+one internal `Field`, so label, hint and error behave identically
+everywhere:
+
+- `label` is required and is the accessible name. `hideLabel` hides it
+  visually and keeps the name — for a search box whose icon and
+  placeholder say what it is. A placeholder is never the label.
+- `hint` sits under the control; `error` under the hint, with an icon and
+  `role="alert"`. Both are joined to the control by `aria-describedby`,
+  hint first; a caller's own `aria-describedby` is appended. `error` also
+  sets `aria-invalid` and the danger border — the border is never the only
+  signal.
+- `className` and `ref` land on the native control, never on a wrapper.
+  To override a control's 40px height use the important modifier
+  (`className="h-9!"`); two height utilities on one element are not
+  resolved by their order.
+
+**Disabled means "cannot change"**, never "does not apply". A client's
+kind on the edit form is disabled, with a hint saying why. Fields that do
+not apply to the record are not rendered.
+
+**`Select layout="inline"`** — label beside the control — is for filter
+bars only. It takes no hint and no error; the type forbids them.
+
+**A link that looks like a button** is `<Button asChild>` around a `Link`.
+It takes no `type`, no `isLoading` and no `disabled` — the type forbids
+all three: a link does not load, and one that cannot be followed is not
+rendered.
+
+**Field errors are the form's one validation voice.** A form that runs
+its own validation and shows field errors sets `noValidate`, so the
+browser's bubble never pre-empts the field's own message. A form that
+validates only on the server may keep the browser's `required` and
+`type="url"` checks.
+`noValidate` is for forms whose own checks cover every constraint; a form may leave constraints it does not check itself (required, min/max) to the browser.
+
+**Format structured codes as they are typed, idempotently.** The
+recovery code field (`vault/recoveryCode.ts`) upper-cases, strips
+anything outside the alphabet and re-inserts the hyphens on every
+change, restoring the caret after the same code character it followed;
+formatting a canonical value returns it unchanged. Never cap such a
+field with `maxLength` — the browser truncates a paste before the
+formatter can clean it; the formatter caps the code itself.
+
+## 4. Secrets on screen
+
+- **Never render a password.** Show a mask plus a Copy button.
+- **A copied secret clears after 30 seconds**, through `copyAndClear`
+  (`vault/clipboard.ts`) — passwords and the vault recovery code alike —
+  and the screen says so where it happens, in the toast or beside the
+  button.
+- **`copyAndClear` rejects when it could not copy** (no clipboard API on
+  plain HTTP, or a denied write). Catch it and say nothing: a "copied"
+  toast for a copy that did not happen is worse than no toast.
+- **Recovery material is displayed for transcription**: one monospace
+  cell per group, in a labelled list, selectable as text. Copy is a
+  convenience, never the only way out.
+- **Usernames are not secrets** — copy them plainly, without the clear.
+
+## 5. Accessibility checklist
 
 Run before opening a PR.
 
-1. One `<h1>` per page, from `PageHeader`; headings descend with no level
+1. One `<h1>` per page, from `PageHeader` (or `CardHeading` on the
+   signed-out screens); headings descend with no level
    skipped.
 2. Every icon-only control has an `aria-label`; every decorative icon is
    `aria-hidden="true"`.
 3. Keyboard: tab order runs sidebar → content → account menu; the menu
    opens on Enter/Space, moves with arrows, closes on Escape, and returns
    focus to its trigger; every interactive element has a visible
-   `focus-visible` ring.
+   `focus-visible` ring. Signed out, there is no sidebar: tab order runs
+   language menu → the card's fields → submit → the mode switch.
 4. Touch targets are at least 44px in the mobile nav and in any list row
    that holds a control.
 5. Text contrast is at least 4.5:1, or 3:1 at 24px and above. `subtle` is
@@ -127,8 +249,24 @@ Run before opening a PR.
    once in `styles.css`, not per component.
 9. Real elements: `<button>` for actions, `<a>`/`Link` for navigation.
    Never `onClick` on a `div`.
+10. Every form control has a programmatic label — visible, or hidden with
+    `hideLabel`. A placeholder is never the label.
+11. A field error is announced (`role="alert"`), tied to its control by
+    `aria-describedby`, and marked with `aria-invalid`.
+12. Disabled means "cannot change"; a field that does not apply is not
+    rendered.
+13. Controls are 40px tall; a filter bar's boxed checkbox matches, and the
+    whole box is the touch target.
+14. Focus order in a form follows reading order, section by section.
+15. Tabs move with the arrow keys and Home/End; a badge inside a tab is
+    part of its name.
+16. A dialog has a title, takes focus to its first field on open, traps
+    it, and returns it to what opened it on close; Escape closes it.
+17. A countdown (the TOTP's seconds left) is never a live region.
+18. An amount's format error is announced like any field error, and only
+    once the field is left.
 
-## 4. i18n
+## 6. i18n
 
 No hardcoded user-visible string, and that includes every `aria-label`.
 Every key exists in both `pt-PT` and `en-GB`;
@@ -147,7 +285,30 @@ Test files are exempt from `i18next/no-literal-string`
 (`packages/config/eslint.config.mjs`): a component test has to render
 literal children to have anything to assert on, and none of it ships.
 
-## 5. The rule about `ui/`
+## 7. Signed-out screens
+
+Sign-in, vault recovery and account setup render outside the shell, in
+`auth/AuthLayout.tsx`: no sidebar, no tab bar, no search, no account menu
+— none of them can do anything without a session. `RequireSession`
+(`auth/RequireSession.tsx`) wraps the whole shell and chooses between the
+splash, the auth layout and the shell; no route path is involved.
+
+- **One card, one `<h1>`.** Each auth page renders its own heading block
+  inside the card (`text-2xl` title, optional `text-sm text-muted`
+  introduction). There is no `PageHeader` here — it is built for a page
+  body with an action slot.
+- **Language and connection are always reachable.** The auth layout's
+  corner holds `ConnectionStatus` and `LanguageMenu`. Account setup records
+  the active language as the account's locale.
+- **The splash is the frame and the mark, nothing else.** `AuthFrame` is
+  shared with the layout and top-anchors its column at every width (never
+  vertically centred), so the mark sits at the same y on the splash and on
+  every card, and does not move when the card replaces the splash.
+- **Autocomplete tokens are exact**: `username` on the email,
+  `current-password` to sign in, `new-password` wherever a password is
+  being chosen. Password managers depend on them.
+
+## 8. The rule about `ui/`
 
 Nothing in `apps/web/src/ui/` imports from a feature folder —
 `obligations/`, `billing/`, `clients/`, `vault/`. It may import from

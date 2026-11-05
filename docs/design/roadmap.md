@@ -2,7 +2,7 @@
 
 **Status:** approved (see [design spec](../superpowers/specs/2026-09-19-ui-refresh-design.md))
 **Branch:** `design/ui-refresh`
-**Last revised:** 2026-09-24
+**Last revised:** 2026-10-04
 
 This tracks the stages of the UI refresh initiative from the design
 spec's rollout plan, in enough detail to plan and review each one
@@ -61,129 +61,103 @@ The boards carry real data: obligation names from the fiscal catalog,
 `en-GB` currency and dates as `src/i18n/format.ts` produces them, and
 figures that reconcile across screens.
 
+## Revision — 2026-10-04
+
+Stage 1 shipped. Stages 2-5 are now specced, each in its own document,
+and the stage sections below are reduced to a summary plus a link —
+the specs are the contract. Brainstorming them against the code as it
+stands after Phase 4 changed five things the earlier map assumed:
+
+- **Phase 4b's search box and reporting date range** were shipped as
+  plain inputs on purpose, for Stage 2 to adopt alongside the client
+  filter bar. Stage 2 now lists them.
+- **`Select` and `Checkbox` are native, styled**, not Radix — so
+  `@radix-ui/react-select` and `@radix-ui/react-checkbox` are never
+  added. Stage 2's only new dependency is `@radix-ui/react-slot`.
+- **Client edit is in scope** (Stage 2): the detail mockup draws an Edit
+  button and `PATCH /clients/:id` already exists.
+- **Stage 3 adds two components the map did not name**: `Callout`
+  (section-state messages) and `MoneyInput` (amounts typed in euros
+  instead of cents).
+- **Stage 5 moves signed-out screens out of the shell** — before
+  it, the sign-in form rendered beside a working sidebar; Stage 5 shipped
+  that change.
+
+The mockups also disagree with the code in three places the specs
+resolve in the code's favour: the vault locks after 5 minutes, not 15;
+the API has no per-platform credential count; the ledger has no
+open/settled state per charge.
+
 ## Stage 1 — App shell & HomePage
 
-**Status:** design complete, implementation plan next.
+**Status:** shipped.
 
-Establishes the design system itself: tokens (`@theme` in
-`styles.css`), the `apps/web/src/ui/` component library, and applies
-both to the app shell (`AppLayout`) and the whole `HomePage` — the
-screen seen immediately after login.
-
-- **New components**: `Button`, `Badge`, `Card`, `EmptyState`,
-  `Skeleton`, `PageHeader`, `DropdownMenu`, `Money`, `DataList`.
-- **New dependencies**: `@radix-ui/react-dropdown-menu`,
-  `class-variance-authority`, `lucide-react`, `@fontsource/inter`.
-- **Screens touched**: `apps/web/src/shell/AppLayout.tsx`,
-  `apps/web/src/HomePage.tsx`,
-  `apps/web/src/obligations/ObligationsDashboard.tsx`,
-  `apps/web/src/billing/ReceivablesSection.tsx`.
-- **Nav rename**: the third sidebar item becomes **Vault**, not
-  "Platforms" — a new `common:nav.vault` key. The route
-  `/vault/platforms` and the `PlatformsPage` component keep their
-  names.
-- **New i18n keys** (five, both locales): `common:home.title`,
-  `common:home.outstanding`, `common:nav.vault`,
-  `obligations:dashboard.emptyHint`, `billing:receivables.emptyHint`.
-- **Out of scope**: every other screen; dark mode; form controls
-  (`HomePage` has no inputs).
-- Full detail: [design spec](../superpowers/specs/2026-09-19-ui-refresh-design.md).
+Tokens, the `apps/web/src/ui/` library (`Button`, `Badge`, `Card`,
+`EmptyState`, `Skeleton`, `PageHeader`, `DropdownMenu`, `Money`,
+`DataList`), the shell and the whole `HomePage`.
+[Spec](../superpowers/specs/2026-09-24-ui-refresh-stage-1-design.md) ·
+[plan](../superpowers/plans/2026-09-24-ui-refresh-stage-1.md).
 
 ## Stage 2 — Clients list & form
 
-**Status:** drawn, not specced.
+**Status:** shipped.
 
-Applies the design system to client management's standalone screens:
-the list with its filter bar, and the create/edit form.
+Form controls `Input`, `Textarea`, `Select`, `Checkbox` (native,
+styled) on one internal `Field`; `Button asChild`. Applied to
+`ClientListPage` and `ClientFormPage`, which splits to serve **create
+and edit** (new route `/clients/$clientId/edit`). Also adopts `Input`
+in `SearchBox` and `PeriodSummaryReport`.
 
-- **Screens**: `ClientListPage`, `ClientFormPage`.
-- **New components** (first real usage): `Input`, `Select`,
-  `Checkbox` — the filter bar (search + kind + archived toggle) and
-  the client form are where the system first needs real form controls
-  with label and error states. `ClientFormPage` is the largest file in
-  the app at 336 lines, which makes it the honest test of whether the
-  form primitives are good enough.
-- **New dependencies**: `@radix-ui/react-select`,
-  `@radix-ui/react-checkbox`.
-- **Depends on**: Stage 1's tokens and `Button`/`Card`/`Badge`/`PageHeader`.
+- **New dependency**: `@radix-ui/react-slot`.
+- **Depends on**: Stage 1.
+- [Spec](../superpowers/specs/2026-10-04-ui-refresh-stage-2-design.md).
+- [Plan](../superpowers/plans/2026-10-04-ui-refresh-stage-2.md).
 
 ## Stage 3 — Client detail page
 
-**Status:** drawn, not specced.
+**Status:** shipped.
 
-Applies the design system to `ClientDetailPage` and every section
-composed into it. This is the densest screen in the app and the one
-where the refresh has the most to prove.
+`ClientDetailPage` as a header plus five URL-backed tabs (Overview,
+Obligations, Billing, People, Credentials), every composed section and
+form restyled, every form in a `Dialog` launched from a button.
+Amounts typed in euros through `MoneyInput`. `ObligationRow` restyled
+(shared with the dashboard). Includes `ObligationAttachments` and
+`ApplyCreditForm` from Phase 4.
 
-- **Screens**: `ClientDetailPage` plus `FiscalProfileForm`,
-  `ObligationsSection` (with `AddAdHocObligationForm`,
-  `AdjustObligationForm` and `ObligationAttachments` — the receipts panel
-  added in Phase 4c, built against this section's pre-refresh markup and
-  restyled here alongside its siblings; a candidate for `Dialog`);
-  `ClientLedgerSection` (with
-  `RetainerPlanForm`, `RecordPaymentForm`, `AddAdHocChargeForm`),
-  `EmploymentSection` (with `AddEmploymentForm`), and
-  `CredentialsSection` (with `AddCredentialForm`, `CredentialRow`, and
-  `VaultUnlockGate` — the gate renders inside this section, not as a
-  standalone screen, so it is styled here rather than in Stage 4).
-- **New components** (first real usage): `Tabs` — the page's five
-  sections; `Dialog` — the write-off reason prompt and the
-  add-credential form, both of which are inline today and shouldn't
-  be; `Toast` — copy-to-clipboard confirmation without a
-  layout-shifting banner.
+- **New components**: `Tabs`, `Dialog`, `Toast`, `Callout`,
+  `MoneyInput`; `DataList` gains `as="dl"`.
 - **New dependencies**: `@radix-ui/react-tabs`,
   `@radix-ui/react-dialog`, `@radix-ui/react-toast`.
-- **Layout, decided**: five tabs — Overview, Obligations, Billing,
-  People, Credentials — with the page header (name, kind, tax number,
-  archive/edit) above the tab strip. On mobile the strip scrolls
-  horizontally. Each tab keeps its own query, so the page fetches only
-  the active tab. See the design spec's decisions section for why tabs
-  rather than an accordion or a split.
-- **Also decided by the mockups**: a revealed credential shows a
-  masked password plus Copy, never the plaintext, with the 30-second
-  clipboard clear stated on screen; a written-off charge keeps its row
-  but renders struck through and muted, with a `Written off` badge.
-- **Still to resolve when brainstormed**: whether the five inline
-  forms become dialogs uniformly or only where the interaction demands
-  it; what the Obligations tab's per-client controls (adjust, waive,
-  ad-hoc) look like once they are not competing with five other
-  sections for the page.
-- **Depends on**: Stage 1's `Money`/`DataList`/`Card`/`Badge`, and
-  Stage 2's `Input`/`Select`/`Checkbox` for the five forms.
+- **Depends on**: Stage 2's form controls.
+- [Spec](../superpowers/specs/2026-10-04-ui-refresh-stage-3-design.md).
+- [Plan](../superpowers/plans/2026-10-04-ui-refresh-stage-3.md).
 
 ## Stage 4 — Vault page & setup
 
-**Status:** drawn, not specced.
+**Status:** shipped.
 
-Applies the design system to the vault screens that live outside the
-client detail page: the platform list (shown as **Vault** in the nav)
-and first-run vault setup.
+`PlatformsPage` (titled Vault, with a status pill and a New platform
+dialog) and `VaultSetupPage` (two steps; the recovery code grouped for
+transcription, with copy-and-clear). No new components. Vault recovery
+moves to Stage 5 — it is a mode of the sign-in page.
 
-- **Screens**: `PlatformsPage`, `VaultSetupPage`.
-- **Drawn already**: the vault page in both frames — platform rows
-  carrying their authentication kind and credential count, the create
-  form beside the list on desktop and below it on mobile, and a vault
-  status pill ("Unlocked · locks after 15 min") in the header.
-- **New components**: none — `Dialog`, `Toast`, and the form controls
-  all exist by this point.
-- **Likely design questions**: how vault setup's recovery-code display
-  and confirmation step reads with the new typography, given it is the
-  one screen whose content a user is expected to copy down by hand.
-- **Depends on**: Stage 2's `Input`, Stage 3's `Dialog`/`Toast` and the
-  unlock-gate error styling settled there.
+- **Depends on**: Stage 3's `Dialog`, `Toast`, `Callout` and
+  `PlatformAvatar`.
+- [Spec](../superpowers/specs/2026-10-04-ui-refresh-stage-4-design.md).
+- [Plan](../superpowers/plans/2026-10-04-ui-refresh-stage-4.md).
 
 ## Stage 5 — Auth
 
-**Status:** not designed yet.
+**Status:** shipped.
 
-Applies the design system to login and first-run setup.
+A standalone `AuthLayout` outside the shell for sign-in, recovery and
+account setup; the session gate moves above the shell; a splash
+replaces the blank screen while the session resolves; the recovery code
+field normalises what is typed. No new components.
 
-- **Screens**: `LoginPage`, `SetupPage`.
-- **New components**: none.
-- **Ordered last** because it is the least-frequently-seen screen
-  (once per session) and has no new-component dependency forcing it
-  earlier; moving it earlier would not unblock anything else.
-- **Depends on**: Stage 2's `Input`.
+- **Depends on**: Stage 2's form controls.
+- [Spec](../superpowers/specs/2026-10-04-ui-refresh-stage-5-design.md).
+- [Plan](../superpowers/plans/2026-10-04-ui-refresh-stage-5.md).
 
 ## Sequencing
 
@@ -192,15 +166,15 @@ Stage 1 (tokens + shell + HomePage)
    │
    └─→ Stage 2 (Clients list & form) ── introduces Input/Select/Checkbox
            │
-           ├─→ Stage 3 (Client detail) ── introduces Dialog/Toast
+           ├─→ Stage 3 (Client detail) ── introduces Tabs/Dialog/Toast/Callout/MoneyInput
            │       │
-           │       └─→ Stage 4 (Vault standalone) ── reuses Dialog/Toast
+           │       └─→ Stage 4 (Vault standalone) ── reuses Dialog/Toast/Callout
            │
            └─→ Stage 5 (Auth) ── reuses Input, no new components
 ```
 
 Stage 2 gates everything after it, because every remaining screen has
-a form on it. Stage 3 gates Stage 4 only through `Dialog`/`Toast`;
+a form on it. Stage 3 gates Stage 4 only through `Dialog`/`Toast`/`Callout`;
 Stage 5 depends on Stage 2 alone and could run any time after it, but
 is placed last because it is the screen users see least.
 

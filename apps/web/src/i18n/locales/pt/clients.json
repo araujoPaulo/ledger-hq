@@ -1,12 +1,26 @@
 {
   "title": "Clientes",
   "newTitle": "Novo cliente",
-  "empty": "Ainda não há clientes.",
+  "editTitle": "Editar cliente",
+  "empty": "Ainda não há clientes",
+  "emptyHint": "Cria o primeiro cliente para começares a acompanhar prazos e avenças.",
+  "noMatches": "Nenhum cliente corresponde aos filtros.",
+  "noMatchesHint": "Tenta outro nome, o NIF, ou retira o filtro de tipo.",
+  "count_one": "{{count}} cliente",
+  "count_other": "{{count}} clientes",
+  "archived": "Arquivado",
+  "actions": "Ações do cliente",
+  "details": "Dados",
+  "tabs": { "overview": "Resumo", "obligations": "Obrigações", "billing": "Faturação", "credentials": "Credenciais" },
+  "glance": { "title": "Num relance", "due": "Obrigações a vencer", "balance": "Saldo" },
   "filter": { "all": "Todos", "search": "Pesquisar por nome ou NIF", "showArchived": "Mostrar arquivados" },
   "form": {
+    "section": { "identification": "Identificação", "contact": "Contacto" },
+    "cannotClear": "Este campo ainda não pode ficar vazio. Indica um novo valor ou mantém o atual.",
+    "profileLater": "O perfil fiscal preenche-se depois de criar o cliente.",
     "name": { "label": "Nome", "invalid": "Indica um nome válido." },
     "taxId": { "label": "NIF", "invalid": "O NIF não é válido." },
-    "kind": { "label": "Tipo" },
+    "kind": { "label": "Tipo", "immutable": "O tipo de cliente não pode ser alterado depois de criado." },
     "legalForm": { "label": "Forma jurídica", "invalid": "Escolhe uma forma jurídica válida." },
     "accounting": { "label": "Contabilidade", "invalid": "Escolhe um tipo de contabilidade válido." },
     "socialSecurityNo": { "label": "NISS", "invalid": "O NISS não é válido." },
@@ -23,6 +37,9 @@
     "hasEmployees": "Tem empregados",
     "hasWithholding": "Faz retenções na fonte",
     "isVatCashBasis": "IVA de caixa",
-    "startedAt": "Início"
+    "startedAt": "Início",
+    "empty": "Ainda não há perfil fiscal. Sem ele, o gerador não propõe obrigações.",
+    "setUp": "Preencher",
+    "openActivityCompany": "Uma empresa tem sempre atividade aberta."
   }
 }
