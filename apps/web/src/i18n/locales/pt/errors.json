@@ -55,7 +55,8 @@
     "allocation_exceeds_charge_balance": "O valor alocado excede o saldo em aberto desta cobrança.",
     "allocation_exceeds_available_credit": "O valor excede o crédito disponível neste pagamento.",
     "plan_overlap": "Já existe um plano de retainer em vigor para este cliente.",
-    "charge_already_written_off": "Esta cobrança já foi perdoada."
+    "charge_already_written_off": "Esta cobrança já foi perdoada.",
+    "plan_start_too_early": "Um plano não pode começar antes de 1 de janeiro de 2000."
   },
   "attachments": {
     "type_not_allowed": "Só são aceites ficheiros PDF, PNG ou JPEG.",

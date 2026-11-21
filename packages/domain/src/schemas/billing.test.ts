@@ -55,6 +55,19 @@ describe('createRetainerPlanSchema', () => {
     expect(result.success).toBe(true)
   })
 
+  it('rejects a validFrom before 2000 — a mistyped year would generate thousands of charges', () => {
+    const result = createRetainerPlanSchema.safeParse({ amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: '0026-01-01' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe('billing.plan_start_too_early')
+      expect(result.error.issues[0]?.path).toEqual(['validFrom'])
+    }
+  })
+
+  it('accepts a validFrom of 2000-01-01', () => {
+    expect(createRetainerPlanSchema.safeParse({ amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: '2000-01-01' }).success).toBe(true)
+  })
+
   it('rejects a dueDayOfMonth above 28', () => {
     const result = createRetainerPlanSchema.safeParse({
       amountCents: 9000,
@@ -77,6 +90,15 @@ describe('createRetainerPlanSchema', () => {
 })
 
 describe('renewRetainerPlanSchema', () => {
+  it('rejects an effectiveFrom before 2000', () => {
+    const result = renewRetainerPlanSchema.safeParse({ newAmountCents: 12000, effectiveFrom: '1999-12-31' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe('billing.plan_start_too_early')
+      expect(result.error.issues[0]?.path).toEqual(['effectiveFrom'])
+    }
+  })
+
   it('accepts just the required fields, periodicity/dueDayOfMonth optional', () => {
     const result = renewRetainerPlanSchema.safeParse({ newAmountCents: 12000, effectiveFrom: '2026-06-01' })
     expect(result.success).toBe(true)

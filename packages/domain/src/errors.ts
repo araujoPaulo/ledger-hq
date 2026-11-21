@@ -39,6 +39,7 @@ export const ERROR_CODES = [
   'billing.allocation_exceeds_available_credit',
   'billing.plan_overlap',
   'billing.charge_already_written_off',
+  'billing.plan_start_too_early',
   'attachments.type_not_allowed',
   'attachments.too_large',
   'attachments.file_missing',

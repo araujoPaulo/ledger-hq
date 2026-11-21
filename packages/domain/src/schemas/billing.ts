@@ -21,13 +21,20 @@ export const generateChargesBodySchema = z
 
 export type GenerateChargesInput = z.infer<typeof generateChargesBodySchema>
 
+/** Earliest accepted plan start: a mistyped year (0026) would otherwise generate thousands of charges. */
+export const EARLIEST_PLAN_START = '2000-01-01'
+
+const planStartSchema = isoDateSchema.refine((value) => value >= EARLIEST_PLAN_START, {
+  message: 'billing.plan_start_too_early',
+})
+
 export const createRetainerPlanSchema = z
   .object({
     amountCents: z.number().int().positive(),
     periodicity: z.enum(PERIODICITY_VALUES),
     dueDayOfMonth: z.number().int().min(1).max(28),
     /** Omitted means today; a past date backfills every period since (master spec §8.1). */
-    validFrom: isoDateSchema.optional(),
+    validFrom: planStartSchema.optional(),
   })
   .strict()
 
@@ -36,7 +43,7 @@ export type CreateRetainerPlanInput = z.infer<typeof createRetainerPlanSchema>
 export const renewRetainerPlanSchema = z
   .object({
     newAmountCents: z.number().int().positive(),
-    effectiveFrom: isoDateSchema,
+    effectiveFrom: planStartSchema,
     periodicity: z.enum(PERIODICITY_VALUES).optional(),
     dueDayOfMonth: z.number().int().min(1).max(28).optional(),
   })

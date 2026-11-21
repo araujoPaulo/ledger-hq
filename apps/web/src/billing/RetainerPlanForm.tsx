@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { PERIODICITY_VALUES } from '@ledger-hq/domain'
+import { EARLIEST_PLAN_START, PERIODICITY_VALUES } from '@ledger-hq/domain'
 import type { Periodicity } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { Button, Dialog, Input, MoneyInput, Select } from '../ui'
@@ -91,6 +91,7 @@ export function RetainerPlanForm({ clientId, currentPlan, onSaved }: Props) {
       <Input
         type="date"
         required
+        min={EARLIEST_PLAN_START}
         label={t(isRenewal ? 'billing:retainerPlan.effectiveFrom.label' : 'billing:retainerPlan.validFrom.label')}
         value={effectiveDate}
         onChange={(event) => setEffectiveDate(event.target.value)}
