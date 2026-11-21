@@ -2,7 +2,7 @@
   "appName": "Ledger HQ",
   "loading": "A carregar",
   "home": { "title": "Resumo", "outstanding": "Em dívida" },
-  "nav": { "clients": "Clientes", "vault": "Cofre", "reporting": "Relatórios" },
+  "nav": { "summary": "Resumo", "clients": "Clientes", "vault": "Cofre", "reporting": "Relatórios" },
   "search": {
     "label": "Pesquisar",
     "placeholder": "Pesquisar clientes, plataformas, obrigações…",

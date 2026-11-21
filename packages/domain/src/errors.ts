@@ -18,6 +18,8 @@ export const ERROR_CODES = [
   'fiscal_profile.vat_regime_requires_open_activity',
   'fiscal_profile.income_tax_incompatible_with_kind',
   'fiscal_profile.employees_flag_not_allowed_for_individual',
+  'fiscal_profile.obligations_from_before_start',
+  'fiscal_profile.obligations_from_in_future',
   'employment.employer_must_be_company',
   'employment.employee_must_be_individual',
   'employment.self_employment',

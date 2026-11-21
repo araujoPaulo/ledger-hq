@@ -47,10 +47,10 @@ test('sets up a company, generates obligations, sees them on the dashboard, and 
   await page.getByRole('tab', { name: /obrigações/i }).click()
 
   // The regenerate preview banner should appear once the profile exists.
-  // MONTHLY VAT generates one instance per month across the generator's
-  // calendar-year window (obligations.service.ts's `yearStart`/`yearEnd`),
-  // not just one for "today" — a dozen "Declaração periódica de IVA" rows
-  // appear at once, so `.first()` disambiguates
+  // MONTHLY VAT generates one instance per month from the profile's start
+  // (the form defaults it to today) to the end of the calendar year
+  // (obligations.service.ts's `windowStart`/`yearEnd`), so several
+  // "Declaração periódica de IVA" rows can appear at once; `.first()` disambiguates
   // wherever the brief's original single-match assertion doesn't hold.
   await expect(page.getByRole('button', { name: /aplicar/i })).toBeVisible({ timeout: 10_000 })
   await page.getByRole('button', { name: /aplicar/i }).click()

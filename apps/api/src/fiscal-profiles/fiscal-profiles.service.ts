@@ -15,6 +15,8 @@ const FIELD_FOR_CODE: Record<string, string> = {
   'fiscal_profile.vat_regime_requires_open_activity': 'vatRegime',
   'fiscal_profile.income_tax_incompatible_with_kind': 'incomeTax',
   'fiscal_profile.employees_flag_not_allowed_for_individual': 'hasEmployees',
+  'fiscal_profile.obligations_from_before_start': 'obligationsFrom',
+  'fiscal_profile.obligations_from_in_future': 'obligationsFrom',
 }
 
 @Injectable()
@@ -37,11 +39,16 @@ export class FiscalProfilesService {
   async upsert(clientId: string, input: FiscalProfileInput): Promise<FiscalProfile> {
     const client = await this.clients.findOne(clientId)
 
-    const violations = checkFiscalProfileConsistency(client.kind, input)
+    const today = new Date().toISOString().slice(0, 10)
+    const violations = checkFiscalProfileConsistency(client.kind, input, today)
     if (violations.length > 0) throw validationError(violations)
 
     const before = await this.prisma.fiscalProfile.findUnique({ where: { clientId } })
-    const data = { ...input, startedAt: new Date(`${input.startedAt}T00:00:00Z`) }
+    const data = {
+      ...input,
+      startedAt: new Date(`${input.startedAt}T00:00:00Z`),
+      obligationsFrom: input.obligationsFrom === null ? null : new Date(`${input.obligationsFrom}T00:00:00Z`),
+    }
 
     const profile = await this.prisma.fiscalProfile.upsert({
       where: { clientId },

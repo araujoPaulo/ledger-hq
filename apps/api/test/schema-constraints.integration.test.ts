@@ -185,6 +185,40 @@ describe('employment constraints', () => {
   })
 })
 
+describe('fiscal profile constraints', () => {
+  function fiscalProfile(clientId: string, startedAt: string, obligationsFrom: string | null) {
+    return {
+      clientId,
+      hasOpenActivity: true,
+      vatRegime: 'MONTHLY' as const,
+      incomeTax: 'CIT' as const,
+      hasEmployees: false,
+      hasWithholding: false,
+      isVatCashBasis: false,
+      startedAt: new Date(`${startedAt}T00:00:00Z`),
+      obligationsFrom: obligationsFrom === null ? null : new Date(`${obligationsFrom}T00:00:00Z`),
+    }
+  }
+
+  it('rejects an obligationsFrom before startedAt', async () => {
+    const clientId = await createCompany('501442600')
+
+    await expect(
+      prisma.fiscalProfile.create({ data: fiscalProfile(clientId, '2026-05-01', '2026-04-30') }),
+    ).rejects.toThrow(/fiscal_profile_obligations_from_after_started/)
+  })
+
+  it('accepts an obligationsFrom on or after startedAt, or none', async () => {
+    const first = await createCompany('501442600')
+    const second = await createClient('500000003')
+    const third = await createClient('500000004')
+
+    await expect(prisma.fiscalProfile.create({ data: fiscalProfile(first, '2026-05-01', '2026-05-01') })).resolves.toBeDefined()
+    await expect(prisma.fiscalProfile.create({ data: fiscalProfile(second, '2026-05-01', '2026-08-01') })).resolves.toBeDefined()
+    await expect(prisma.fiscalProfile.create({ data: fiscalProfile(third, '2026-05-01', null) })).resolves.toBeDefined()
+  })
+})
+
 describe('credential constraints', () => {
   it('rejects two credentials with the same client, platform and label', async () => {
     const client = await prisma.client.create({

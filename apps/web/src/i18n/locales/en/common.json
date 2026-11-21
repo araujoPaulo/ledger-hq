@@ -2,7 +2,7 @@
   "appName": "Ledger HQ",
   "loading": "Loading",
   "home": { "title": "Overview", "outstanding": "Outstanding" },
-  "nav": { "clients": "Clients", "vault": "Vault", "reporting": "Reports" },
+  "nav": { "summary": "Summary", "clients": "Clients", "vault": "Vault", "reporting": "Reports" },
   "search": {
     "label": "Search",
     "placeholder": "Search clients, platforms, obligations…",

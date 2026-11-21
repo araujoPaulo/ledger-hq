@@ -33,6 +33,8 @@ const COMPANY_PROFILE = {
   hasEmployees: false,
   hasWithholding: false,
   isVatCashBasis: false,
+  startedAt: new Date('2020-01-01T00:00:00Z'),
+  obligationsFrom: null,
 }
 
 describe('ObligationsService#syncCatalogDefinitions', () => {
@@ -266,5 +268,96 @@ describe('ObligationsService#generate', () => {
     expect((vi.mocked(prisma.obligationInstance.createMany).mock.calls[0]![0] as { data: unknown[] }).data).toHaveLength(
       dryRunResult.toCreate.length,
     )
+  })
+
+  describe('start of generation', () => {
+    function serviceWith(profile: Record<string, unknown>, existing: unknown[] = []) {
+      const prisma = fakePrisma({
+        client: { findMany: vi.fn().mockResolvedValue([client]) },
+        fiscalProfile: { findUnique: vi.fn().mockResolvedValue({ ...COMPANY_PROFILE, ...profile }) },
+        obligationInstance: {
+          findMany: vi.fn().mockResolvedValue(existing),
+          createMany: vi.fn().mockResolvedValue({ count: 0 }),
+          deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        },
+      })
+      return new ObligationsService(prisma, fakeClientsService(client))
+    }
+
+    function labelsFor(result: { toCreate: Array<{ definitionCode: string; periodLabel: string }> }, code: string): string[] {
+      return result.toCreate.filter((item) => item.definitionCode === code).map((item) => item.periodLabel)
+    }
+
+    it('starts at the fiscal profile start date, keeping the period it falls in', async () => {
+      const service = serviceWith({ startedAt: new Date('2026-05-15T00:00:00Z') })
+
+      const result = await service.generate({ asOf: new Date('2026-10-04T00:00:00Z'), clientId: 'c1' }, true)
+
+      expect(labelsFor(result, 'VAT_MONTHLY_RETURN')).toEqual(['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'])
+      expect(labelsFor(result, 'MODEL_22_CIT_RETURN')).toEqual(['2026'])
+    })
+
+    it('starts at the user-chosen obligationsFrom when it is later than the start date', async () => {
+      const service = serviceWith({ obligationsFrom: new Date('2026-07-01T00:00:00Z') })
+
+      const result = await service.generate({ asOf: new Date('2026-10-04T00:00:00Z'), clientId: 'c1' }, true)
+
+      expect(labelsFor(result, 'VAT_MONTHLY_RETURN')).toEqual(['2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'])
+    })
+
+    it('still never reaches back before 1 January of asOf\'s year, however early the start date', async () => {
+      const service = serviceWith({ startedAt: new Date('2025-06-01T00:00:00Z') })
+
+      const result = await service.generate({ asOf: new Date('2026-10-04T00:00:00Z'), clientId: 'c1' }, true)
+
+      expect(labelsFor(result, 'VAT_MONTHLY_RETURN')).toHaveLength(12)
+      for (const item of result.toCreate) {
+        expect(item.periodLabel.startsWith('2026')).toBe(true)
+      }
+    })
+
+    it('generates nothing when the start date falls after asOf\'s year', async () => {
+      const service = serviceWith({ startedAt: new Date('2027-02-01T00:00:00Z') })
+
+      const result = await service.generate({ asOf: new Date('2026-10-04T00:00:00Z'), clientId: 'c1' }, true)
+
+      expect(result.toCreate).toEqual([])
+    })
+
+    it('retracts a PENDING instance whose period ended before the start, even one already in arrears', async () => {
+      const service = serviceWith({ obligationsFrom: new Date('2026-07-01T00:00:00Z') }, [
+        { id: 'before-1', clientId: 'c1', definitionCode: 'VAT_MONTHLY_RETURN', periodStart: new Date('2026-03-01T00:00:00Z'), periodEnd: new Date('2026-03-31T00:00:00Z'), periodLabel: '2026-03', status: 'PENDING' },
+        { id: 'before-2', clientId: 'c1', definitionCode: 'VAT_MONTHLY_RETURN', periodStart: new Date('2025-11-01T00:00:00Z'), periodEnd: new Date('2025-11-30T00:00:00Z'), periodLabel: '2025-11', status: 'PENDING' },
+      ])
+
+      const result = await service.generate({ asOf: new Date('2026-10-04T00:00:00Z'), clientId: 'c1' }, true)
+
+      expect(result.toRetract).toEqual([
+        { clientId: 'c1', definitionCode: 'VAT_MONTHLY_RETURN', periodLabel: '2026-03' },
+        { clientId: 'c1', definitionCode: 'VAT_MONTHLY_RETURN', periodLabel: '2025-11' },
+      ])
+    })
+
+    it('keeps a PENDING instance whose period straddles the start date', async () => {
+      const service = serviceWith({ startedAt: new Date('2026-05-15T00:00:00Z') }, [
+        { id: 'straddle', clientId: 'c1', definitionCode: 'VAT_MONTHLY_RETURN', periodStart: new Date('2026-05-01T00:00:00Z'), periodEnd: new Date('2026-05-31T00:00:00Z'), periodLabel: '2026-05', status: 'PENDING' },
+      ])
+
+      const result = await service.generate({ asOf: new Date('2026-10-04T00:00:00Z'), clientId: 'c1' }, true)
+
+      expect(result.toRetract).toEqual([])
+    })
+
+    it('never retracts an already-handled instance from before the start', async () => {
+      const service = serviceWith({ obligationsFrom: new Date('2026-07-01T00:00:00Z') }, [
+        { id: 'done', clientId: 'c1', definitionCode: 'VAT_MONTHLY_RETURN', periodStart: new Date('2026-03-01T00:00:00Z'), periodEnd: new Date('2026-03-31T00:00:00Z'), periodLabel: '2026-03', status: 'DONE' },
+        { id: 'waived', clientId: 'c1', definitionCode: 'VAT_MONTHLY_RETURN', periodStart: new Date('2026-04-01T00:00:00Z'), periodEnd: new Date('2026-04-30T00:00:00Z'), periodLabel: '2026-04', status: 'WAIVED' },
+        { id: 'working', clientId: 'c1', definitionCode: 'VAT_MONTHLY_RETURN', periodStart: new Date('2026-05-01T00:00:00Z'), periodEnd: new Date('2026-05-31T00:00:00Z'), periodLabel: '2026-05', status: 'IN_PROGRESS' },
+      ])
+
+      const result = await service.generate({ asOf: new Date('2026-10-04T00:00:00Z'), clientId: 'c1' }, true)
+
+      expect(result.toRetract).toEqual([])
+    })
   })
 })

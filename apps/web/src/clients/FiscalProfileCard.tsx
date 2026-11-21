@@ -28,6 +28,12 @@ function ProfileView({ profile }: { profile: FiscalProfileResponse }) {
           label={t('clients:profile.startedAt')}
           value={<span className="tabular-nums">{formatDate(profile.startedAt, i18n.language as SupportedLocale)}</span>}
         />
+        {profile.obligationsFrom !== null && (
+          <DataList.Row
+            label={t('clients:profile.obligationsFrom')}
+            value={<span className="tabular-nums">{formatDate(profile.obligationsFrom, i18n.language as SupportedLocale)}</span>}
+          />
+        )}
       </DataList>
       {on.length > 0 && (
         <div className="flex flex-wrap gap-2">

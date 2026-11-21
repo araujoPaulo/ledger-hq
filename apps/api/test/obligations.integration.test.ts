@@ -22,7 +22,7 @@ function patch(path: string, body: Record<string, unknown>) {
   return request(app.getHttpServer()).patch(path).set('Cookie', cookie).set('X-Requested-With', 'ledger-hq').send(body)
 }
 
-async function createCompanyWithProfile() {
+async function createCompanyWithProfile(profile: { startedAt?: string; obligationsFrom?: string } = {}) {
   const client = await post('/api/v1/clients', {
     kind: 'COMPANY',
     name: 'Padaria Central, Lda.',
@@ -43,6 +43,7 @@ async function createCompanyWithProfile() {
       hasWithholding: false,
       isVatCashBasis: false,
       startedAt: '2020-01-01',
+      ...profile,
     })
     .expect(200)
 
@@ -68,6 +69,46 @@ describe('obligation generation and listing', () => {
     const listed = await request(app.getHttpServer()).get('/api/v1/obligations').set('Cookie', cookie).expect(200)
     expect(listed.body.length).toBeGreaterThan(0)
     expect(listed.body[0]).toMatchObject({ clientId, status: 'PENDING' })
+  })
+
+  it('proposes nothing from before the fiscal profile start date', async () => {
+    const clientId = await createCompanyWithProfile({ startedAt: '2026-05-15' })
+
+    const dryRun = await post(`/api/v1/obligations/generate?dryRun=true`, { asOf: '2026-10-04', clientId }).expect(201)
+
+    const vatLabels = (dryRun.body.toCreate as Array<{ definitionCode: string; periodLabel: string }>)
+      .filter((item) => item.definitionCode === 'VAT_MONTHLY_RETURN')
+      .map((item) => item.periodLabel)
+    expect(vatLabels).toEqual(['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'])
+  })
+
+  it('starts at obligationsFrom, and retracts what an earlier start had generated', async () => {
+    const clientId = await createCompanyWithProfile()
+    await post(`/api/v1/obligations/generate?dryRun=false`, { asOf: '2026-10-04', clientId }).expect(201)
+
+    await request(app.getHttpServer())
+      .put(`/api/v1/clients/${clientId}/fiscal-profile`)
+      .set('Cookie', cookie)
+      .set('X-Requested-With', 'ledger-hq')
+      .send({
+        hasOpenActivity: true,
+        vatRegime: 'MONTHLY',
+        incomeTax: 'CIT',
+        hasEmployees: false,
+        hasWithholding: false,
+        isVatCashBasis: false,
+        startedAt: '2020-01-01',
+        obligationsFrom: '2026-07-01',
+      })
+      .expect(200)
+
+    const dryRun = await post(`/api/v1/obligations/generate?dryRun=true`, { asOf: '2026-10-04', clientId }).expect(201)
+    const retractedVat = (dryRun.body.toRetract as Array<{ definitionCode: string; periodLabel: string }>)
+      .filter((item) => item.definitionCode === 'VAT_MONTHLY_RETURN')
+      .map((item) => item.periodLabel)
+      .sort()
+    expect(retractedVat).toEqual(['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06'])
+    expect(dryRun.body.toCreate).toEqual([])
   })
 
   it('filters the list by clientId', async () => {

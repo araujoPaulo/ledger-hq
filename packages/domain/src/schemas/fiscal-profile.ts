@@ -13,18 +13,27 @@ export const fiscalProfileInputSchema = z
     hasWithholding: z.boolean(),
     isVatCashBasis: z.boolean(),
     startedAt: isoDateSchema,
+    /**
+     * Where the obligation generator starts, when later than `startedAt`
+     * (e.g. a client taken over mid-activity whose earlier obligations were
+     * handled elsewhere). `null` means "from `startedAt`".
+     */
+    obligationsFrom: isoDateSchema.nullable().default(null),
   })
   .strict()
 
 export type FiscalProfileInput = z.infer<typeof fiscalProfileInputSchema>
 
 /**
- * Rules that depend on the client's kind, which the payload does not carry.
- * Returns every violation so a form can highlight all of them at once.
+ * Rules that depend on the client's kind or on today's date, neither of
+ * which the payload carries. `today` is an ISO date (`YYYY-MM-DD`), passed
+ * in rather than read so this stays a pure function. Returns every violation
+ * so a form can highlight all of them at once.
  */
 export function checkFiscalProfileConsistency(
   kind: ClientKind,
   input: FiscalProfileInput,
+  today: string,
 ): ErrorCode[] {
   const errors: ErrorCode[] = []
 
@@ -43,6 +52,15 @@ export function checkFiscalProfileConsistency(
 
   if (kind === 'INDIVIDUAL' && input.hasEmployees) {
     errors.push('fiscal_profile.employees_flag_not_allowed_for_individual')
+  }
+
+  // ISO dates compare correctly as strings.
+  if (input.obligationsFrom !== null) {
+    if (input.obligationsFrom < input.startedAt) {
+      errors.push('fiscal_profile.obligations_from_before_start')
+    } else if (input.obligationsFrom > today) {
+      errors.push('fiscal_profile.obligations_from_in_future')
+    }
   }
 
   return errors

@@ -44,7 +44,7 @@ describe('MobileTabBar', () => {
   it('labels every icon-only tab', async () => {
     renderTabBar()
 
-    expect(await screen.findByRole('link', { name: /prazos/i })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /resumo/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /clientes/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /cofre/i })).toBeInTheDocument()
   })
@@ -54,7 +54,7 @@ describe('MobileTabBar', () => {
   it('colours the active tab with the accent through aria-current', async () => {
     renderTabBar()
 
-    const active = await screen.findByRole('link', { name: /prazos/i })
+    const active = await screen.findByRole('link', { name: /resumo/i })
     expect(active).toHaveAttribute('aria-current', 'page')
     expect(active.className).toContain('aria-[current=page]:text-accent-700')
     expect(screen.getByRole('link', { name: /clientes/i }).className).toContain('text-muted')
@@ -67,7 +67,7 @@ describe('MobileTabBar', () => {
   it('pads for the iOS home indicator', async () => {
     renderTabBar()
 
-    const bar = (await screen.findByRole('link', { name: /prazos/i })).closest('nav')
+    const bar = (await screen.findByRole('link', { name: /resumo/i })).closest('nav')
     expect(bar?.className).toContain('safe-area-inset-bottom')
   })
 })
