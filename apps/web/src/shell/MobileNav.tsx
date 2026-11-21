@@ -5,7 +5,7 @@ import { AccountMenu } from './AccountMenu'
 import { ConnectionStatus } from './ConnectionStatus'
 
 const DESTINATIONS = [
-  { to: '/', labelKey: 'obligations:dashboard.title', icon: CalendarCheck },
+  { to: '/', labelKey: 'common:nav.summary', icon: CalendarCheck },
   { to: '/clients', labelKey: 'common:nav.clients', icon: Users },
   { to: '/vault/platforms', labelKey: 'common:nav.vault', icon: Vault },
   { to: '/reporting', labelKey: 'common:nav.reporting', icon: ChartColumn },

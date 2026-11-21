@@ -199,7 +199,7 @@ test('records an advance payment, sees it as credit, and spends it on a later ch
 
   // The debt is settled from credit alone, so the client never appears in
   // receivables. There is no "início"/"home" nav link (the sidebar's home
-  // destination is labelled "Prazos"), so returning to the home page
+  // destination is labelled "Resumo"), so returning to the home page
   // reuses this file's own idiom above.
   await page.goto('/')
   await expect(page.getByText('Talho do Bairro Crédito, Lda.')).toHaveCount(0)
