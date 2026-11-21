@@ -26,7 +26,8 @@ export const createRetainerPlanSchema = z
     amountCents: z.number().int().positive(),
     periodicity: z.enum(PERIODICITY_VALUES),
     dueDayOfMonth: z.number().int().min(1).max(28),
-    validFrom: isoDateSchema,
+    /** Omitted means today; a past date backfills every period since (master spec §8.1). */
+    validFrom: isoDateSchema.optional(),
   })
   .strict()
 

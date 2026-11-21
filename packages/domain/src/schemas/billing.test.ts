@@ -50,6 +50,11 @@ describe('createRetainerPlanSchema', () => {
     expect(result.success).toBe(true)
   })
 
+  it('accepts a plan with no validFrom — the service defaults it to today', () => {
+    const result = createRetainerPlanSchema.safeParse({ amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8 })
+    expect(result.success).toBe(true)
+  })
+
   it('rejects a dueDayOfMonth above 28', () => {
     const result = createRetainerPlanSchema.safeParse({
       amountCents: 9000,

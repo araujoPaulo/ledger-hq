@@ -233,7 +233,7 @@ export class BillingService {
         amountCents: input.amountCents,
         periodicity: input.periodicity,
         dueDayOfMonth: input.dueDayOfMonth,
-        validFrom: new Date(`${input.validFrom}T00:00:00Z`),
+        validFrom: new Date(`${input.validFrom ?? isoDate(new Date())}T00:00:00Z`),
         validTo: null,
       },
     })

@@ -129,6 +129,15 @@ describe('BillingService#createRetainerPlan', () => {
     expect(created).toMatchObject({ clientId: 'c1', amountCents: 9000, validTo: null })
   })
 
+  it('defaults validFrom to today when omitted', async () => {
+    const service = new BillingService(fakePrisma(), fakeClientsService(client))
+    const today = new Date().toISOString().slice(0, 10)
+
+    const created = await service.createRetainerPlan('c1', { amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8 })
+
+    expect(created.validFrom).toEqual(new Date(`${today}T00:00:00Z`))
+  })
+
   it('rejects a second plan while one is already in force', async () => {
     const prisma = fakePrisma({
       retainerPlan: { findFirst: vi.fn().mockResolvedValue({ id: 'existing' }), create: vi.fn() },
