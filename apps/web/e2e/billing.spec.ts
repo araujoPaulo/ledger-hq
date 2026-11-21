@@ -60,7 +60,8 @@ test('creates a retainer plan, charges a client, records a payment, and sees the
   }
   const previousMonth = monthLabel(-1)
   const currentMonth = monthLabel(0)
-  const today = now.toISOString().slice(0, 10)
+  // The form pre-fills the browser's local date, not UTC's.
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
   await ledger.getByRole('button', { name: /criar plano de retainer/i }).click()
   const planDialog = page.getByRole('dialog', { name: /criar plano de retainer/i })

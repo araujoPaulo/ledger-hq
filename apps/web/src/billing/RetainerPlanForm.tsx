@@ -8,6 +8,16 @@ import { Button, Dialog, Input, MoneyInput, Select } from '../ui'
 import { createRetainerPlan, renewRetainerPlan } from './api'
 import type { RetainerPlan } from './api'
 
+/**
+ * Today in the viewer's own timezone, as `YYYY-MM-DD`. Not `toISOString()`:
+ * just after midnight in Lisbon that is still yesterday in UTC, and on the 1st
+ * a UTC default would bill a whole extra month.
+ */
+function localToday(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 type Props = { clientId: string; currentPlan: RetainerPlan | null; onSaved: () => void }
 
 /** Renders inside `Dialog.Content`. Creates a plan, or renews the one in force. */
@@ -19,7 +29,7 @@ export function RetainerPlanForm({ clientId, currentPlan, onSaved }: Props) {
   const [periodicity, setPeriodicity] = useState<Periodicity>((currentPlan?.periodicity as Periodicity | undefined) ?? 'MONTHLY')
   const [dueDayOfMonth, setDueDayOfMonth] = useState(String(currentPlan?.dueDayOfMonth ?? 8))
   // Defaults to today; a past date backfills every period since (master spec §8.1).
-  const [effectiveDate, setEffectiveDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [effectiveDate, setEffectiveDate] = useState(localToday)
 
   const mutation = useMutation({
     mutationFn: (cents: number): Promise<RetainerPlan | { closedPlanId: string | null; newPlanId: string }> =>

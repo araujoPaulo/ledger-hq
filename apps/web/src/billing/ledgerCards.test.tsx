@@ -44,6 +44,11 @@ const plan = {
   validTo: null,
 }
 
+function localToday(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -114,7 +119,7 @@ describe('RetainerPlanCard', () => {
     renderWith(<RetainerPlanCard clientId="c1" onSaved={() => {}} />)
     await userEvent.click(await screen.findByRole('button', { name: /criar plano de retainer/i }))
     const dialog = await screen.findByRole('dialog', { name: /criar plano de retainer/i })
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localToday()
 
     expect(within(dialog).getByLabelText(/em vigor desde/i)).toHaveValue(today)
     await userEvent.type(within(dialog).getByLabelText(/valor mensal/i), '90,00')
@@ -123,13 +128,33 @@ describe('RetainerPlanCard', () => {
     await waitFor(() => expect(createRetainerPlan).toHaveBeenCalledWith('c1', expect.objectContaining({ validFrom: today })))
   })
 
+  it("pre-fills today's local date, not UTC's, just after midnight in Lisbon", async () => {
+    // 00:30 on 1 July in Lisbon (WEST, UTC+1) is still 30 June in UTC: a
+    // UTC "today" would pre-fill June and bill a whole extra month.
+    const originalTz = process.env.TZ
+    process.env.TZ = 'Europe/Lisbon'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2027-06-30T23:30:00Z'))
+    try {
+      getCurrentRetainerPlan.mockResolvedValue(null)
+      renderWith(<RetainerPlanCard clientId="c1" onSaved={() => {}} />)
+      await userEvent.click(await screen.findByRole('button', { name: /criar plano de retainer/i }))
+      const dialog = await screen.findByRole('dialog', { name: /criar plano de retainer/i })
+
+      expect(within(dialog).getByLabelText(/em vigor desde/i)).toHaveValue('2027-07-01')
+    } finally {
+      vi.useRealTimers()
+      process.env.TZ = originalTz
+    }
+  })
+
   it("pre-fills a fee update's effective date with today", async () => {
     getCurrentRetainerPlan.mockResolvedValue(plan)
     renderWith(<RetainerPlanCard clientId="c1" onSaved={() => {}} />)
     await userEvent.click(await screen.findByRole('button', { name: /atualizar valor/i }))
     const dialog = await screen.findByRole('dialog', { name: /atualizar valor/i })
 
-    expect(within(dialog).getByLabelText(/a partir de/i)).toHaveValue(new Date().toISOString().slice(0, 10))
+    expect(within(dialog).getByLabelText(/a partir de/i)).toHaveValue(localToday())
   })
 
   it('cannot be saved without a positive amount', async () => {
