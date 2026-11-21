@@ -131,8 +131,7 @@ describe('RetainerPlanCard', () => {
   it("pre-fills today's local date, not UTC's, just after midnight in Lisbon", async () => {
     // 00:30 on 1 July in Lisbon (WEST, UTC+1) is still 30 June in UTC: a
     // UTC "today" would pre-fill June and bill a whole extra month.
-    const originalTz = process.env.TZ
-    process.env.TZ = 'Europe/Lisbon'
+    vi.stubEnv('TZ', 'Europe/Lisbon')
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2027-06-30T23:30:00Z'))
     try {
@@ -144,7 +143,7 @@ describe('RetainerPlanCard', () => {
       expect(within(dialog).getByLabelText(/em vigor desde/i)).toHaveValue('2027-07-01')
     } finally {
       vi.useRealTimers()
-      process.env.TZ = originalTz
+      vi.unstubAllEnvs()
     }
   })
 
