@@ -150,6 +150,8 @@ model FiscalProfile {
   hasWithholding  Boolean
   isVatCashBasis  Boolean
   startedAt       DateTime  @db.Date
+  /// Optional user-chosen date, between startedAt and the day it was set, from which the generator proposes obligations.
+  obligationsFrom DateTime? @db.Date
   updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
   client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }

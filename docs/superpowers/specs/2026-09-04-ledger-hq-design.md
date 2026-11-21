@@ -246,6 +246,7 @@ model FiscalProfile {
   hasWithholding  Boolean
   isVatCashBasis  Boolean
   startedAt       DateTime @db.Date
+  obligationsFrom DateTime? @db.Date // optional; startedAt <= obligationsFrom <= the day it is set
 }
 ```
 
@@ -552,7 +553,10 @@ generate({ asOf })
 
 For each active client, it combines the fiscal profile with the catalog,
 produces every period of `asOf`'s calendar year (1 January to 31 December)
-and upserts instances. The year is the period's, not the deadline's: December's
+that ends on or after the profile's start, and upserts instances. The start is
+the later of `startedAt` and the optional, user-chosen `obligationsFrom` (for
+a client taken over mid-activity whose earlier obligations were handled
+elsewhere); the period the start falls inside is kept. The year is the period's, not the deadline's: December's
 VAT return and the year's Modelo 22 belong to that year even though they fall
 due in the next. On 1 January the daily cron moves on to the new year by
 itself; no lookahead is needed, since no deadline falls before 1 January of its
@@ -563,13 +567,17 @@ own period's year. Four invariants:
 2. **Never touches your work.** Instances with a status other than `PENDING` are
    left alone even if the rule changes.
 3. **Never rewrites the past.** Only creates instances for the current
-   calendar year. Its already-ended periods are created as `PENDING` (a client
-   onboarded in October gets January to September as overdue, for the operator
-   to mark done or waived); earlier years are never generated.
+   calendar year, and none whose period ended before the profile's start. Its
+   already-ended periods from the start onwards are created as `PENDING` (a
+   client whose profile starts in January but is onboarded in October gets
+   January to September as overdue, for the operator to mark done or waived);
+   earlier years are never generated.
 4. **Retracts forward only.** If a client stops having employees, future
    `PENDING` payroll instances of the current year disappear; past and
    already-handled ones remain, and so do a later year's, which 1 January
-   re-evaluates.
+   re-evaluates. The one exception: a `PENDING` instance whose period ended
+   before the profile's start was never owed, so it is retracted whatever its
+   age (e.g. after `startedAt` or `obligationsFrom` moves later).
 
 It runs on a daily cron inside the backend and on demand, including
 automatically after a fiscal profile is saved, with a preview of the changes

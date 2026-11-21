@@ -34,6 +34,7 @@ function defaultsFor(kind: ClientKind): FiscalProfileInput {
         hasWithholding: false,
         isVatCashBasis: false,
         startedAt: today,
+        obligationsFrom: null,
       }
     : {
         hasOpenActivity: false,
@@ -43,6 +44,7 @@ function defaultsFor(kind: ClientKind): FiscalProfileInput {
         hasWithholding: false,
         isVatCashBasis: false,
         startedAt: today,
+        obligationsFrom: null,
       }
 }
 
@@ -55,6 +57,7 @@ function toInput(profile: FiscalProfileResponse): FiscalProfileInput {
     hasWithholding: profile.hasWithholding,
     isVatCashBasis: profile.isVatCashBasis,
     startedAt: profile.startedAt,
+    obligationsFrom: profile.obligationsFrom,
   }
 }
 
@@ -70,7 +73,8 @@ export function FiscalProfileForm({ clientId, kind, initial, onSaved }: Props) {
 
   // Recomputed on every render, so it reflects the latest edit and never
   // reimplements a rule this function itself already owns.
-  const violations = checkFiscalProfileConsistency(kind, values)
+  const today = new Date().toISOString().slice(0, 10)
+  const violations = checkFiscalProfileConsistency(kind, values, today)
 
   const mutation = useMutation({
     mutationFn: (input: FiscalProfileInput) => putFiscalProfile(clientId, input),
@@ -122,6 +126,15 @@ export function FiscalProfileForm({ clientId, kind, initial, onSaved }: Props) {
           label={t('clients:profile.startedAt')}
           value={values.startedAt}
           onChange={(event) => update('startedAt', event.target.value)}
+        />
+        <Input
+          type="date"
+          label={t('clients:profile.obligationsFrom')}
+          hint={t('clients:profile.obligationsFromHint')}
+          value={values.obligationsFrom ?? ''}
+          min={values.startedAt}
+          max={today}
+          onChange={(event) => update('obligationsFrom', event.target.value === '' ? null : event.target.value)}
         />
       </div>
 

@@ -156,6 +156,52 @@ describe('PUT /clients/:id/fiscal-profile', () => {
   it('returns not found for an unknown client', async () => {
     await putProfile('0192f1a0-0000-7000-8000-0000000000ff', companyProfile).expect(404)
   })
+
+  describe('obligationsFrom', () => {
+    async function createCompany(): Promise<string> {
+      return createClient({ kind: 'COMPANY', name: 'Padaria Central, Lda.', taxId: '501442600', accounting: 'ORGANIZED', legalForm: 'LDA' })
+    }
+
+    function isoDaysFromToday(days: number): string {
+      const date = new Date()
+      date.setUTCDate(date.getUTCDate() + days)
+      return date.toISOString().slice(0, 10)
+    }
+
+    it('is null when omitted', async () => {
+      const response = await putProfile(await createCompany(), companyProfile).expect(200)
+
+      expect(response.body.obligationsFrom).toBeNull()
+    })
+
+    it('stores and returns a date between the start date and today', async () => {
+      const clientId = await createCompany()
+
+      await putProfile(clientId, { ...companyProfile, obligationsFrom: '2024-07-01' }).expect(200)
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/clients/${clientId}/fiscal-profile`)
+        .set('Cookie', cookie)
+        .expect(200)
+
+      expect(response.body.obligationsFrom).toBe('2024-07-01')
+    })
+
+    it('rejects a date before the start date', async () => {
+      const response = await putProfile(await createCompany(), { ...companyProfile, obligationsFrom: '2019-12-31' }).expect(422)
+
+      expect(response.body.error.params.issues).toEqual([
+        { path: 'obligationsFrom', code: 'fiscal_profile.obligations_from_before_start' },
+      ])
+    })
+
+    it('rejects a date after today', async () => {
+      const response = await putProfile(await createCompany(), { ...companyProfile, obligationsFrom: isoDaysFromToday(1) }).expect(422)
+
+      expect(response.body.error.params.issues).toEqual([
+        { path: 'obligationsFrom', code: 'fiscal_profile.obligations_from_in_future' },
+      ])
+    })
+  })
 })
 
 describe('GET /clients/:id/fiscal-profile', () => {

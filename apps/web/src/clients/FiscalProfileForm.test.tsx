@@ -56,6 +56,7 @@ const profile = {
   hasWithholding: false,
   isVatCashBasis: false,
   startedAt: '2024-01-01',
+  obligationsFrom: null,
 }
 
 beforeEach(() => {
@@ -109,6 +110,52 @@ describe('FiscalProfileForm', () => {
     })
     await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
   })
+
+  it('sends no obligationsFrom when left empty', async () => {
+    putFiscalProfile.mockResolvedValue({})
+    renderForm('COMPANY')
+
+    expect(screen.getByLabelText(/gerar obrigações desde/i)).toHaveValue('')
+    await userEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
+
+    await vi.waitFor(() => {
+      expect(putFiscalProfile).toHaveBeenCalledWith('1', expect.objectContaining({ obligationsFrom: null }))
+    })
+  })
+
+  it('sends the chosen obligationsFrom', async () => {
+    putFiscalProfile.mockResolvedValue({})
+    renderForm('COMPANY')
+
+    await userEvent.clear(screen.getByLabelText(/^início$/i))
+    await userEvent.type(screen.getByLabelText(/^início$/i), '2024-01-01')
+    await userEvent.type(screen.getByLabelText(/gerar obrigações desde/i), '2025-07-01')
+    await userEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
+
+    await vi.waitFor(() => {
+      expect(putFiscalProfile).toHaveBeenCalledWith('1', expect.objectContaining({ startedAt: '2024-01-01', obligationsFrom: '2025-07-01' }))
+    })
+  })
+
+  it('flags an obligationsFrom before the start date and blocks the save', async () => {
+    renderForm('COMPANY')
+
+    await userEvent.clear(screen.getByLabelText(/^início$/i))
+    await userEvent.type(screen.getByLabelText(/^início$/i), '2024-06-01')
+    await userEvent.type(screen.getByLabelText(/gerar obrigações desde/i), '2024-05-31')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/não pode ser anterior ao início/i)
+    expect(screen.getByRole('button', { name: /^guardar$/i })).toBeDisabled()
+  })
+
+  it('flags an obligationsFrom after today and blocks the save', async () => {
+    renderForm('COMPANY')
+
+    await userEvent.type(screen.getByLabelText(/gerar obrigações desde/i), '2999-01-01')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/não pode ser posterior a hoje/i)
+    expect(screen.getByRole('button', { name: /^guardar$/i })).toBeDisabled()
+  })
 })
 
 describe('FiscalProfileCard', () => {
@@ -126,6 +173,15 @@ describe('FiscalProfileCard', () => {
     expect(screen.getByText('Atividade aberta')).toBeInTheDocument()
     expect(screen.getByText('Tem empregados')).toBeInTheDocument()
     expect(screen.queryByText('Faz retenções na fonte')).not.toBeInTheDocument()
+    expect(screen.queryByText('Gerar obrigações desde')).not.toBeInTheDocument()
+  })
+
+  it('shows obligationsFrom only when one is set', async () => {
+    getFiscalProfile.mockResolvedValue({ ...profile, obligationsFrom: '2025-07-01' })
+    renderCard()
+
+    expect(await screen.findByText('Gerar obrigações desde')).toBeInTheDocument()
+    expect(screen.getByText('01/07/2025')).toBeInTheDocument()
   })
 
   it('opens the form, filled from the profile, from the Edit button', async () => {

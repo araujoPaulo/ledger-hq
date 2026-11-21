@@ -38,6 +38,8 @@
     "hasWithholding": "Faz retenções na fonte",
     "isVatCashBasis": "IVA de caixa",
     "startedAt": "Início",
+    "obligationsFrom": "Gerar obrigações desde",
+    "obligationsFromHint": "Opcional. Entre o início e hoje; vazio gera desde o início.",
     "empty": "Ainda não há perfil fiscal. Sem ele, o gerador não propõe obrigações.",
     "setUp": "Preencher",
     "openActivityCompany": "Uma empresa tem sempre atividade aberta."

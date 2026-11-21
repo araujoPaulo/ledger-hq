@@ -90,12 +90,20 @@ export class ObligationsService {
       const profile = await this.prisma.fiscalProfile.findUnique({ where: { clientId: client.id } })
       if (!profile) continue
 
+      // Nothing is owed before the fiscal profile starts, nor before the
+      // user-chosen obligationsFrom (already validated to be on or after
+      // startedAt, but taking the later of the two keeps the generator
+      // independent of that check). A period the start date falls inside is
+      // kept: the client was active for part of it.
+      const profileStart = laterOf(profile.startedAt, profile.obligationsFrom)
+      const windowStart = laterOf(yearStart, profileStart)
+
       const subject = toSubject(client.kind, profile)
       const existingInstances = await this.prisma.obligationInstance.findMany({ where: { clientId: client.id } })
 
       for (const entry of FISCAL_CATALOG) {
         const applies = appliesTo(entry, subject) && withinValidity(entry, input.asOf)
-        const periods = applies ? generatePeriods(entry.periodicity, yearStart, yearEnd) : []
+        const periods = applies ? generatePeriods(entry.periodicity, windowStart, yearEnd) : []
         const periodKeys = new Set(periods.map((period) => isoKey(period.start)))
 
         const existingForCode = existingInstances.filter((instance) => instance.definitionCode === entry.code)
@@ -111,16 +119,18 @@ export class ObligationsService {
           // periodKeys only spans asOf's calendar year — an instance outside
           // it (a past year's arrears, or a later year's left behind by the
           // old rolling horizon) would otherwise look indistinguishable from
-          // "the rule stopped applying." Retraction must stay forward-only
-          // (master spec §7.3, invariant 4) and within the window: only an
-          // instance of this year whose period hasn't ended yet can be
-          // retracted.
-          if (
-            instance.status === 'PENDING' &&
-            instance.periodEnd >= input.asOf &&
-            instance.periodStart <= yearEnd &&
-            !periodKeys.has(isoKey(instance.periodStart))
-          ) {
+          // "the rule stopped applying." Retraction for a rule change must
+          // stay forward-only (master spec §7.3, invariant 4) and within the
+          // window: only an instance of this year whose period hasn't ended
+          // yet can be retracted on those grounds.
+          const ruleStoppedApplying =
+            instance.periodEnd >= input.asOf && instance.periodStart <= yearEnd && !periodKeys.has(isoKey(instance.periodStart))
+          // The one exception to forward-only: a period that ended before
+          // the profile's start was never owed, so it goes whatever its age
+          // (e.g. generated before startedAt or obligationsFrom moved later).
+          const endedBeforeStart = instance.periodEnd < profileStart
+
+          if (instance.status === 'PENDING' && (ruleStoppedApplying || endedBeforeStart)) {
             toRetract.push({
               id: instance.id,
               clientId: client.id,
@@ -274,6 +284,10 @@ function toSubject(kind: ClientKind, profile: FiscalProfile): ObligationSubject 
     hasWithholding: profile.hasWithholding,
     isVatCashBasis: profile.isVatCashBasis,
   }
+}
+
+function laterOf(date: Date, other: Date | null): Date {
+  return other !== null && other > date ? other : date
 }
 
 function isoKey(date: Date): string {

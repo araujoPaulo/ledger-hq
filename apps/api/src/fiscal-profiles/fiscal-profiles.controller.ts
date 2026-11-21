@@ -7,8 +7,9 @@ import { SessionGuard } from '../auth/session.guard.js'
 import { FiscalProfilesService } from './fiscal-profiles.service.js'
 import type { FiscalProfile } from '../generated/prisma/client.js'
 
-type FiscalProfileResponse = Omit<FiscalProfile, 'startedAt' | 'updatedAt'> & {
+type FiscalProfileResponse = Omit<FiscalProfile, 'startedAt' | 'obligationsFrom' | 'updatedAt'> & {
   startedAt: string
+  obligationsFrom: string | null
   updatedAt: string
 }
 
@@ -16,6 +17,7 @@ function toResponse(profile: FiscalProfile): FiscalProfileResponse {
   return {
     ...profile,
     startedAt: profile.startedAt.toISOString().slice(0, 10),
+    obligationsFrom: profile.obligationsFrom?.toISOString().slice(0, 10) ?? null,
     updatedAt: profile.updatedAt.toISOString(),
   }
 }

@@ -22,7 +22,9 @@
     "open_activity_required_for_company": "Uma empresa tem sempre atividade aberta.",
     "vat_regime_requires_open_activity": "Sem atividade aberta, o regime de IVA tem de ser «Não aplicável».",
     "income_tax_incompatible_with_kind": "O imposto sobre o rendimento não corresponde ao tipo de cliente.",
-    "employees_flag_not_allowed_for_individual": "Uma pessoa singular não pode ter empregados neste registo."
+    "employees_flag_not_allowed_for_individual": "Uma pessoa singular não pode ter empregados neste registo.",
+    "obligations_from_before_start": "A data de geração de obrigações não pode ser anterior ao início.",
+    "obligations_from_in_future": "A data de geração de obrigações não pode ser posterior a hoje."
   },
   "employment": {
     "employer_must_be_company": "O empregador tem de ser uma empresa.",

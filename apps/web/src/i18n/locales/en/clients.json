@@ -38,6 +38,8 @@
     "hasWithholding": "Withholds tax at source",
     "isVatCashBasis": "VAT cash basis",
     "startedAt": "Start date",
+    "obligationsFrom": "Generate obligations from",
+    "obligationsFromHint": "Optional. Between the start date and today; empty generates from the start date.",
     "empty": "No fiscal profile yet. Without one, the generator proposes no obligations.",
     "setUp": "Set up",
     "openActivityCompany": "A company always has open activity."

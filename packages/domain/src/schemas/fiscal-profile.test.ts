@@ -10,6 +10,7 @@ const companyProfile: FiscalProfileInput = {
   hasWithholding: true,
   isVatCashBasis: false,
   startedAt: '2020-01-01',
+  obligationsFrom: null,
 }
 
 const employeeProfile: FiscalProfileInput = {
@@ -20,7 +21,10 @@ const employeeProfile: FiscalProfileInput = {
   hasWithholding: false,
   isVatCashBasis: false,
   startedAt: '2021-03-01',
+  obligationsFrom: null,
 }
+
+const TODAY = '2026-11-21'
 
 const sideActivityProfile: FiscalProfileInput = {
   ...employeeProfile,
@@ -34,6 +38,19 @@ describe('fiscalProfileInputSchema', () => {
     expect(fiscalProfileInputSchema.safeParse(companyProfile).success).toBe(true)
   })
 
+  it('defaults a missing obligationsFrom to null', () => {
+    const { obligationsFrom: _omitted, ...withoutObligationsFrom } = companyProfile
+    const result = fiscalProfileInputSchema.safeParse(withoutObligationsFrom)
+
+    expect(result.success && result.data.obligationsFrom).toBeNull()
+  })
+
+  it('accepts an explicit obligationsFrom date', () => {
+    const result = fiscalProfileInputSchema.safeParse({ ...companyProfile, obligationsFrom: '2026-07-01' })
+
+    expect(result.success && result.data.obligationsFrom).toBe('2026-07-01')
+  })
+
   it('rejects an unknown VAT regime', () => {
     const result = fiscalProfileInputSchema.safeParse({ ...companyProfile, vatRegime: 'YEARLY' })
 
@@ -43,22 +60,22 @@ describe('fiscalProfileInputSchema', () => {
 
 describe('checkFiscalProfileConsistency', () => {
   it('accepts a company profile', () => {
-    expect(checkFiscalProfileConsistency('COMPANY', companyProfile)).toEqual([])
+    expect(checkFiscalProfileConsistency('COMPANY', companyProfile, TODAY)).toEqual([])
   })
 
   it('accepts an employee with no activity of their own', () => {
-    expect(checkFiscalProfileConsistency('INDIVIDUAL', employeeProfile)).toEqual([])
+    expect(checkFiscalProfileConsistency('INDIVIDUAL', employeeProfile, TODAY)).toEqual([])
   })
 
   it('accepts an employee who also invoices independently', () => {
-    expect(checkFiscalProfileConsistency('INDIVIDUAL', sideActivityProfile)).toEqual([])
+    expect(checkFiscalProfileConsistency('INDIVIDUAL', sideActivityProfile, TODAY)).toEqual([])
   })
 
   it('requires open activity on a company', () => {
     const errors = checkFiscalProfileConsistency('COMPANY', {
       ...companyProfile,
       hasOpenActivity: false,
-    })
+    }, TODAY)
 
     expect(errors).toContain('fiscal_profile.open_activity_required_for_company')
   })
@@ -67,7 +84,7 @@ describe('checkFiscalProfileConsistency', () => {
     const errors = checkFiscalProfileConsistency('INDIVIDUAL', {
       ...employeeProfile,
       vatRegime: 'QUARTERLY',
-    })
+    }, TODAY)
 
     expect(errors).toContain('fiscal_profile.vat_regime_requires_open_activity')
   })
@@ -76,7 +93,7 @@ describe('checkFiscalProfileConsistency', () => {
     const errors = checkFiscalProfileConsistency('INDIVIDUAL', {
       ...employeeProfile,
       incomeTax: 'CIT',
-    })
+    }, TODAY)
 
     expect(errors).toContain('fiscal_profile.income_tax_incompatible_with_kind')
   })
@@ -85,7 +102,7 @@ describe('checkFiscalProfileConsistency', () => {
     const errors = checkFiscalProfileConsistency('COMPANY', {
       ...companyProfile,
       incomeTax: 'PIT_CATEGORY_B',
-    })
+    }, TODAY)
 
     expect(errors).toContain('fiscal_profile.income_tax_incompatible_with_kind')
   })
@@ -94,7 +111,7 @@ describe('checkFiscalProfileConsistency', () => {
     const errors = checkFiscalProfileConsistency('INDIVIDUAL', {
       ...employeeProfile,
       hasEmployees: true,
-    })
+    }, TODAY)
 
     expect(errors).toContain('fiscal_profile.employees_flag_not_allowed_for_individual')
   })
@@ -104,8 +121,26 @@ describe('checkFiscalProfileConsistency', () => {
       ...employeeProfile,
       incomeTax: 'CIT',
       hasEmployees: true,
-    })
+    }, TODAY)
 
     expect(errors).toHaveLength(2)
+  })
+
+  it('accepts an obligationsFrom between the start date and today, both ends included', () => {
+    for (const obligationsFrom of ['2020-01-01', '2025-06-15', TODAY]) {
+      expect(checkFiscalProfileConsistency('COMPANY', { ...companyProfile, obligationsFrom }, TODAY)).toEqual([])
+    }
+  })
+
+  it('rejects an obligationsFrom before the fiscal profile start date', () => {
+    const errors = checkFiscalProfileConsistency('COMPANY', { ...companyProfile, obligationsFrom: '2019-12-31' }, TODAY)
+
+    expect(errors).toEqual(['fiscal_profile.obligations_from_before_start'])
+  })
+
+  it('rejects an obligationsFrom after today', () => {
+    const errors = checkFiscalProfileConsistency('COMPANY', { ...companyProfile, obligationsFrom: '2026-11-22' }, TODAY)
+
+    expect(errors).toEqual(['fiscal_profile.obligations_from_in_future'])
   })
 })

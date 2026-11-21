@@ -22,7 +22,9 @@
     "open_activity_required_for_company": "A company always has open activity.",
     "vat_regime_requires_open_activity": "Without open activity the VAT regime must be “Not applicable”.",
     "income_tax_incompatible_with_kind": "The income tax type does not match the client kind.",
-    "employees_flag_not_allowed_for_individual": "An individual cannot have employees in this register."
+    "employees_flag_not_allowed_for_individual": "An individual cannot have employees in this register.",
+    "obligations_from_before_start": "The obligations start date cannot be before the start date.",
+    "obligations_from_in_future": "The obligations start date cannot be after today."
   },
   "employment": {
     "employer_must_be_company": "The employer must be a company.",
