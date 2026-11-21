@@ -78,10 +78,10 @@ export class BillingService {
   ) {}
 
   /**
-   * For each in-force `RetainerPlan`, creates one `Charge` per period that
+   * For each started `RetainerPlan`, creates one `Charge` per period that
    * has already started (master spec §8.1) — unlike the obligation
    * generator, no future horizon, and no retraction: a closed plan simply
-   * stops producing new periods once `asOf` moves past its `validTo`.
+   * stops producing new periods past its `validTo`.
    */
   async generateCharges(input: { asOf: Date; clientId?: string }, dryRun: boolean): Promise<GenerateChargesResult> {
     const clients = input.clientId
@@ -91,8 +91,14 @@ export class BillingService {
     const toCreate: Array<{ clientId: string; planId: string; period: { start: Date; label: string }; amountCents: number; dueOn: Date }> = []
 
     for (const client of clients) {
+      // Every plan that has started, closed ones included: a plan closed
+      // before its periods were ever generated (a create whose generation
+      // failed, renewed before the nightly run) still owes them. Each plan is
+      // billed only up to its own `validTo`, and oldest first, so a closed
+      // plan claims the period a mid-period fee change falls inside.
       const plans = await this.prisma.retainerPlan.findMany({
-        where: { clientId: client.id, validFrom: { lte: input.asOf }, OR: [{ validTo: null }, { validTo: { gte: input.asOf } }] },
+        where: { clientId: client.id, validFrom: { lte: input.asOf } },
+        orderBy: { validFrom: 'asc' },
       })
 
       // Scoped to the client, NOT to the plan: a fee change mid-period creates
@@ -104,7 +110,8 @@ export class BillingService {
       const existingLabels = new Set(existing.map((charge) => charge.periodLabel))
 
       for (const plan of plans) {
-        const periods = chargePeriodsSince(plan.periodicity, plan.validFrom, input.asOf)
+        const billedUntil = plan.validTo !== null && plan.validTo < input.asOf ? plan.validTo : input.asOf
+        const periods = chargePeriodsSince(plan.periodicity, plan.validFrom, billedUntil)
 
         for (const period of periods) {
           if (existingLabels.has(period.label)) continue
@@ -226,17 +233,20 @@ export class BillingService {
     const existing = await this.prisma.retainerPlan.findFirst({ where: { clientId, validTo: null } })
     if (existing) throw new AppError('billing.plan_overlap', {}, 409)
 
-    return this.prisma.retainerPlan.create({
+    const plan = await this.prisma.retainerPlan.create({
       data: {
         id: uuidv7(),
         clientId,
         amountCents: input.amountCents,
         periodicity: input.periodicity,
         dueDayOfMonth: input.dueDayOfMonth,
-        validFrom: new Date(`${input.validFrom}T00:00:00Z`),
+        validFrom: new Date(`${input.validFrom ?? isoDate(new Date())}T00:00:00Z`),
         validTo: null,
       },
     })
+
+    await this.generateChargesAfterPlanChange(clientId)
+    return plan
   }
 
   /**
@@ -250,7 +260,7 @@ export class BillingService {
   async renewRetainerPlan(clientId: string, input: RenewRetainerPlanInput): Promise<{ closedPlanId: string | null; newPlanId: string }> {
     const effectiveFrom = new Date(`${input.effectiveFrom}T00:00:00Z`)
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const current = await tx.retainerPlan.findFirst({ where: { clientId, validTo: null } })
 
       if (current) {
@@ -273,6 +283,27 @@ export class BillingService {
 
       return { closedPlanId: current?.id ?? null, newPlanId: created.id }
     })
+
+    await this.generateChargesAfterPlanChange(clientId)
+    return result
+  }
+
+  /**
+   * Bills a plan's started periods at once instead of waiting for the nightly
+   * cron, so a back-dated plan (an existing client being onboarded) shows its
+   * arrears immediately. Runs after the plan write has committed, never inside
+   * it: the plan is the owner's decision and must stand even if generation
+   * fails — the cron re-runs the same idempotent generator and heals it.
+   */
+  private async generateChargesAfterPlanChange(clientId: string): Promise<void> {
+    try {
+      await this.generateCharges({ asOf: new Date(), clientId }, false)
+    } catch (error) {
+      this.logger.error(
+        `generateChargesAfterPlanChange: failed for client ${clientId}`,
+        error instanceof Error ? error.stack : String(error),
+      )
+    }
   }
 
   async getCurrentRetainerPlan(clientId: string): Promise<RetainerPlan | null> {

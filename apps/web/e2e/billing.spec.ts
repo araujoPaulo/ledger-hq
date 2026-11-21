@@ -49,11 +49,27 @@ test('creates a retainer plan, charges a client, records a payment, and sees the
   const ledger = page.getByRole('region', { name: /^faturação$/i })
 
   // Create the retainer plan from its card. Amounts are typed in euros.
+  // Back-dated to the first of last month, due on day 1: creating the plan
+  // generates its charges at once (master spec §8.1), and both of them —
+  // last month's and this month's — have already fallen due, whatever day
+  // of the month this runs on.
+  const now = new Date()
+  const monthLabel = (offset: number) => {
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1))
+    return `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, '0')}`
+  }
+  const previousMonth = monthLabel(-1)
+  const currentMonth = monthLabel(0)
+  // The form pre-fills the browser's local date, not UTC's.
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
   await ledger.getByRole('button', { name: /criar plano de retainer/i }).click()
   const planDialog = page.getByRole('dialog', { name: /criar plano de retainer/i })
   await planDialog.getByLabel(/valor mensal/i).fill('90,00')
-  await planDialog.getByLabel(/dia de vencimento/i).fill('8')
-  await planDialog.getByLabel(/em vigor desde/i).fill('2026-01-01')
+  await planDialog.getByLabel(/dia de vencimento/i).fill('1')
+  // Pre-filled with today; replaced with the back-dated start.
+  await expect(planDialog.getByLabel(/em vigor desde/i)).toHaveValue(today)
+  await planDialog.getByLabel(/em vigor desde/i).fill(`${previousMonth}-01`)
   await planDialog.getByRole('button', { name: /^guardar$/i }).click()
 
   // The card now offers to update the fee instead of creating a plan —
@@ -62,21 +78,10 @@ test('creates a retainer plan, charges a client, records a payment, and sees the
   await expect(ledger.getByRole('button', { name: /atualizar valor/i })).toBeVisible()
   await expect(ledger.getByRole('button', { name: /criar plano de retainer/i })).toHaveCount(0)
 
-  // The plan itself only produces charges when the daily generation runs
-  // (BillingCron, 3AM) — there is no per-client "generate now" control in
-  // the UI, so this spec raises the charge it then pays through the ad-hoc
-  // route, which lands the same Charge row the generator would and drives
-  // the identical propose/confirm allocation path.
-  await ledger.getByRole('button', { name: /nova cobrança avulsa/i }).click()
-  const chargeDialog = page.getByRole('dialog', { name: /nova cobrança avulsa/i })
-  await chargeDialog.getByLabel(/descrição/i).fill('Consultoria extra')
-  await chargeDialog.getByLabel(/^valor$/i).fill('150,00')
-  // Dated in the past on purpose: receivables is an ageing list of charges
-  // that are already due, so a future-dated charge would (correctly) not
-  // appear there and the assertion below would prove nothing.
-  await chargeDialog.getByLabel(/data de vencimento/i).fill('2026-09-01')
-  await chargeDialog.getByRole('button', { name: /^criar$/i }).click()
-  await expect(ledger.getByText(/consultoria extra/i)).toBeVisible()
+  // Both periods since the plan's start are already on the ledger — no
+  // waiting for the nightly generation run.
+  await expect(ledger.getByText(`Retainer — ${previousMonth}`)).toBeVisible()
+  await expect(ledger.getByText(`Retainer — ${currentMonth}`)).toBeVisible()
 
   // Unpaid, the client is on the home page's receivables list.
   const receivables = page.locator('section').filter({ has: page.getByRole('heading', { name: /recebíveis/i }) })
@@ -87,24 +92,23 @@ test('creates a retainer plan, charges a client, records a payment, and sees the
   await receivables.getByRole('link', { name: /padaria central faturação/i }).click()
   await expect(page).toHaveURL(/\?tab=billing/)
 
-  // Record a payment covering the charge in full.
+  // Record a payment covering both charges in full.
   await ledger.getByRole('button', { name: /registar pagamento/i }).click()
   const payment = page.getByRole('dialog', { name: /registar pagamento/i })
-  await payment.getByLabel(/^valor$/i).fill('150,00')
-  await payment.getByLabel(/data de receção/i).fill('2026-09-05')
+  await payment.getByLabel(/^valor$/i).fill('180,00')
+  await payment.getByLabel(/data de receção/i).fill(today)
   await payment.getByRole('button', { name: /propor alocação/i }).click()
 
-  // The proposal is the single open charge, for the full amount.
-  await expect(payment.getByText(/consultoria extra/i)).toBeVisible()
-  await expect(payment.getByText(/150,00/)).toBeVisible()
+  // The proposal is both open charges, oldest first.
+  await expect(payment.getByText(`Retainer — ${previousMonth}`)).toBeVisible()
+  await expect(payment.getByText(`Retainer — ${currentMonth}`)).toBeVisible()
   await payment.getByRole('button', { name: /^confirmar$/i }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
 
   // The ledger now carries both sides of the movement.
   await expect(ledger.getByText(/pagamento — transfer/i)).toBeVisible()
-  await expect(ledger.getByText(/consultoria extra/i)).toBeVisible()
 
-  // And the charge being fully allocated clears the client from receivables.
+  // And both charges being fully allocated clears the client from receivables.
   await page.goto('/')
   await expect(receivables.getByText(/padaria central faturação/i)).toHaveCount(0)
 })

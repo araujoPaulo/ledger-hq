@@ -1,12 +1,22 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { PERIODICITY_VALUES } from '@ledger-hq/domain'
+import { EARLIEST_PLAN_START, PERIODICITY_VALUES } from '@ledger-hq/domain'
 import type { Periodicity } from '@ledger-hq/domain'
 import { ErrorMessage } from '../shell/ErrorMessage'
 import { Button, Dialog, Input, MoneyInput, Select } from '../ui'
 import { createRetainerPlan, renewRetainerPlan } from './api'
 import type { RetainerPlan } from './api'
+
+/**
+ * Today in the viewer's own timezone, as `YYYY-MM-DD`. Not `toISOString()`:
+ * just after midnight in Lisbon that is still yesterday in UTC, and on the 1st
+ * a UTC default would bill a whole extra month.
+ */
+function localToday(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
 
 type Props = { clientId: string; currentPlan: RetainerPlan | null; onSaved: () => void }
 
@@ -18,7 +28,8 @@ export function RetainerPlanForm({ clientId, currentPlan, onSaved }: Props) {
   const [amountCents, setAmountCents] = useState<number | null>(null)
   const [periodicity, setPeriodicity] = useState<Periodicity>((currentPlan?.periodicity as Periodicity | undefined) ?? 'MONTHLY')
   const [dueDayOfMonth, setDueDayOfMonth] = useState(String(currentPlan?.dueDayOfMonth ?? 8))
-  const [effectiveDate, setEffectiveDate] = useState('')
+  // Defaults to today; a past date backfills every period since (master spec §8.1).
+  const [effectiveDate, setEffectiveDate] = useState(localToday)
 
   const mutation = useMutation({
     mutationFn: (cents: number): Promise<RetainerPlan | { closedPlanId: string | null; newPlanId: string }> =>
@@ -80,6 +91,7 @@ export function RetainerPlanForm({ clientId, currentPlan, onSaved }: Props) {
       <Input
         type="date"
         required
+        min={EARLIEST_PLAN_START}
         label={t(isRenewal ? 'billing:retainerPlan.effectiveFrom.label' : 'billing:retainerPlan.validFrom.label')}
         value={effectiveDate}
         onChange={(event) => setEffectiveDate(event.target.value)}

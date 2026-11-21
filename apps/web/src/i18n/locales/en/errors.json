@@ -55,7 +55,8 @@
     "allocation_exceeds_charge_balance": "The allocated amount exceeds this charge's open balance.",
     "allocation_exceeds_available_credit": "The amount exceeds the credit available on this payment.",
     "plan_overlap": "A retainer plan is already in force for this client.",
-    "charge_already_written_off": "This charge has already been written off."
+    "charge_already_written_off": "This charge has already been written off.",
+    "plan_start_too_early": "A plan cannot start before 1 January 2000."
   },
   "attachments": {
     "type_not_allowed": "Only PDF, PNG and JPEG files are accepted.",

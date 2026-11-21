@@ -44,6 +44,11 @@ const plan = {
   validTo: null,
 }
 
+function localToday(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -62,6 +67,7 @@ describe('RetainerPlanCard', () => {
     await userEvent.type(within(dialog).getByLabelText(/valor mensal/i), '90,00')
     await userEvent.clear(within(dialog).getByLabelText(/dia de vencimento/i))
     await userEvent.type(within(dialog).getByLabelText(/dia de vencimento/i), '8')
+    await userEvent.clear(within(dialog).getByLabelText(/em vigor desde/i))
     await userEvent.type(within(dialog).getByLabelText(/em vigor desde/i), '2026-01-01')
     await userEvent.click(within(dialog).getByRole('button', { name: /^guardar$/i }))
 
@@ -90,6 +96,7 @@ describe('RetainerPlanCard', () => {
     expect(within(dialog).queryByLabelText(/periodicidade/i)).not.toBeInTheDocument()
     // "Novo valor" alone: the date is "Novo valor a partir de".
     await userEvent.type(within(dialog).getByLabelText(/^novo valor$/i), '120')
+    await userEvent.clear(within(dialog).getByLabelText(/a partir de/i))
     await userEvent.type(within(dialog).getByLabelText(/a partir de/i), '2026-06-01')
     await userEvent.click(within(dialog).getByRole('button', { name: /^guardar$/i }))
 
@@ -106,6 +113,49 @@ describe('RetainerPlanCard', () => {
     expect(await screen.findByText('01/01/2026')).toBeInTheDocument()
   })
 
+  it('pre-fills the start date with today', async () => {
+    getCurrentRetainerPlan.mockResolvedValue(null)
+    createRetainerPlan.mockResolvedValue(plan)
+    renderWith(<RetainerPlanCard clientId="c1" onSaved={() => {}} />)
+    await userEvent.click(await screen.findByRole('button', { name: /criar plano de retainer/i }))
+    const dialog = await screen.findByRole('dialog', { name: /criar plano de retainer/i })
+    const today = localToday()
+
+    expect(within(dialog).getByLabelText(/em vigor desde/i)).toHaveValue(today)
+    await userEvent.type(within(dialog).getByLabelText(/valor mensal/i), '90,00')
+    await userEvent.click(within(dialog).getByRole('button', { name: /^guardar$/i }))
+
+    await waitFor(() => expect(createRetainerPlan).toHaveBeenCalledWith('c1', expect.objectContaining({ validFrom: today })))
+  })
+
+  it("pre-fills today's local date, not UTC's, just after midnight in Lisbon", async () => {
+    // 00:30 on 1 July in Lisbon (WEST, UTC+1) is still 30 June in UTC: a
+    // UTC "today" would pre-fill June and bill a whole extra month.
+    vi.stubEnv('TZ', 'Europe/Lisbon')
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2027-06-30T23:30:00Z'))
+    try {
+      getCurrentRetainerPlan.mockResolvedValue(null)
+      renderWith(<RetainerPlanCard clientId="c1" onSaved={() => {}} />)
+      await userEvent.click(await screen.findByRole('button', { name: /criar plano de retainer/i }))
+      const dialog = await screen.findByRole('dialog', { name: /criar plano de retainer/i })
+
+      expect(within(dialog).getByLabelText(/em vigor desde/i)).toHaveValue('2027-07-01')
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it("pre-fills a fee update's effective date with today", async () => {
+    getCurrentRetainerPlan.mockResolvedValue(plan)
+    renderWith(<RetainerPlanCard clientId="c1" onSaved={() => {}} />)
+    await userEvent.click(await screen.findByRole('button', { name: /atualizar valor/i }))
+    const dialog = await screen.findByRole('dialog', { name: /atualizar valor/i })
+
+    expect(within(dialog).getByLabelText(/a partir de/i)).toHaveValue(localToday())
+  })
+
   it('cannot be saved without a positive amount', async () => {
     getCurrentRetainerPlan.mockResolvedValue(null)
     renderWith(<RetainerPlanCard clientId="c1" onSaved={() => {}} />)
@@ -113,6 +163,7 @@ describe('RetainerPlanCard', () => {
     await userEvent.click(await screen.findByRole('button', { name: /criar plano de retainer/i }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByLabelText(/valor mensal/i), '0')
+    await userEvent.clear(within(dialog).getByLabelText(/em vigor desde/i))
     await userEvent.type(within(dialog).getByLabelText(/em vigor desde/i), '2026-01-01')
 
     expect(within(dialog).getByRole('button', { name: /^guardar$/i })).toBeDisabled()
@@ -129,6 +180,7 @@ describe('RetainerPlanCard failures', () => {
     await userEvent.click(await screen.findByRole('button', { name: /criar plano de retainer/i }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.type(within(dialog).getByLabelText(/valor mensal/i), '90,00')
+    await userEvent.clear(within(dialog).getByLabelText(/em vigor desde/i))
     await userEvent.type(within(dialog).getByLabelText(/em vigor desde/i), '2026-01-01')
     await userEvent.click(within(dialog).getByRole('button', { name: /^guardar$/i }))
 

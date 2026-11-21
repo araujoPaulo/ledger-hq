@@ -117,7 +117,7 @@ export function applyCredit(clientId: string, dryRun: boolean, allocations?: Pro
 
 export function createRetainerPlan(
   clientId: string,
-  input: { amountCents: number; periodicity: string; dueDayOfMonth: number; validFrom: string },
+  input: { amountCents: number; periodicity: string; dueDayOfMonth: number; validFrom?: string },
 ): Promise<RetainerPlan> {
   return apiFetch(`/billing/clients/${clientId}/retainer-plan`, { method: 'POST', body: input })
 }
