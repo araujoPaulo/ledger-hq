@@ -18,7 +18,8 @@ export function RetainerPlanForm({ clientId, currentPlan, onSaved }: Props) {
   const [amountCents, setAmountCents] = useState<number | null>(null)
   const [periodicity, setPeriodicity] = useState<Periodicity>((currentPlan?.periodicity as Periodicity | undefined) ?? 'MONTHLY')
   const [dueDayOfMonth, setDueDayOfMonth] = useState(String(currentPlan?.dueDayOfMonth ?? 8))
-  const [effectiveDate, setEffectiveDate] = useState('')
+  // Defaults to today; a past date backfills every period since (master spec §8.1).
+  const [effectiveDate, setEffectiveDate] = useState(() => new Date().toISOString().slice(0, 10))
 
   const mutation = useMutation({
     mutationFn: (cents: number): Promise<RetainerPlan | { closedPlanId: string | null; newPlanId: string }> =>

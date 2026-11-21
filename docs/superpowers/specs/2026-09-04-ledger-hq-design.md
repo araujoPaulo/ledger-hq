@@ -647,6 +647,9 @@ begins.
   of short months.
 - Idempotency comes from `@@unique(clientId, planId, periodLabel)`.
 - Runs on the same daily cron as the obligation generator.
+- Also runs for the client right after a plan is created or renewed, so a
+  back-dated plan's arrears exist immediately. A failure there never fails
+  the plan write; the cron heals it. A plan's start date defaults to today.
 - Archiving a client closes the plan with `validTo`, and no further charges are
   created.
 - A retainer plan is optional. An individual whose personal filings are covered
