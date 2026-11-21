@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { Logger } from '@nestjs/common'
 import type { PrismaService } from '../common/prisma.service.js'
 import type { ClientsService } from '../clients/clients.service.js'
 import { BillingService } from './billing.service.js'
@@ -138,6 +139,27 @@ describe('BillingService#createRetainerPlan', () => {
     expect(created.validFrom).toEqual(new Date(`${today}T00:00:00Z`))
   })
 
+  it("generates the client's charges right after creating the plan", async () => {
+    const service = new BillingService(fakePrisma(), fakeClientsService(client))
+    const generate = vi.spyOn(service, 'generateCharges').mockResolvedValue({ toCreate: [], creditToAllocate: [], created: 0, allocated: 0 })
+
+    await service.createRetainerPlan('c1', { amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: '2026-09-01' })
+
+    expect(generate).toHaveBeenCalledWith({ asOf: expect.any(Date), clientId: 'c1' }, false)
+  })
+
+  it('still returns the plan when charge generation fails', async () => {
+    const service = new BillingService(fakePrisma(), fakeClientsService(client))
+    vi.spyOn(service, 'generateCharges').mockRejectedValue(new Error('boom'))
+    const loggerError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+
+    const created = await service.createRetainerPlan('c1', { amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: '2026-09-01' })
+
+    expect(created).toMatchObject({ clientId: 'c1', amountCents: 9000 })
+    expect(loggerError).toHaveBeenCalledTimes(1)
+    loggerError.mockRestore()
+  })
+
   it('rejects a second plan while one is already in force', async () => {
     const prisma = fakePrisma({
       retainerPlan: { findFirst: vi.fn().mockResolvedValue({ id: 'existing' }), create: vi.fn() },
@@ -190,6 +212,39 @@ describe('BillingService#renewRetainerPlan', () => {
 
     expect(result).toEqual({ closedPlanId: null, newPlanId: 'new' })
     expect(tx.retainerPlan.update).not.toHaveBeenCalled()
+  })
+
+  it("generates the client's charges after the renewal commits, never inside it", async () => {
+    const tx = { retainerPlan: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn(), create: vi.fn().mockResolvedValue({ id: 'new' }) } }
+    let generatedInsideTransaction = false
+    const prisma = fakePrisma({
+      $transaction: vi.fn().mockImplementation(async (fn: (tx: unknown) => unknown) => {
+        const result = await fn(tx)
+        generatedInsideTransaction = generate.mock.calls.length > 0
+        return result
+      }),
+    })
+    const service = new BillingService(prisma, fakeClientsService(client))
+    const generate = vi.spyOn(service, 'generateCharges').mockResolvedValue({ toCreate: [], creditToAllocate: [], created: 0, allocated: 0 })
+
+    await service.renewRetainerPlan('c1', { newAmountCents: 9000, effectiveFrom: '2026-09-01', periodicity: 'MONTHLY', dueDayOfMonth: 8 })
+
+    expect(generate).toHaveBeenCalledWith({ asOf: expect.any(Date), clientId: 'c1' }, false)
+    expect(generatedInsideTransaction).toBe(false)
+  })
+
+  it('still returns the renewal when charge generation fails', async () => {
+    const tx = { retainerPlan: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn(), create: vi.fn().mockResolvedValue({ id: 'new' }) } }
+    const prisma = fakePrisma({ $transaction: vi.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn(tx)) })
+    const service = new BillingService(prisma, fakeClientsService(client))
+    vi.spyOn(service, 'generateCharges').mockRejectedValue(new Error('boom'))
+    const loggerError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+
+    const result = await service.renewRetainerPlan('c1', { newAmountCents: 9000, effectiveFrom: '2026-09-01', periodicity: 'MONTHLY', dueDayOfMonth: 8 })
+
+    expect(result).toEqual({ closedPlanId: null, newPlanId: 'new' })
+    expect(loggerError).toHaveBeenCalledTimes(1)
+    loggerError.mockRestore()
   })
 
   it('rejects a renewal whose effectiveFrom would leave the closed plan with a negative-length range', async () => {

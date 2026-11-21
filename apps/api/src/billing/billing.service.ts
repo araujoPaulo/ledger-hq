@@ -226,7 +226,7 @@ export class BillingService {
     const existing = await this.prisma.retainerPlan.findFirst({ where: { clientId, validTo: null } })
     if (existing) throw new AppError('billing.plan_overlap', {}, 409)
 
-    return this.prisma.retainerPlan.create({
+    const plan = await this.prisma.retainerPlan.create({
       data: {
         id: uuidv7(),
         clientId,
@@ -237,6 +237,9 @@ export class BillingService {
         validTo: null,
       },
     })
+
+    await this.generateChargesAfterPlanChange(clientId)
+    return plan
   }
 
   /**
@@ -250,7 +253,7 @@ export class BillingService {
   async renewRetainerPlan(clientId: string, input: RenewRetainerPlanInput): Promise<{ closedPlanId: string | null; newPlanId: string }> {
     const effectiveFrom = new Date(`${input.effectiveFrom}T00:00:00Z`)
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const current = await tx.retainerPlan.findFirst({ where: { clientId, validTo: null } })
 
       if (current) {
@@ -273,6 +276,27 @@ export class BillingService {
 
       return { closedPlanId: current?.id ?? null, newPlanId: created.id }
     })
+
+    await this.generateChargesAfterPlanChange(clientId)
+    return result
+  }
+
+  /**
+   * Bills a plan's started periods at once instead of waiting for the nightly
+   * cron, so a back-dated plan (an existing client being onboarded) shows its
+   * arrears immediately. Runs after the plan write has committed, never inside
+   * it: the plan is the owner's decision and must stand even if generation
+   * fails — the cron re-runs the same idempotent generator and heals it.
+   */
+  private async generateChargesAfterPlanChange(clientId: string): Promise<void> {
+    try {
+      await this.generateCharges({ asOf: new Date(), clientId }, false)
+    } catch (error) {
+      this.logger.error(
+        `generateChargesAfterPlanChange: failed for client ${clientId}`,
+        error instanceof Error ? error.stack : String(error),
+      )
+    }
   }
 
   async getCurrentRetainerPlan(clientId: string): Promise<RetainerPlan | null> {
