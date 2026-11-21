@@ -78,10 +78,10 @@ export class BillingService {
   ) {}
 
   /**
-   * For each in-force `RetainerPlan`, creates one `Charge` per period that
+   * For each started `RetainerPlan`, creates one `Charge` per period that
    * has already started (master spec §8.1) — unlike the obligation
    * generator, no future horizon, and no retraction: a closed plan simply
-   * stops producing new periods once `asOf` moves past its `validTo`.
+   * stops producing new periods past its `validTo`.
    */
   async generateCharges(input: { asOf: Date; clientId?: string }, dryRun: boolean): Promise<GenerateChargesResult> {
     const clients = input.clientId
@@ -91,8 +91,14 @@ export class BillingService {
     const toCreate: Array<{ clientId: string; planId: string; period: { start: Date; label: string }; amountCents: number; dueOn: Date }> = []
 
     for (const client of clients) {
+      // Every plan that has started, closed ones included: a plan closed
+      // before its periods were ever generated (a create whose generation
+      // failed, renewed before the nightly run) still owes them. Each plan is
+      // billed only up to its own `validTo`, and oldest first, so a closed
+      // plan claims the period a mid-period fee change falls inside.
       const plans = await this.prisma.retainerPlan.findMany({
-        where: { clientId: client.id, validFrom: { lte: input.asOf }, OR: [{ validTo: null }, { validTo: { gte: input.asOf } }] },
+        where: { clientId: client.id, validFrom: { lte: input.asOf } },
+        orderBy: { validFrom: 'asc' },
       })
 
       // Scoped to the client, NOT to the plan: a fee change mid-period creates
@@ -104,7 +110,8 @@ export class BillingService {
       const existingLabels = new Set(existing.map((charge) => charge.periodLabel))
 
       for (const plan of plans) {
-        const periods = chargePeriodsSince(plan.periodicity, plan.validFrom, input.asOf)
+        const billedUntil = plan.validTo !== null && plan.validTo < input.asOf ? plan.validTo : input.asOf
+        const periods = chargePeriodsSince(plan.periodicity, plan.validFrom, billedUntil)
 
         for (const period of periods) {
           if (existingLabels.has(period.label)) continue

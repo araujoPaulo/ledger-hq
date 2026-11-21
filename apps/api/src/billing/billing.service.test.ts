@@ -75,6 +75,20 @@ describe('BillingService#generateCharges', () => {
     ])
   })
 
+  it("bills a closed plan's periods only up to its validTo", async () => {
+    const closed = { id: 'plan-old', clientId: 'c1', amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 8, validFrom: new Date('2026-01-01T00:00:00Z'), validTo: new Date('2026-02-28T00:00:00Z') }
+    const prisma = fakePrisma({
+      client: { findMany: vi.fn().mockResolvedValue([client]) },
+      retainerPlan: { findMany: vi.fn().mockResolvedValue([closed]) },
+      charge: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({}) },
+    })
+    const service = new BillingService(prisma, fakeClientsService(client))
+
+    const result = await service.generateCharges({ asOf: new Date('2026-04-15T00:00:00Z') }, true)
+
+    expect(result.toCreate.map((item) => item.periodLabel)).toEqual(['2026-01', '2026-02'])
+  })
+
   it('generates nothing for a client with no in-force plan', async () => {
     const prisma = fakePrisma({
       client: { findMany: vi.fn().mockResolvedValue([client]) },

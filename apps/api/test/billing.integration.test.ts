@@ -400,6 +400,51 @@ describe('retainer plan create/renew generates charges', () => {
     expect(charges.every((charge) => charge.amountCents === 12000)).toBe(true)
   })
 
+  it('still bills a closed plan whose periods were never generated before it was renewed', async () => {
+    // A create whose generation failed, renewed before the nightly run: the
+    // closed plan is no longer in force, but its periods are still owed.
+    const clientId = await createClient('600000057')
+    const lastDayOfOldPlan = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 0))
+    await prisma.retainerPlan.create({
+      data: { id: uuidv7(), clientId, amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 1, validFrom: new Date(`${monthStart(-2).iso}T00:00:00Z`), validTo: lastDayOfOldPlan },
+    })
+    await prisma.retainerPlan.create({
+      data: { id: uuidv7(), clientId, amountCents: 12000, periodicity: 'MONTHLY', dueDayOfMonth: 1, validFrom: new Date(`${monthStart(-1).iso}T00:00:00Z`), validTo: null },
+    })
+
+    await billing.generateCharges({ asOf: new Date(), clientId }, false)
+
+    const charges = await retainerChargesOf(clientId)
+    expect(charges.map((charge) => [charge.periodLabel, charge.amountCents])).toEqual([
+      [monthStart(-2).label, 9000],
+      [monthStart(-1).label, 12000],
+      [monthStart(0).label, 12000],
+    ])
+  })
+
+  it('lets the closed plan claim the period a mid-month fee change falls inside', async () => {
+    const clientId = await createClient('600000058')
+    const midMonth = new Date(`${monthStart(-1).iso}T00:00:00Z`)
+    midMonth.setUTCDate(15)
+    const dayBefore = new Date(midMonth.getTime() - 24 * 60 * 60 * 1000)
+    // Successor inserted first, so only an explicit validFrom ordering puts the closed plan first.
+    await prisma.retainerPlan.create({
+      data: { id: uuidv7(), clientId, amountCents: 12000, periodicity: 'MONTHLY', dueDayOfMonth: 1, validFrom: midMonth, validTo: null },
+    })
+    await prisma.retainerPlan.create({
+      data: { id: uuidv7(), clientId, amountCents: 9000, periodicity: 'MONTHLY', dueDayOfMonth: 1, validFrom: new Date(`${monthStart(-2).iso}T00:00:00Z`), validTo: dayBefore },
+    })
+
+    await billing.generateCharges({ asOf: new Date(), clientId }, false)
+
+    const charges = await retainerChargesOf(clientId)
+    expect(charges.map((charge) => [charge.periodLabel, charge.amountCents])).toEqual([
+      [monthStart(-2).label, 9000],
+      [monthStart(-1).label, 9000],
+      [monthStart(0).label, 12000],
+    ])
+  })
+
   it('spends existing credit against the charges it generates', async () => {
     const clientId = await createClient('600000056')
     await billing.recordPayment({ clientId, amountCents: 9000, receivedOn: monthStart(-1).iso, method: 'TRANSFER', allocations: [] })
